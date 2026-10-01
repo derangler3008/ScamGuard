@@ -1,3 +1,3 @@
 """ScamGuard – Betrugserkennung für deutschsprachige Kleinanzeigen."""
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"

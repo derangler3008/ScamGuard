@@ -2,6 +2,16 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.4.1] – 2026-10-02
+
+### Behoben
+- `scamguard start`/`api` bei schon laufendem ScamGuard: klare Meldung „läuft bereits“ (Exit 0)
+  statt uvicorns `[Errno 48] address already in use`; Qwen wird dabei gar nicht erst gestartet.
+- Port von einem anderen Programm belegt → Hinweis mit freiem Port (`--port`), Exit 1.
+- Läuft Qwen schon (z. B. separat per `scamguard llm-server`), nutzt `start` es mit, statt einen
+  zweiten Qwen-Server zu starten; `llm-server` meldet ebenfalls „läuft bereits“.
+- Extension unverändert (bleibt 0.4.0).
+
 ## [0.4.0] – 2026-10-02
 
 ### Hinzugefügt

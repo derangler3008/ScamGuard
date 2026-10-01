@@ -152,11 +152,63 @@ def _cmd_ui(args) -> int:
                            cwd=PROJECT_ROOT)
 
 
-def _cmd_api(args) -> int:
+def _probe_host(host: str) -> str:
+    return "127.0.0.1" if host in ("", "0.0.0.0") else host
+
+
+def _port_busy(host: str, port: int) -> bool:
+    import socket
+
+    try:  # create_connection kann IPv4 und IPv6 (z. B. --host ::1)
+        with socket.create_connection((_probe_host(host), port), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def _http_json(url: str, headers: dict[str, str] | None = None) -> dict | None:
+    """GET mit kurzem Timeout; None, wenn dort nichts mit JSON antwortet."""
+    from urllib.request import Request, urlopen
+
+    try:
+        with urlopen(Request(url, headers=headers or {}), timeout=2) as resp:
+            data = json.loads(resp.read())
+    except (OSError, ValueError):  # URLError/HTTPError sind OSError, JSONDecodeError ist ValueError
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _api_port_check(host: str, port: int, command: str = "start") -> int | None:
+    """Exit-Code, falls der API-Port schon belegt ist (statt uvicorns „Errno 48“), sonst None."""
+    if not _port_busy(host, port):
+        return None
+    url = f"http://{_probe_host(host)}:{port}"
+    health = _http_json(f"{url}/health", {"X-ScamGuard-Client": "cli"})
+    if health and "detectors" in health:
+        print(f"ScamGuard läuft bereits auf {url} (Version {health.get('version', '?')}) – nichts zu tun.\n"
+              "Zum Neustarten erst das laufende Terminal mit Ctrl+C beenden.")
+        return 0
+    print(f"Port {port} ist von einem anderen Programm belegt. Anderen Port wählen, z. B.\n"
+          f"  scamguard {command} --port {port + 1}\n"
+          "und in der Extension (Popup → Server-Adresse) dieselbe Adresse eintragen.")
+    return 1
+
+
+def _local_llm_running(base_url: str) -> bool:
+    models = _http_json(f"{base_url.rstrip('/')}/models")
+    return bool(models and models.get("data"))
+
+
+def _serve_api(args) -> int:
     import uvicorn
 
     uvicorn.run("scamguard.api:app", host=args.host, port=args.port, reload=False)
     return 0
+
+
+def _cmd_api(args) -> int:
+    code = _api_port_check(args.host, args.port, "api")
+    return code if code is not None else _serve_api(args)
 
 
 MLX_HINT = ("MLX läuft nur auf Macs mit Apple Silicon. Auf anderen Rechnern einen OpenAI-kompatiblen\n"
@@ -204,6 +256,10 @@ def _cmd_llm_server(args) -> int:
         print(MLX_HINT if sys.platform != "darwin" else
               'mlx-lm fehlt → pip install -e ".[local-llm]"')
         return 1
+    base_url = load_config()["llm"]["local"]["base_url"]
+    if _local_llm_running(base_url):
+        print(f"Das lokale LLM läuft bereits ({base_url}) – nichts zu tun.")
+        return 0
     command, env, where = _llm_server_process_args(args.model)
     print(f"Starte {where} …")
     return subprocess.call(command, env=env)
@@ -212,21 +268,27 @@ def _cmd_llm_server(args) -> int:
 def _cmd_start(args) -> int:
     """Alles für die Extension in einem Terminal: lokales LLM (falls eingerichtet) + ScamGuard-API.
     Ctrl+C beendet beides."""
+    code = _api_port_check(args.host, args.port)
+    if code is not None:  # vor dem LLM prüfen – sonst startet Qwen umsonst und wird gleich wieder beendet
+        return code
     llm_cfg = load_config()["llm"]
+    base_url = llm_cfg["local"]["base_url"]
     llm_process = None
     if args.ohne_llm:
         print("KI-Analyse aus: Qwen-Server wird nicht gestartet.")
     elif llm_cfg.get("provider") != "local":
         print(f"LLM-Provider ist „{llm_cfg.get('provider')}“ – kein lokales Modell zu starten.")
+    elif _local_llm_running(base_url):
+        print(f"Qwen läuft bereits ({base_url}) – wird mitbenutzt.")
     elif _mlx_available():
         command, env, where = _llm_server_process_args()
         print(f"Starte Qwen: {where} (bereit nach ca. 10–20 s) …")
         llm_process = subprocess.Popen(command, env=env)
     else:
-        print(f"Kein MLX verfügbar – lokales LLM bitte separat starten ({llm_cfg['local']['base_url']}).")
+        print(f"Kein MLX verfügbar – lokales LLM bitte separat starten ({base_url}).")
     print(f"Starte ScamGuard-API auf http://{args.host}:{args.port} … (Beenden mit Ctrl+C)")
     try:
-        return _cmd_api(args)
+        return _serve_api(args)
     finally:
         if llm_process and llm_process.poll() is None:
             llm_process.terminate()

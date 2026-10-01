@@ -160,3 +160,58 @@ def test_llm_server_command_starts_offline_with_matching_model_id(monkeypatch):
     assert env["HF_HUB_OFFLINE"] == "1"                         # Modell im Cache → keine Netzabfrage
     assert json.loads(command[command.index("--chat-template-args") + 1]) == {"enable_thinking": False}
     assert command[command.index("--allowed-origins") + 1] != "*"
+
+
+def _start_args(**kw):
+    import argparse
+
+    return argparse.Namespace(**{"host": "127.0.0.1", "port": 8000, "ohne_llm": False, **kw})
+
+
+def _no_popen(*a, **kw):
+    raise AssertionError("Qwen darf nicht gestartet werden")
+
+
+def test_start_when_scamguard_already_runs(monkeypatch, capsys):
+    from scamguard import cli
+
+    monkeypatch.setattr(cli, "_port_busy", lambda host, port: True)
+    monkeypatch.setattr(cli, "_http_json", lambda url, headers=None: {"version": "9.9", "detectors": {}})
+    monkeypatch.setattr(cli.subprocess, "Popen", _no_popen)
+    assert cli._cmd_start(_start_args()) == 0
+    assert "läuft bereits" in capsys.readouterr().out
+
+
+def test_start_when_port_is_taken_by_other_program(monkeypatch, capsys):
+    from scamguard import cli
+
+    monkeypatch.setattr(cli, "_port_busy", lambda host, port: True)
+    monkeypatch.setattr(cli, "_http_json", lambda url, headers=None: None)
+    monkeypatch.setattr(cli.subprocess, "Popen", _no_popen)
+    assert cli._cmd_start(_start_args()) == 1
+    assert "--port 8001" in capsys.readouterr().out
+
+
+def test_start_reuses_running_qwen(monkeypatch, capsys):
+    from scamguard import cli
+
+    monkeypatch.setattr(cli, "_port_busy", lambda host, port: False)
+    monkeypatch.setattr(cli, "_http_json", lambda url, headers=None: {"data": [{"id": "qwen"}]})
+    monkeypatch.setattr(cli.subprocess, "Popen", _no_popen)
+    monkeypatch.setattr(cli, "_serve_api", lambda args: 0)
+    assert cli._cmd_start(_start_args()) == 0
+    assert "wird mitbenutzt" in capsys.readouterr().out
+
+
+def test_port_probe_with_real_socket():
+    import socket
+
+    from scamguard import cli
+
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen()
+        port = server.getsockname()[1]
+        assert cli._port_busy("127.0.0.1", port)
+        assert cli._port_busy("0.0.0.0", port)  # wird auf 127.0.0.1 geprüft
+    assert not cli._port_busy("127.0.0.1", port)
