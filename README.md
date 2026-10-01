@@ -197,7 +197,7 @@ sofort das Ergebnis der schnellen Modelle und ergänzt danach die KI-Einschätzu
 
 | Rechner | Modell | Größe | Server |
 |---|---|---|---|
-| MacBook M4, 16 GB gemeinsamer Speicher | Qwen3.5-9B, MLX OptiQ 4-Bit (neuestes Qwen, das passt) | 6,6 GB | `scamguard llm-server` |
+| MacBook M4, 16 GB gemeinsamer Speicher | Qwen3.5-9B, MLX OptiQ 4-Bit (neuestes Qwen, das passt) – gemessen: 30–40 s pro Prüfung | 6,6 GB | `scamguard llm-server` |
 | PC mit 16 GB Grafikspeicher (z. B. RX 7800 XT) | Qwen3.8-27B, GGUF `UD-Q3_K_XL` (alternativ `UD-IQ4_XS`, 14,3 GB) | 13,1 GB | LM Studio oder Ollama |
 | PC/Mac mit wenig Speicher | Qwen3.5-4B, 4-Bit | ~3 GB | wie oben |
 
