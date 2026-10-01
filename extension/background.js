@@ -30,7 +30,7 @@ async function fetchWithTimeout(url, options, timeoutMs) {
     return await fetch(url, { ...options, signal: ctrl.signal });
   } catch (err) {
     if (err.name === "AbortError") throw new ScanError("timeout", "Zeitüberschreitung beim ScamGuard-Server");
-    throw new ScanError("offline", "ScamGuard-Server nicht erreichbar – läuft `scamguard api`?");
+    throw new ScanError("offline", "ScamGuard-Server nicht erreichbar – läuft `scamguard start`?");
   } finally {
     clearTimeout(timer);
   }

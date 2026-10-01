@@ -1,6 +1,6 @@
 """Firefox mit der ScamGuard-Extension starten – zum Ausprobieren auf echten Seiten.
 
-    scamguard api                                   # Server (in einem zweiten Terminal)
+    scamguard start                                 # Server: Qwen + API (zweites Terminal)
     python scripts/firefox_mit_extension.py         # Firefox + Extension + kleinanzeigen.de
     python scripts/firefox_mit_extension.py URL …   # stattdessen bestimmte Seiten öffnen
     python scripts/firefox_mit_extension.py --reload # nur Extension neu laden (nach Code-Änderungen)
@@ -157,7 +157,7 @@ def main(urls: list[str]) -> None:
     try:
         urlopen(API_HEALTH, timeout=2)
     except (URLError, OSError):
-        print("⚠ ScamGuard-Server nicht erreichbar – in einem zweiten Terminal `scamguard api` starten.")
+        print("⚠ ScamGuard-Server nicht erreichbar – in einem zweiten Terminal `scamguard start` starten.")
 
     binary = _firefox_binary()
     port = _running_debugger_port()

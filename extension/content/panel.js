@@ -166,7 +166,7 @@
     const offline = error?.kind === "offline" || error?.kind === "timeout";
     return h("div", { role: "alert" },
       h("p", { text: error?.message ?? "Unbekannter Fehler" }),
-      offline && h("p", { class: "hint" }, "Server starten mit ", h("code", { text: "scamguard api" })),
+      offline && h("p", { class: "hint" }, "Server starten mit ", h("code", { text: "scamguard start" })),
       onRetry && h("button", { class: "primary", type: "button", text: "Erneut versuchen", onclick: onRetry }));
   }
 

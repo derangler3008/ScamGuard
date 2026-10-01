@@ -11,6 +11,7 @@
   scamguard ui [--public]             Streamlit-Frontend starten (Standard: nur lokal)
   scamguard api                       REST-API starten (FastAPI)
   scamguard llm-server [--model ID]   Lokales LLM (Qwen, MLX) für die KI-Analyse starten
+  scamguard start [--ohne-llm]        Qwen-Server + API zusammen starten (für die Extension)
 """
 
 from __future__ import annotations
@@ -130,25 +131,81 @@ def _cmd_api(args) -> int:
     return 0
 
 
-def _cmd_llm_server(args) -> int:
+MLX_HINT = ("MLX läuft nur auf Macs mit Apple Silicon. Auf anderen Rechnern einen OpenAI-kompatiblen\n"
+            "Server nutzen und llm.local.base_url/model in config.yaml anpassen, z. B.:\n"
+            "  Ollama:    ollama pull <qwen-modell> && ollama serve   → http://127.0.0.1:11434/v1\n"
+            "  LM Studio: Modell laden, Server starten              → http://127.0.0.1:1234/v1")
+
+
+def _mlx_available() -> bool:
+    import importlib.util
+
+    return (sys.platform == "darwin" and platform.machine() == "arm64"
+            and importlib.util.find_spec("mlx_lm") is not None)
+
+
+def _llm_server_process_args(model: str | None = None) -> tuple[list[str], dict[str, str], str]:
+    """Befehl, Umgebung und Modell für den lokalen MLX-Server (Qwen)."""
+    import os
+
     local = load_config()["llm"]["local"]
-    model = args.model or local["model"]
+    model = model or local["model"]
     port = urlparse(local["base_url"]).port or 8080
-    if sys.platform != "darwin" or platform.machine() != "arm64":
-        print("MLX läuft nur auf Macs mit Apple Silicon. Auf anderen Rechnern einen OpenAI-kompatiblen\n"
-              "Server nutzen und llm.local.base_url/model in config.yaml anpassen, z. B.:\n"
-              "  Ollama:    ollama pull <qwen-modell> && ollama serve   → http://127.0.0.1:11434/v1\n"
-              "  LM Studio: Modell laden, Server starten              → http://127.0.0.1:1234/v1")
-        return 1
-    print(f"Starte {model} auf http://127.0.0.1:{port}/v1 (erster Start lädt das Modell, ~6–7 GB) …")
-    return subprocess.call([
-        sys.executable, "-m", "mlx_lm.server", "--model", model,
+    env = dict(os.environ)
+    try:  # Modell schon heruntergeladen → ohne Netzabfrage bei Hugging Face starten
+        from huggingface_hub import snapshot_download
+
+        snapshot_download(model, local_files_only=True)
+        env["HF_HUB_OFFLINE"] = "1"
+    except Exception:  # noqa: BLE001 – nicht im Cache: beim Start herunterladen (~6–7 GB)
+        print(f"Modell {model} ist noch nicht heruntergeladen – der erste Start lädt es (~6–7 GB).")
+    command = [
+        # Die Modell-ID muss genau der in den Anfragen entsprechen, sonst lädt mlx_lm das Modell neu
+        sys.executable, "-m", "mlx_lm", "server", "--model", model,
         "--host", "127.0.0.1", "--port", str(port),
         # Qwen3.5 „denkt“ sonst vor jeder Antwort – für die Einstufung unnötig und langsam
         "--chat-template-args", json.dumps({"enable_thinking": False}),
         # Kein CORS für fremde Webseiten: nur der ScamGuard-Server (ohne Browser) nutzt das Modell
         "--allowed-origins", "http://127.0.0.1:8000",
-    ])
+    ]
+    return command, env, f"{model} auf http://127.0.0.1:{port}/v1"
+
+
+def _cmd_llm_server(args) -> int:
+    if not _mlx_available():
+        print(MLX_HINT if sys.platform != "darwin" else
+              'mlx-lm fehlt → pip install -e ".[local-llm]"')
+        return 1
+    command, env, where = _llm_server_process_args(args.model)
+    print(f"Starte {where} …")
+    return subprocess.call(command, env=env)
+
+
+def _cmd_start(args) -> int:
+    """Alles für die Extension in einem Terminal: lokales LLM (falls eingerichtet) + ScamGuard-API.
+    Ctrl+C beendet beides."""
+    llm_cfg = load_config()["llm"]
+    llm_process = None
+    if args.ohne_llm:
+        print("KI-Analyse aus: Qwen-Server wird nicht gestartet.")
+    elif llm_cfg.get("provider") != "local":
+        print(f"LLM-Provider ist „{llm_cfg.get('provider')}“ – kein lokales Modell zu starten.")
+    elif _mlx_available():
+        command, env, where = _llm_server_process_args()
+        print(f"Starte Qwen: {where} (bereit nach ca. 10–20 s) …")
+        llm_process = subprocess.Popen(command, env=env)
+    else:
+        print(f"Kein MLX verfügbar – lokales LLM bitte separat starten ({llm_cfg['local']['base_url']}).")
+    print(f"Starte ScamGuard-API auf http://{args.host}:{args.port} … (Beenden mit Ctrl+C)")
+    try:
+        return _cmd_api(args)
+    finally:
+        if llm_process and llm_process.poll() is None:
+            llm_process.terminate()
+            try:
+                llm_process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                llm_process.kill()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -186,6 +243,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("llm-server", help="Lokales LLM (MLX, Apple Silicon) starten")
     p.add_argument("--model", help="Hugging-Face-ID eines MLX-Modells (Standard: config.yaml)")
     p.set_defaults(func=_cmd_llm_server)
+
+    p = sub.add_parser("start", help="Qwen-Server und API zusammen starten (für die Extension)")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--ohne-llm", action="store_true", help="Nur die API, ohne lokales LLM")
+    p.set_defaults(func=_cmd_start)
 
     p = sub.add_parser("api", help="REST-API starten")
     p.add_argument("--host", default="127.0.0.1")

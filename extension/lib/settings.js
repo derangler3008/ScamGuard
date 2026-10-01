@@ -3,7 +3,7 @@
 import { ext } from "./ext.js";
 
 export const DEFAULT_SETTINGS = Object.freeze({
-  apiUrl: "http://127.0.0.1:8000", // lokaler ScamGuard-Server (`scamguard api`)
+  apiUrl: "http://127.0.0.1:8000", // lokaler ScamGuard-Server (`scamguard start`)
   autoScan: true,                  // Kleinanzeigen-Anzeigen beim Öffnen automatisch prüfen
   analyzeImages: true,             // Inseratsbilder mitschicken (Bildmodelle)
   // KI-Analyse per LLM: "auto" = nur ein lokales Modell (kostenlos, Daten bleiben auf dem Rechner),

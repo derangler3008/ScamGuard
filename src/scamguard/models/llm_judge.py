@@ -45,7 +45,7 @@ geben, ist das selbst ein Warnsignal.
 SCAM_TYPES = ["keiner", "fake_zahlungslink", "vorkasse", "paypal_freunde", "dreiecksbetrug",
               "phishing", "identitaetsdiebstahl", "ueberzahlung", "fake_inserat_sonstiges"]
 LANGUAGE_QUALITY = ["muttersprachlich", "leichte_fehler", "gebrochen", "maschinell_uebersetzt"]
-MAX_RED_FLAGS = 6
+MAX_RED_FLAGS = 4  # kurze Antworten: lokal bestimmt die Antwortlänge fast allein die Laufzeit
 
 OUTPUT_SCHEMA = {
     "type": "object",
@@ -77,10 +77,11 @@ JSON_INSTRUCTIONS = f"""Antworte ausschließlich mit einem einzigen JSON-Objekt 
 danach, keine Code-Blöcke – in genau diesem Format:
 {{"scam_probability": <Zahl von 0 bis 1>, "scam_type": "<{'|'.join(SCAM_TYPES)}>", \
 "language_quality": "<{'|'.join(LANGUAGE_QUALITY)}>", \
-"red_flags": [{{"code": "<kurzer_code>", "explanation": "<ein Satz>", "evidence": "<wörtliches Zitat>"}}], \
-"summary": "<ein Satz auf Deutsch>"}}
-Höchstens {MAX_RED_FLAGS} red_flags. Ist das Inserat unauffällig: niedrige scam_probability, \
-scam_type "keiner", red_flags leer."""
+"red_flags": [{{"code": "<kurzer_code>", "explanation": "<kurzer Satz, max. 15 Wörter>", \
+"evidence": "<wörtliches Zitat aus dem Inserat, max. 8 Wörter>"}}], \
+"summary": "<ein Satz auf Deutsch, max. 25 Wörter>"}}
+Höchstens {MAX_RED_FLAGS} red_flags – nur die wichtigsten. Ist das Inserat unauffällig: niedrige \
+scam_probability, scam_type "keiner", red_flags leer."""
 
 MAX_IMAGES = 4
 MAX_IMAGE_SIDE = 1568  # größere Bilder skaliert die Claude API ohnehin herunter
@@ -202,7 +203,7 @@ class LocalBackend:
                 response = client.post(f"{self.base_url}/chat/completions", json=body)
         except httpx.ConnectError as exc:
             raise JudgeError(f"Lokales LLM nicht erreichbar ({self.base_url}) – "
-                             "`scamguard llm-server` bzw. Ollama/LM Studio starten") from exc
+                             "`scamguard start` bzw. Ollama/LM Studio starten") from exc
         except httpx.TimeoutException as exc:
             raise JudgeError(f"Lokales LLM antwortet nicht rechtzeitig (> {self.timeout:.0f} s)") from exc
         if response.status_code == 400 and "response_format" in body:

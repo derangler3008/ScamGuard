@@ -145,3 +145,18 @@ def test_api_llm_auto_mode_only_uses_local_models(api, monkeypatch):
 def test_api_rejects_invalid_json(api):
     assert api.post("/scan", data={"listing": "{kaputt"}, headers=CLIENT).status_code == 422
     assert api.post("/scan", data={"listing": "[1, 2]"}, headers=CLIENT).status_code == 422
+
+
+def test_llm_server_command_starts_offline_with_matching_model_id(monkeypatch):
+    import huggingface_hub
+
+    from scamguard import cli
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", lambda *a, **kw: "/cache/qwen")
+    command, env, _ = cli._llm_server_process_args()
+    model = CFG["llm"]["local"]["model"]
+    assert command[1:4] == ["-m", "mlx_lm", "server"]           # nicht der veraltete Aufruf
+    assert command[command.index("--model") + 1] == model       # gleiche ID wie in den Anfragen
+    assert env["HF_HUB_OFFLINE"] == "1"                         # Modell im Cache → keine Netzabfrage
+    assert json.loads(command[command.index("--chat-template-args") + 1]) == {"enable_thinking": False}
+    assert command[command.index("--allowed-origins") + 1] != "*"

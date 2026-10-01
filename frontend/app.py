@@ -121,7 +121,7 @@ with st.sidebar:
     llm_model = llm_cfg.get(llm_cfg.get("provider", "local"), {}).get("model", "").split("/")[-1]
     use_llm = st.toggle(f"KI-Analyse zuschalten ({llm_model})", value=False,
                         help=("Lokales Modell: kostenlos, Daten bleiben auf dem Rechner. "
-                              "Server vorher starten: `scamguard llm-server`. Dauer: ca. 10–30 s pro Prüfung."
+                              "Server vorher starten: `scamguard start` oder `scamguard llm-server`. Dauer auf einem MacBook M4: ca. 5–20 s pro Prüfung."
                               if is_local else
                               "Sendet Titel, Beschreibung und Nachrichten an die Claude API. "
                               "Verkäufername und Ort werden nicht übertragen. Kostet API-Guthaben."))

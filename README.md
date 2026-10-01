@@ -65,6 +65,10 @@ source .venv/bin/activate
 pip install -e ".[dev]"            # Kern: Regeln, Baseline, Frontend, API, Tests
 ```
 
+> **„zsh: command not found: scamguard“?** Der Befehl liegt in der virtuellen Umgebung des Projekts.
+> In jedem neuen Terminal zuerst `cd ScamGuard && source .venv/bin/activate` – oder den vollen Pfad
+> nutzen: `.venv/bin/scamguard start`.
+
 Optionale Pakete je nach Aufgabe:
 
 ```bash
@@ -87,6 +91,7 @@ scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell
 scamguard scan examples/inserat_beispiel.json
 scamguard ui                         # Frontend → http://127.0.0.1:8501
 scamguard api                        # REST-API → http://127.0.0.1:8000/docs
+scamguard start                      # für die Extension: Qwen (lokales LLM) + API zusammen
 pytest                               # Tests
 ```
 
@@ -123,7 +128,9 @@ Originaltext zum Markieren) bzw. `target` (`price`, `seller`, `image:<n>`).
 
 ### Installation
 
-1. **Server starten** (muss laufen, solange die Extension genutzt wird): `scamguard api`
+1. **Server starten** (muss laufen, solange die Extension genutzt wird):
+   `cd ScamGuard && source .venv/bin/activate && scamguard start` – startet das lokale LLM (Qwen)
+   und die API zusammen, `Ctrl+C` beendet beides. Ohne KI-Analyse: `scamguard start --ohne-llm`.
 2. **Chrome / Edge / Brave / Arc:** `chrome://extensions` → *Entwicklermodus* an →
    *Entpackte Erweiterung laden* → Ordner `extension/` wählen.
 3. **Firefox (ab Version 140) – am einfachsten:** `python scripts/firefox_mit_extension.py`
@@ -186,8 +193,7 @@ offline, Inseratsdaten verlassen den Rechner nicht.
 
 ```bash
 pip install -e ".[local-llm]"      # Apple MLX
-scamguard llm-server               # erster Start lädt Qwen3.5-9B (~6,6 GB) und startet den Server
-scamguard api                      # zweites Terminal
+scamguard start                    # Qwen + API; erster Start lädt Qwen3.5-9B (~6,6 GB)
 ```
 
 In der Extension: Popup → *Einstellungen* → *KI-Analyse: Automatisch* (Standard). Die Extension zeigt
@@ -197,7 +203,7 @@ sofort das Ergebnis der schnellen Modelle und ergänzt danach die KI-Einschätzu
 
 | Rechner | Modell | Größe | Server |
 |---|---|---|---|
-| MacBook M4, 16 GB gemeinsamer Speicher | Qwen3.5-9B, MLX OptiQ 4-Bit (neuestes Qwen, das passt) – gemessen: 30–40 s pro Prüfung | 6,6 GB | `scamguard llm-server` |
+| MacBook M4, 16 GB gemeinsamer Speicher | Qwen3.5-9B, MLX OptiQ 4-Bit (neuestes Qwen, das passt) – gemessen: ca. 6 s (unauffällig) bis 20 s (Betrug) | 6,6 GB | `scamguard llm-server` |
 | PC mit 16 GB Grafikspeicher (z. B. RX 7800 XT) | Qwen3.8-27B, GGUF `UD-Q3_K_XL` (alternativ `UD-IQ4_XS`, 14,3 GB) | 13,1 GB | LM Studio oder Ollama |
 | PC/Mac mit wenig Speicher | Qwen3.5-4B, 4-Bit | ~3 GB | wie oben |
 

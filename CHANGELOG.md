@@ -2,6 +2,20 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.3.1] – 2026-10-01
+
+### Hinzugefügt
+- `scamguard start`: startet lokales LLM (Qwen) und API in einem Terminal, `Ctrl+C` beendet beides
+  (`--ohne-llm` nur API).
+
+### Geändert
+- KI-Analyse etwa doppelt so schnell (MacBook M4: ca. 6 s unauffällig, 16–20 s Betrug statt
+  30–40 s): höchstens 4 Warnsignale, kurze Begründungen und Zitate.
+- Qwen-Server startet bei vorhandenem Modell ohne Netzabfrage (`HF_HUB_OFFLINE`) und mit dem
+  aktuellen Aufruf `python -m mlx_lm server`.
+- Alle Startanweisungen (README, Popup, Panel, Fehlermeldungen) nennen `scamguard start`;
+  README erklärt „command not found“ (virtuelle Umgebung aktivieren).
+
 ## [0.3.0] – 2026-10-01
 
 ### Hinzugefügt
