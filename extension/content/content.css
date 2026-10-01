@@ -1,0 +1,71 @@
+/* ScamGuard – Markierungen auf der Seite.
+   Schwere nicht nur über Farbe: durchgezogene / gestrichelte / gepunktete Linie + Warnsymbol. */
+
+mark.scamguard-mark {
+  color: inherit !important;
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: help;
+  text-decoration-thickness: 2px !important;
+  text-underline-offset: 2px;
+  text-decoration-line: underline !important;
+}
+
+mark.scamguard-mark.scamguard-sev-high {
+  background: rgba(240, 68, 56, 0.28) !important;
+  text-decoration-color: #d92d20 !important;
+  text-decoration-style: solid !important;
+}
+
+mark.scamguard-mark.scamguard-sev-high::before {
+  content: "⚠\fe0e";
+  color: #b42318;
+  font-size: 0.85em;
+  margin-right: 1px;
+}
+
+mark.scamguard-mark.scamguard-sev-mid {
+  background: rgba(247, 144, 9, 0.28) !important;
+  text-decoration-color: #dc6803 !important;
+  text-decoration-style: dashed !important;
+}
+
+mark.scamguard-mark.scamguard-sev-low {
+  background: rgba(250, 204, 21, 0.3) !important;
+  text-decoration-color: #ca8504 !important;
+  text-decoration-style: dotted !important;
+}
+
+.scamguard-flagged {
+  outline-width: 3px !important;
+  outline-offset: 3px !important;
+  outline-style: dotted !important;
+  outline-color: #ca8504 !important;
+  border-radius: 2px;
+}
+
+.scamguard-flagged.scamguard-sev-high {
+  outline-style: solid !important;
+  outline-color: #d92d20 !important;
+}
+
+.scamguard-flagged.scamguard-sev-mid {
+  outline-style: dashed !important;
+  outline-color: #dc6803 !important;
+}
+
+.scamguard-pulse {
+  animation: scamguard-pulse 1.2s ease-out 2;
+}
+
+@keyframes scamguard-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(217, 45, 32, 0.55); }
+  100% { box-shadow: 0 0 0 14px rgba(217, 45, 32, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scamguard-pulse {
+    animation: none;
+    outline-width: 5px !important;
+  }
+}

@@ -36,7 +36,8 @@ def test_known_fake_image_is_hard_signal(fake_image, tmp_path):
                                                "path": str(tmp_path / "kein_modell.pt")}})
     result = ImageDetector(cfg).predict(Listing(title="x", image_paths=[str(fake_image)]))
     assert result.score is None  # nur Hash-Abgleich → kein eigener Score
-    assert any(s.code == "KNOWN_FAKE_IMAGE" and s.hard for s in result.signals)
+    fake = next(s for s in result.signals if s.code == "KNOWN_FAKE_IMAGE")
+    assert fake.hard and fake.target == "image:0" and fake.evidence == "Bild 1"
 
 
 def test_image_detector_without_images_returns_no_score():

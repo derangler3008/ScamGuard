@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scamguard"
-version = "0.1.0"
+version = "0.2.0"
 description = "Betrugserkennung für deutschsprachige Kleinanzeigen (DHBW Mannheim KI-Projekt)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,8 @@ vision = ["torch>=2.2", "torchvision>=0.17", "transformers>=4.41", "imagehash>=4
 # LLM-Judge über die Claude API
 llm = ["anthropic>=1.11"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
+# Browser-Tests der Extension: danach `playwright install chromium`; Firefox muss installiert sein
+e2e = ["playwright>=1.48", "selenium>=4.25", "imagehash>=4.3"]
 all = ["scamguard[data,text,vision,llm,dev]"]
 
 [project.scripts]
@@ -45,7 +47,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests/e2e"]
+markers = ["e2e: Browser-Ende-zu-Ende-Tests der Extension (Playwright/Chromium, Selenium/Firefox)"]
 
 [tool.ruff]
 line-length = 100

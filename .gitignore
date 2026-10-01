@@ -12,3 +12,6 @@ data/processed/*
 data/images/*
 models/*
 !**/.gitkeep
+
+# Gepackte Extension (web-ext build)
+dist/

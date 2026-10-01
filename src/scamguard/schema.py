@@ -77,8 +77,12 @@ class Signal:
     code: str          # maschinenlesbar, z. B. "EXTERNAL_PAYMENT"
     message: str       # deutsche Erklärung für das Frontend
     weight: float      # Schwere 0..1
-    evidence: str | None = None  # gefundene Textstelle, URL o. Ä.
+    evidence: str | None = None  # gefundene Textstelle, URL o. Ä. (zur Anzeige, ggf. gekürzt)
     hard: bool = False  # sehr starkes Indiz (z. B. Fake-Bezahlseite)
+    # Für die Browser-Extension: exakte Originaltexte zum Markieren auf der Seite …
+    highlights: list[str] = field(default_factory=list)
+    # … oder ein Seitenelement statt Text: "price", "seller", "image:<n>" (n = Index in image_paths)
+    target: str | None = None
 
 
 @dataclass

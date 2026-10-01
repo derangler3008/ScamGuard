@@ -74,27 +74,58 @@ def test_text_baseline_trains_and_explains(samples, tmp_path):
     assert all(s.code == "TEXT_PATTERN" for s in result.signals)
     # Erklärungen dürfen keine reinen Stoppwörter sein
     assert not {s.evidence for s in result.signals} & {"ich", "das", "die", "und"}
+    assert all(len(s.evidence) >= 4 for s in result.signals)  # keine Mini-Wörter wie „per“ markieren
 
 
-def test_api_health_and_scan():
+CLIENT = {"X-ScamGuard-Client": "pytest"}
+
+
+@pytest.fixture(scope="module")
+def api():
     from fastapi.testclient import TestClient
 
     from scamguard.api import app
 
-    client = TestClient(app)
-    assert client.get("/health").json()["status"] == "ok"
+    return TestClient(app)
+
+
+def test_api_health_and_scan(api):
+    assert api.get("/health").json()["status"] == "ok"
     payload = {"title": "PS5", "description": "Zahlung nur Freunde und Familie", "price": 50,
                "category": "elektronik", "label": 1}
-    resp = client.post("/scan", data={"listing": json.dumps(payload)})
+    resp = api.post("/scan", data={"listing": json.dumps(payload)}, headers=CLIENT)
     assert resp.status_code == 200
     body = resp.json()
     assert body["verdict"] in {"unauffällig", "verdächtig", "hohes Risiko"}
-    assert any(s["code"] == "OFFPLATFORM_PAYMENT" for s in body["signals"])
+    flag = next(s for s in body["signals"] if s["code"] == "OFFPLATFORM_PAYMENT")
+    assert flag["highlights"] == ["Freunde und Familie"]  # exakter Originaltext für die Extension
 
 
-def test_api_rejects_invalid_json():
-    from fastapi.testclient import TestClient
+def test_api_normalizes_raw_page_values_and_sets_targets(api):
+    # So schickt die Extension die Werte: Rohtext von der Seite
+    payload = {"title": "iPhone 15 Pro 256GB", "description": "Wie neu.", "price": "120 € VB",
+               "category": "Kleinanzeigen Mannheim > Elektronik > Handy & Telefon",
+               "seller_account_age_days": 2}
+    body = api.post("/scan", data={"listing": json.dumps(payload)}, headers=CLIENT).json()
+    targets = {s["code"]: s["target"] for s in body["signals"]}
+    assert targets["PRICE_FAR_TOO_LOW"] == "price"
+    assert targets["NEW_ACCOUNT"] == "seller"
 
-    from scamguard.api import app
 
-    assert TestClient(app).post("/scan", data={"listing": "{kaputt"}).status_code == 422
+def test_api_rejects_requests_without_client_header(api):
+    # Simuliert eine fremde Webseite, die ohne CORS-Freigabe an die lokale API postet
+    resp = api.post("/scan", data={"listing": json.dumps({"title": "x"}), "use_llm": "true"})
+    assert resp.status_code == 403
+
+
+def test_api_rejects_foreign_origin_but_accepts_extension(api):
+    data = {"listing": json.dumps({"title": "x"})}
+    evil = api.post("/scan", data=data, headers={**CLIENT, "Origin": "https://evil.example"})
+    lookalike = api.post("/scan", data=data, headers={**CLIENT, "Origin": "http://localhost.evil.example"})
+    ext = api.post("/scan", data=data, headers={**CLIENT, "Origin": "chrome-extension://abcdefghijklmnop"})
+    assert (evil.status_code, lookalike.status_code, ext.status_code) == (403, 403, 200)
+
+
+def test_api_rejects_invalid_json(api):
+    assert api.post("/scan", data={"listing": "{kaputt"}, headers=CLIENT).status_code == 422
+    assert api.post("/scan", data={"listing": "[1, 2]"}, headers=CLIENT).status_code == 422

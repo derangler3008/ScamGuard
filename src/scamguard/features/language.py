@@ -140,6 +140,7 @@ def analyze_language(text: str) -> LanguageFeatures:
         feats.signals.append(Signal(
             src, "ARTICLE_ERRORS", "Falsche Artikel bei Alltagswörtern (Hinweis auf Nicht-Muttersprachler/MT)",
             min(0.15 * len(feats.article_errors), 0.35), evidence=", ".join(feats.article_errors[:3]),
+            highlights=list(feats.article_errors),
         ))
     if feats.umlaut_substitutes >= 3:
         feats.signals.append(Signal(src, "UMLAUT_SUBSTITUTES",

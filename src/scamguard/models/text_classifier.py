@@ -88,11 +88,11 @@ class TextBaselineDetector(Detector):
             if contrib[idx] <= 0.05 or len(signals) >= top_k:
                 break
             prefix, _, ngram = names[x.col[idx]].partition("__")
-            if prefix != "word" or all(w in GERMAN_STOPWORDS for w in ngram.split()):
+            if prefix != "word" or len(ngram) < 4 or all(w in GERMAN_STOPWORDS for w in ngram.split()):
                 continue
             signals.append(Signal("text_model", "TEXT_PATTERN",
                                   f"Textmuster, das in Betrugsfällen der Trainingsdaten häufig ist: „{ngram}“",
-                                  float(min(contrib[idx], 0.5)), evidence=ngram))
+                                  float(min(contrib[idx], 0.5)), evidence=ngram, highlights=[ngram]))
         return signals
 
 

@@ -1,0 +1,144 @@
+import { ext } from "../lib/ext.js";
+import { API_URL_PATTERN, getSettings, saveSettings } from "../lib/settings.js";
+
+const VERDICTS = {
+  "hohes Risiko": { cls: "high", icon: "⛔", label: "Hohes Risiko" },
+  "verdächtig": { cls: "mid", icon: "⚠️", label: "Verdächtig" },
+  "unauffällig": { cls: "ok", icon: "✅", label: "Unauffällig" },
+};
+const TOGGLES = ["autoScan", "analyzeImages", "showPanel", "useLlm"];
+const $ = (id) => document.getElementById(id);
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+async function activeTab() {
+  const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+  return tab;
+}
+
+function renderResult(entry) {
+  const box = $("result");
+  box.className = "";
+  box.replaceChildren();
+  if (!entry) {
+    box.append(el("p", "muted", "Dieser Tab wurde noch nicht geprüft."));
+    return;
+  }
+  if (entry.error) {
+    box.append(el("p", "error", entry.error.message));
+    return;
+  }
+  const v = VERDICTS[entry.verdict] ?? { cls: "", icon: "", label: entry.verdict };
+  box.className = v.cls;
+  const score = el("p", "score");
+  score.append(el("span", "pct", `${Math.round(entry.score * 100)} %`), el("span", "verdict", `${v.icon} ${v.label}`));
+  box.append(score);
+  if (!entry.signals?.length) {
+    box.append(el("p", "muted", "Keine Warnsignale gefunden."));
+    return;
+  }
+  const list = el("ul");
+  for (const s of entry.signals.slice(0, 3)) list.append(el("li", "", s.message));
+  box.append(list);
+  if (entry.signalCount > 3) {
+    box.append(el("p", "muted", `… und ${entry.signalCount - 3} weitere – Details im Panel auf der Seite.`));
+  }
+}
+
+async function refreshResult(tabId) {
+  const key = `tab:${tabId}`;
+  const stored = await ext.storage.session.get(key);
+  renderResult(stored[key]);
+}
+
+async function checkServer() {
+  const status = $("server-status");
+  status.className = "status";
+  status.textContent = "Server …";
+  const health = await ext.runtime.sendMessage({ type: "health" });
+  status.classList.add(health?.ok ? "online" : "offline");
+  status.textContent = health?.ok ? "Server verbunden" : "Server aus";
+  status.title = health?.ok ? `ScamGuard ${health.data.version}` : health?.error ?? "";
+}
+
+async function initSettings() {
+  const settings = await getSettings();
+  for (const key of TOGGLES) {
+    const box = $(key);
+    box.checked = Boolean(settings[key]);
+    box.addEventListener("change", () => saveSettings({ [key]: box.checked }));
+  }
+  const url = $("apiUrl");
+  url.value = settings.apiUrl;
+  url.addEventListener("change", async () => {
+    const value = url.value.trim().replace(/\/+$/, "");
+    if (!API_URL_PATTERN.test(value)) {
+      $("apiUrl-error").textContent = "Nur lokale Adressen, z. B. http://127.0.0.1:8000";
+      url.setAttribute("aria-invalid", "true");
+      return;
+    }
+    $("apiUrl-error").textContent = "";
+    url.removeAttribute("aria-invalid");
+    url.value = value;
+    await saveSettings({ apiUrl: value });
+    checkServer();
+  });
+}
+
+async function initScanButton(tab) {
+  const button = $("scan-btn");
+  if (!tab?.id || !/^https?:/.test(tab.url ?? "")) {
+    button.disabled = true;
+    button.textContent = "Diese Seite kann nicht geprüft werden";
+    return;
+  }
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Prüfe …";
+    const response = await ext.runtime.sendMessage({ type: "scanTab", tabId: tab.id });
+    button.disabled = false;
+    button.textContent = "Erneut prüfen";
+    // Server-Fehler stehen bereits im Tab-Ergebnis; Fehler vor dem Scan (z. B. Browser-interne
+    // Seite) nicht – die direkt anzeigen.
+    if (response?.ok === false && SCAN_NOT_STARTED.has(response.error?.kind)) {
+      renderResult({ error: response.error });
+      return;
+    }
+    await refreshResult(tab.id);
+  });
+}
+
+const SCAN_NOT_STARTED = new Set(["page", "extension", "unknown"]);
+const REQUIRED_ORIGINS = ext.runtime.getManifest().host_permissions;
+
+async function checkPermissions() {
+  const granted = await ext.permissions.contains({ origins: REQUIRED_ORIGINS });
+  $("permissions").hidden = granted;
+  return granted;
+}
+
+$("grant-btn").addEventListener("click", () => {
+  // Ohne await davor: Firefox erlaubt permissions.request nur direkt in der Nutzeraktion
+  ext.permissions.request({ origins: REQUIRED_ORIGINS }).then(() => {
+    checkPermissions();
+    checkServer();
+  });
+});
+
+const tab = await activeTab();
+checkPermissions();
+initSettings();
+checkServer();
+initScanButton(tab);
+if (tab?.id) {
+  refreshResult(tab.id);
+  // Ergebnis live aktualisieren, falls der automatische Scan gerade fertig wird
+  ext.storage.onChanged.addListener((changes, area) => {
+    if (area === "session" && changes[`tab:${tab.id}`]) refreshResult(tab.id);
+  });
+}

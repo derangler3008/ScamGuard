@@ -16,14 +16,21 @@ from scamguard.data.registry import DatasetSpec
 from scamguard.features.language import looks_german
 from scamguard.schema import CATEGORIES, Listing
 
+# Reihenfolge zählt (erster Treffer gewinnt):
+# - Fahrräder stehen bei Kleinanzeigen unter „Auto, Rad & Boot“, sind aber kein Auto.
+# - Haushaltsgeräte stehen unter „Elektronik“ → vor elektronik prüfen.
 CATEGORY_KEYWORDS = {
-    "elektronik": ["elektronik", "handy", "smartphone", "computer", "laptop", "konsole", "tv", "audio"],
-    "haushaltsgeraete": ["haushalt", "waschmaschine", "kühlschrank", "küche", "geräte"],
-    "auto": ["auto", "kfz", "fahrzeug", "pkw", "motorrad", "wohnmobil"],
-    "moebel": ["möbel", "moebel", "sofa", "schrank", "einrichtung", "wohnen"],
+    "sonstiges": ["fahrrad", "fahrräder"],
+    "haushaltsgeraete": ["haushalt", "waschmaschine", "kühlschrank", "küche", "staubsauger",
+                         "trockner", "spülmaschine", "geschirrspüler"],
+    "elektronik": ["elektronik", "handy", "smartphone", "computer", "laptop", "notebook", "tablet",
+                   "konsole", "tv", "audio", "foto", "kamera"],
+    "auto": ["auto", "kfz", "fahrzeug", "pkw", "motorrad", "wohnmobil", "reifen"],
+    "moebel": ["möbel", "moebel", "sofa", "schrank", "einrichtung", "wohnen", "wohnzimmer",
+               "schlafzimmer", "esszimmer"],
     "mode": ["mode", "kleidung", "schuhe", "taschen", "beauty"],
     "tiere": ["tier", "hund", "katze", "pferd"],
-    "immobilien": ["wohnung", "immobilie", "haus", "miete", "wg"],
+    "immobilien": ["wohnung", "immobilie", "häuser", "miete", "wg", "grundstück"],
     "tickets": ["ticket", "eintrittskarte", "konzert"],
 }
 
@@ -70,16 +77,19 @@ def parse_price(value: Any) -> float | None:
 
 
 def normalize_category(value: Any) -> str:
+    """Freitext oder Brotkrumenpfad ("Kleinanzeigen Mannheim > Elektronik > Haushaltsgeräte")
+    → eine unserer Kategorien. Bei Pfaden zählt der spezifischste Teil (von hinten gelesen)."""
     value = _clean(value)
     if not value:
         return "sonstiges"
-    s = str(value).lower().strip()
-    ascii_s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss").replace(" ", "")
-    if ascii_s in CATEGORIES:
-        return ascii_s
-    for cat, keywords in CATEGORY_KEYWORDS.items():
-        if any(k in s for k in keywords):
-            return cat
+    segments = [s.strip().lower() for s in re.split(r"[>›»|]", str(value)) if s.strip()]
+    for s in reversed(segments):
+        ascii_s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+        if ascii_s.replace(" ", "") in CATEGORIES:
+            return ascii_s.replace(" ", "")
+        for cat, keywords in CATEGORY_KEYWORDS.items():
+            if any(k in s for k in keywords):
+                return cat
     return "sonstiges"
 
 

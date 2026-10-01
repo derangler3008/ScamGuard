@@ -181,7 +181,8 @@ class LLMJudgeDetector(Detector):
 
         score = min(max(float(data["scam_probability"]), 0.0), 1.0)
         signals = [Signal(self.name, f"LLM_{flag['code'].upper()}", flag["explanation"],
-                          weight=score, evidence=flag["evidence"][:120])
+                          weight=score, evidence=flag["evidence"][:120],
+                          highlights=[flag["evidence"]] if flag["evidence"] else [])
                    for flag in data.get("red_flags", [])]
         if data.get("summary"):
             signals.insert(0, Signal(self.name, "LLM_SUMMARY",

@@ -158,15 +158,17 @@ class ImageDetector(Detector):
     def predict(self, listing: Listing) -> ModelResult:
         from PIL import Image
 
-        paths = [p for p in listing.image_paths if Path(p).exists()]
-        if not paths:
+        # Index bezieht sich auf listing.image_paths → die Extension ordnet so das Bild auf der Seite zu
+        indexed = [(i, p) for i, p in enumerate(listing.image_paths) if Path(p).exists()]
+        if not indexed:
             return ModelResult(self.name, score=None, error="Keine Bilder hochgeladen")
 
         signals: list[Signal] = []
         cnn_scores: list[float] = []
         neural_ran = False
-        for path in paths:
-            label = Path(path).name
+        for idx, path in indexed:
+            label = f"Bild {idx + 1}"  # Dateinamen sind intern (Upload/Temp) → für Menschen nummerieren
+            target = f"image:{idx}"
             with Image.open(path) as raw:
                 img = raw.convert("RGB")
 
@@ -178,7 +180,7 @@ class ImageDetector(Detector):
                 if dist <= PHASH_MAX_DISTANCE:
                     signals.append(Signal(self.name, "KNOWN_FAKE_IMAGE",
                                           "Bild ist identisch mit einem bekannten Betrugsbild",
-                                          0.9, evidence=label, hard=True))
+                                          0.9, evidence=label, hard=True, target=target))
 
             if self._ensure_clip():
                 neural_ran = True
@@ -187,18 +189,19 @@ class ImageDetector(Detector):
                     signals.append(Signal(self.name, "STOCK_PHOTO",
                                           "Wirkt wie ein professionelles Produktfoto – evtl. aus dem Netz "
                                           "kopiert (Google-Bilder-Rückwärtssuche empfohlen)",
-                                          0.3, evidence=f"{label} ({style['stock']:.0%})"))
+                                          0.3, evidence=f"{label} ({style['stock']:.0%})", target=target))
                 if style["screenshot"] > 0.6 or style["text"] > 0.6:
                     signals.append(Signal(self.name, "SCREENSHOT_OR_TEXT",
                                           "Bild ist ein Screenshot/Textbild statt eines Artikelfotos",
-                                          0.25, evidence=label))
+                                          0.25, evidence=label, target=target))
                 if listing.category in CATEGORY_PROMPTS:
                     cat = self._clip_probs(img, CATEGORY_PROMPTS)
                     best = max(cat, key=cat.get)
                     if cat[listing.category] < 0.15 and cat[best] > 0.5:
                         signals.append(Signal(self.name, "CATEGORY_MISMATCH",
                                               f"Bild passt nicht zur Kategorie „{listing.category}“ "
-                                              f"(sieht eher nach „{best}“ aus)", 0.35, evidence=label))
+                                              f"(sieht eher nach „{best}“ aus)", 0.35, evidence=label,
+                                              target=target))
 
             if self._cnn is not None:
                 neural_ran = True

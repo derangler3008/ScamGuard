@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScamGuard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="../icons/icon32.png" alt="" width="24" height="24">
+    <h1>ScamGuard</h1>
+    <span id="server-status" class="status" role="status">Server …</span>
+  </header>
+
+  <main>
+    <section id="permissions" class="notice" hidden>
+      <p>ScamGuard braucht Zugriff auf Kleinanzeigen und den lokalen Server
+        (in Firefox nicht immer automatisch erteilt).</p>
+      <button id="grant-btn" class="primary" type="button">Zugriff erlauben</button>
+    </section>
+
+    <section id="result" aria-live="polite" aria-label="Ergebnis für diesen Tab">
+      <p class="muted">Dieser Tab wurde noch nicht geprüft.</p>
+    </section>
+
+    <button id="scan-btn" class="primary" type="button">Diese Seite prüfen</button>
+    <p class="hint">Tipp: Text markieren → Rechtsklick → <em>Markierten Text mit ScamGuard prüfen</em>
+      (z. B. für Chat-Nachrichten oder E-Mails).</p>
+
+    <details id="settings">
+      <summary>Einstellungen</summary>
+      <label class="check"><input type="checkbox" id="autoScan"> Kleinanzeigen-Anzeigen automatisch prüfen</label>
+      <label class="check"><input type="checkbox" id="analyzeImages"> Inseratsbilder mitprüfen</label>
+      <label class="check"><input type="checkbox" id="showPanel"> Ergebnis-Panel auf der Seite anzeigen</label>
+      <label class="check"><input type="checkbox" id="useLlm"> Claude-Analyse zuschalten
+        <small>Text des Inserats geht an die Claude API, kostet Guthaben.</small></label>
+      <label for="apiUrl">Server-Adresse (nur lokal)</label>
+      <input type="url" id="apiUrl" spellcheck="false" aria-describedby="apiUrl-error">
+      <small id="apiUrl-error" class="error" role="alert"></small>
+    </details>
+  </main>
+
+  <footer>Server starten: <code>scamguard api</code></footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

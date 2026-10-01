@@ -95,6 +95,24 @@ def test_language_filter_keeps_all_german_samples():
 
 # --- Lexikon & Preis --------------------------------------------------------------
 
+def test_phrases_match_across_line_breaks():
+    lexicon = str(resolve_path(CFG["paths"]["lexicon"]))
+    signals = match_phrases("Zahlung per PayPal Freunde und\nFamilie.\nZahlung bereits\nveranlasst, "
+                            "bitte\nklicken Sie auf den Link", lexicon)
+    assert {"OFFPLATFORM_PAYMENT", "FAKE_PAYMENT_LINK"} <= codes(signals)
+    # Die Markierung enthält den Originaltext inkl. Umbruch – die Extension sucht whitespace-tolerant
+    assert next(s for s in signals if s.code == "OFFPLATFORM_PAYMENT").highlights == ["Freunde und\nFamilie"]
+
+
+def test_whitespace_tolerant_pattern_rewrite():
+    from scamguard.features.scam_phrases import whitespace_tolerant
+
+    assert whitespace_tolerant("western ?union") == r"western\s*union"
+    assert whitespace_tolerant("freunde (und|&) familie") == r"freunde\s+(und|&)\s+familie"
+    assert whitespace_tolerant("dhl[- ]?treuhand") == r"dhl[-\s]?treuhand"
+    assert whitespace_tolerant(r"verfügbar\?\s*$") == r"verfügbar\?\s*$"
+
+
 def test_phrase_groups_match_once_per_group():
     signals = match_phrases("Zahlung per PayPal Freunde und Familie oder Western Union",
                             str(resolve_path(CFG["paths"]["lexicon"])))
@@ -129,3 +147,23 @@ def test_normalize_category():
     assert normalize_category("Haushaltsgeräte") == "haushaltsgeraete"
     assert normalize_category("Handy & Telefon") == "elektronik"
     assert normalize_category(None) == "sonstiges"
+
+
+def test_normalize_category_breadcrumb_uses_most_specific_segment():
+    # So liefert die Extension die Kategorie (Brotkrumenpfad von Kleinanzeigen)
+    assert normalize_category("Kleinanzeigen Mannheim > Elektronik > Haushaltsgeräte") == "haushaltsgeraete"
+    assert normalize_category("Kleinanzeigen Mannheim > Elektronik > TV & Video") == "elektronik"
+    assert normalize_category("Kleinanzeigen Mannheim > Auto, Rad & Boot > Autos") == "auto"
+    assert normalize_category("Kleinanzeigen Mannheim > Auto, Rad & Boot > Fahrräder & Zubehör") == "sonstiges"
+    assert normalize_category("Kleinanzeigen Mannheim > Haus & Garten > Gartenzubehör") == "sonstiges"
+
+
+def test_highlights_contain_exact_page_text():
+    # Anzeige darf gekürzt sein, die Markierung braucht den Originaltext
+    f = analyze_contacts("Konto: GB82 WEST 1234 5698 7654 32, Mail an info@example.com")
+    iban = next(s for s in f.signals if s.code == "FOREIGN_IBAN")
+    assert iban.evidence.endswith("…")
+    assert iban.highlights == ["GB82 WEST 1234 5698 7654 32"]
+    assert next(s for s in f.signals if s.code == "EMAIL_IN_TEXT").highlights == ["info@example.com"]
+    lang = analyze_language("Der Auto ist gut und die Handy auch.")
+    assert next(s for s in lang.signals if s.code == "ARTICLE_ERRORS").highlights == ["Der Auto", "die Handy"]

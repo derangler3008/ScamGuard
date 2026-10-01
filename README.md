@@ -2,12 +2,13 @@
 
 KI-Projekt an der DHBW Mannheim: Erkennung von Betrugsmaschen in **deutschsprachigen**
 Kleinanzeigen (DE/AT/CH), mit Fokus auf Elektronik, Haushaltsgeräte und Autos.
-Ein Inserat (Text, Preis, Bilder, Chatverlauf) wird hochgeladen und von mehreren
-unabhängigen Detektoren bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score.
+Ein Inserat (Text, Preis, Bilder, Chatverlauf) wird hochgeladen – oder direkt im Browser per
+**Extension für Chromium und Firefox** geprüft – und von mehreren unabhängigen Detektoren
+bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstellen.
 
-> **Status:** erster Entwurf (v0.1.0). Die Pipeline läuft Ende-zu-Ende, die Modelle sind
-> aber nur auf 24 synthetischen Demo-Inseraten trainiert. Aussagekräftig wird es erst mit
-> euren echten Datensätzen.
+> **Status:** Entwurf v0.2.0. Pipeline, Web-Frontend und Browser-Extension laufen Ende-zu-Ende,
+> die Modelle sind aber nur auf 24 synthetischen Demo-Inseraten trainiert. Aussagekräftig wird
+> es erst mit euren echten Datensätzen.
 
 ---
 
@@ -72,6 +73,7 @@ pip install -e ".[text]"     # GBERT feintunen (torch, transformers)
 pip install -e ".[vision]"   # Bildmodelle (torch, torchvision, CLIP, imagehash)
 pip install -e ".[llm]"      # Claude als LLM-Judge
 pip install -e ".[all]"      # alles
+pip install -e ".[e2e]"      # Browser-Tests der Extension (danach: playwright install chromium)
 ```
 
 Einmal durchspielen:
@@ -89,6 +91,84 @@ pytest                               # Tests
 
 Frontend und API sind standardmäßig **nur auf dem eigenen Rechner** erreichbar. Für eine
 Live-Demo im Kurs: `scamguard ui --public`.
+
+---
+
+## Browser-Extension (Chrome, Edge, Brave & Firefox)
+
+![ScamGuard-Extension auf einer (nachgebauten) Kleinanzeigen-Seite](docs/screenshots/chromium_inserat.png)
+
+Wie ein Adblocker markiert die Extension **Betrugsindikatoren direkt auf der Seite** und zeigt
+einen **Prozent-Score** – im Panel oben rechts und als Badge am Toolbar-Symbol.
+
+- **Automatisch** auf Kleinanzeigen-Anzeigen (`kleinanzeigen.de/s-anzeige/…`)
+- **Jede andere Seite:** Toolbar-Symbol → „Diese Seite prüfen“
+- **Chat-Nachrichten / E-Mails:** Text markieren → Rechtsklick → „Markierten Text mit ScamGuard prüfen“
+- **Markierungen:** rot, durchgezogen, ⚠ = hoch · orange, gestrichelt = mittel · gelb, gepunktet =
+  niedrig (nicht nur über Farbe unterscheidbar). Preis, Verkäufer und Bilder werden umrahmt.
+  Klick auf ein Warnsignal im Panel springt zur Fundstelle.
+
+```
+Webseite ──Content Script liest aus──► Service Worker (Chromium) / Hintergrundskript (Firefox)
+   ▲                                                  │ HTTP, nur lokal
+   │                                                  ▼
+   └── Markierungen · Panel · Badge ◄── Signale mit Fundstellen ◄── scamguard api (127.0.0.1:8000)
+```
+
+Die Extension enthält **keine eigene Erkennungslogik** – sie ist ein Client für den
+ScamGuard-Server. So nutzt sie alle Modelle (Regeln, Text, Bilder, optional Claude), und ihr
+pflegt die Logik nur an einer Stelle. Jedes Signal liefert dafür `highlights` (exakter
+Originaltext zum Markieren) bzw. `target` (`price`, `seller`, `image:<n>`).
+
+### Installation
+
+1. **Server starten** (muss laufen, solange die Extension genutzt wird): `scamguard api`
+2. **Chrome / Edge / Brave / Arc:** `chrome://extensions` → *Entwicklermodus* an →
+   *Entpackte Erweiterung laden* → Ordner `extension/` wählen.
+3. **Firefox (ab Version 140):** `about:debugging#/runtime/this-firefox` →
+   *Temporäres Add-on laden …* → `extension/manifest.json` wählen.
+   - Temporäre Add-ons verschwinden beim Neustart. Dauerhaft: über addons.mozilla.org als
+     „unlisted“ signieren lassen (`npx web-ext sign --channel=unlisted`, kostenloser AMO-Account).
+   - Fragt Firefox nach Zugriffsrechten: Toolbar-Symbol → *Zugriff erlauben*.
+4. **Paket fürs Team:** `npx web-ext build --source-dir extension --artifacts-dir dist`
+
+**Einstellungen (Popup):** automatisch prüfen · Bilder mitprüfen · Panel anzeigen ·
+Claude-Analyse (kostet API-Guthaben) · Server-Adresse (nur `127.0.0.1`/`localhost`).
+
+### Datenschutz & Sicherheit
+
+- Die Extension spricht **nur mit dem lokalen Server**. Host-Berechtigungen gibt es nur für
+  `127.0.0.1`/`localhost`, `www.kleinanzeigen.de` und dessen Bild-Server. Verkäufername und
+  Ort werden nicht übertragen.
+- Mit eingeschalteter Claude-Analyse gehen Inseratstexte (optional Bilder) vom Server an die
+  Claude API – sonst verlässt nichts den Rechner.
+- Der Server beantwortet `/scan` nur mit Header `X-ScamGuard-Client` und ohne fremden `Origin`.
+  Fremde Webseiten können ihn daher nicht heimlich nutzen (z. B. um auf eure Kosten Claude
+  aufzurufen).
+- Texte aus der Seite landen im Panel nur als Text, nie als HTML – ein präpariertes Inserat
+  kann so keinen Code ins Panel einschleusen.
+- Firefox verlangt eine Datenübertragungs-Erklärung: `websiteContent` (der lokale Server läuft
+  außerhalb des Browsers).
+
+### Grenzen & Erweiterung
+
+- Ändert Kleinanzeigen sein Seitenlayout, fällt die Extension in den generischen Modus zurück
+  (weniger Elementmarkierungen) → Selektoren in `extension/content/extract.js` anpassen
+  (zuletzt geprüft: 2026-10-01).
+- Auf Seiten, die sich ständig neu aufbauen (Single-Page-Apps), können Markierungen beim
+  Neurendern verschwinden.
+- Weitere Plattformen (willhaben.at, markt.de, …): neuen Adapter in `extract.js` ergänzen.
+
+### Tests der Extension
+
+```bash
+pip install -e ".[e2e]" && playwright install chromium
+pytest -m e2e      # echte Extension in Chromium (Playwright) und im installierten Firefox (Selenium)
+```
+
+Kleinanzeigen wird dabei **nicht** aufgerufen: Die Tests liefern nachgebaute Seiten aus
+(`tests/e2e/fixtures`) und starten den Server im Testprozess. Screenshots für den Bericht:
+`SCAMGUARD_SCREENSHOTS=docs/screenshots pytest -m e2e -k scam_listing`
 
 ---
 
@@ -161,6 +241,13 @@ ScamGuard/
 ├── models/                      trainierte Gewichte (nicht im Git)
 ├── examples/                    Beispiel-Inserat für `scamguard scan`
 ├── frontend/app.py              Streamlit-Oberfläche (Prüfen + Labeln)
+├── extension/                   Browser-Extension (Manifest V3, Chromium + Firefox)
+│   ├── manifest.json
+│   ├── background.js            Service Worker/Hintergrundskript: Server, Badge, Kontextmenü
+│   ├── content/                 extract.js (Auslesen) · highlight.js (Markieren) · panel.js
+│   └── popup/                   Toolbar-Popup: Score, Serverstatus, Einstellungen
+├── docs/screenshots/            Screenshots der Extension (aus den E2E-Tests)
+├── scripts/                     Hilfsskripte (z. B. Extension-Icons erzeugen)
 ├── src/scamguard/
 │   ├── schema.py                einheitliches Datenschema (Listing, Signal, ScanResult)
 │   ├── data/registry.py         ← HIER Datensätze eintragen
@@ -170,9 +257,9 @@ ScamGuard/
 │   ├── models/                  rules, text_classifier, image_model, llm_judge, fusion
 │   ├── pipeline.py              alle Detektoren → Fusion
 │   ├── evaluate.py              Kennzahlen pro Modell und Quelle
-│   ├── api.py                   FastAPI
+│   ├── api.py                   FastAPI (Backend für Extension & Co.)
 │   └── cli.py                   `scamguard …`
-└── tests/
+└── tests/                       Unit-Tests · e2e/ = Browser-Tests der Extension
 ```
 
 ---
@@ -183,7 +270,7 @@ ScamGuard/
 |---|---|---|
 | **A – Daten & Evaluation** | Datensätze finden, Registry, Labeln, Metriken | 3–5 Quellen recherchieren und eintragen, Labeling-Leitfaden schreiben, Testset fixieren (nie zum Tuning nutzen!), `evaluate` für den Bericht |
 | **B – Text/NLP** | Regeln, Lexikon, Textmodelle, LLM | Lexikon mit echten Fällen erweitern, Baseline vs. GBERT vergleichen, Rechtschreib-Features (Hunspell/LanguageTool), LLM-Prompt evaluieren |
-| **C – Bild & Frontend** | Bildmodelle, UI, API | Bilddatensatz aufbauen, CLIP-Prompts testen, CNN trainieren, Fake-Hash-Liste pflegen, Frontend polieren |
+| **C – Bild, Frontend & Extension** | Bildmodelle, UI, API, Browser-Extension | Bilddatensatz aufbauen, CLIP-Prompts testen, CNN trainieren, Fake-Hash-Liste pflegen, Extension-Adapter für weitere Plattformen, Nutzertests mit der Extension |
 
 Gemeinsam: Fusion-Gewichte auf dem Validierungsset lernen (Stacking), Fehleranalyse
 (falsch-positive seriöse Inserate!), Projektbericht.

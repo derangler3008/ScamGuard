@@ -167,23 +167,25 @@ def analyze_contacts(text: str) -> ContactFeatures:
             feats.signals.append(Signal(
                 src, "LOOKALIKE_DOMAIN",
                 f"Link imitiert „{brand}“, gehört aber nicht zur offiziellen Domain",
-                0.9, evidence=url, hard=True,
+                0.9, evidence=url, hard=True, highlights=[url],
             ))
         if registered in URL_SHORTENERS:
             feats.signals.append(Signal(src, "URL_SHORTENER", "Gekürzter Link verschleiert das Ziel",
-                                        0.45, evidence=url))
+                                        0.45, evidence=url, highlights=[url]))
         if suffix.split(".")[-1] in SUSPICIOUS_TLDS:
             feats.signals.append(Signal(src, "SUSPICIOUS_TLD",
-                                        f"Ungewöhnliche Top-Level-Domain „.{suffix}“", 0.4, evidence=url))
+                                        f"Ungewöhnliche Top-Level-Domain „.{suffix}“", 0.4, evidence=url,
+                                        highlights=[url]))
         if re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", host):
             feats.signals.append(Signal(src, "IP_URL", "Link zeigt direkt auf eine IP-Adresse",
-                                        0.6, evidence=url))
+                                        0.6, evidence=url, highlights=[url]))
         if "xn--" in host:
             feats.signals.append(Signal(src, "PUNYCODE_URL",
-                                        "Link nutzt Punycode (mögliche Zeichen-Täuschung)", 0.6, evidence=url))
+                                        "Link nutzt Punycode (mögliche Zeichen-Täuschung)", 0.6, evidence=url,
+                                        highlights=[url]))
         if registered not in OFFICIAL_DOMAINS and not brand:
             feats.signals.append(Signal(src, "EXTERNAL_LINK",
-                                        "Externer Link im Inserat/Chat", 0.2, evidence=url))
+                                        "Externer Link im Inserat/Chat", 0.2, evidence=url, highlights=[url]))
 
     # E-Mails
     for mail in feats.emails:
@@ -194,15 +196,17 @@ def analyze_contacts(text: str) -> ContactFeatures:
             feats.signals.append(Signal(
                 src, "IMPERSONATION_EMAIL",
                 f"E-Mail gibt sich als „{brand or local_brand}“ aus", 0.8, evidence=mail, hard=True,
+                highlights=[mail],
             ))
         else:
             feats.signals.append(Signal(src, "EMAIL_IN_TEXT",
                                         "E-Mail-Adresse im Text (Kontakt außerhalb der Plattform)",
-                                        0.3, evidence=mail))
+                                        0.3, evidence=mail, highlights=[mail]))
 
     # IBANs (nur mit gültiger Prüfsumme, um Fehltreffer zu vermeiden).
     # Vor der Telefonsuche, weil IBAN-Ziffernblöcke sonst wie Nummern aussehen.
-    feats.ibans = sorted({m.upper() for m in IBAN_RE.findall(text_wo_mail) if _iban_is_valid(m)})
+    iban_originals = {m.upper(): m for m in IBAN_RE.findall(text_wo_mail) if _iban_is_valid(m)}
+    feats.ibans = sorted(iban_originals)
     text_wo_iban = IBAN_RE.sub(" ", text_wo_mail)
 
     # Telefonnummern
@@ -212,20 +216,22 @@ def analyze_contacts(text: str) -> ContactFeatures:
     for number, cc in intl:
         if not cc.startswith(DACH_COUNTRY_CODES):
             feats.signals.append(Signal(src, "FOREIGN_PHONE",
-                                        "Ausländische Telefonnummer (außerhalb DACH)", 0.45, evidence=number))
+                                        "Ausländische Telefonnummer (außerhalb DACH)", 0.45, evidence=number,
+                                        highlights=[number]))
     if feats.phones:
         feats.signals.append(Signal(src, "PHONE_IN_TEXT",
                                     "Telefonnummer im Text (Kontakt außerhalb der Plattform)",
-                                    0.15, evidence=feats.phones[0]))
+                                    0.15, evidence=feats.phones[0], highlights=list(feats.phones)))
 
     for iban in feats.ibans:
         country = iban[:2]
+        # Anzeige gekürzt (Datenschutz in Logs/UI), markiert wird der Originaltext auf der Seite
         if country in DACH_IBAN_COUNTRIES:
             feats.signals.append(Signal(src, "IBAN_IN_TEXT",
                                         "Bankverbindung direkt im Text (Hinweis auf Vorkasse)",
-                                        0.3, evidence=iban[:8] + "…"))
+                                        0.3, evidence=iban[:8] + "…", highlights=[iban_originals[iban]]))
         else:
             feats.signals.append(Signal(src, "FOREIGN_IBAN",
                                         f"Ausländische Bankverbindung ({country})", 0.55,
-                                        evidence=iban[:8] + "…"))
+                                        evidence=iban[:8] + "…", highlights=[iban_originals[iban]]))
     return feats
