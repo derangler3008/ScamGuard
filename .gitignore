@@ -15,3 +15,6 @@ models/*
 
 # Gepackte Extension (web-ext build)
 dist/
+
+# Firefox-Entwicklungsprofil (scripts/firefox_mit_extension.py)
+.firefox-dev-profil/

@@ -125,8 +125,10 @@ Originaltext zum Markieren) bzw. `target` (`price`, `seller`, `image:<n>`).
 1. **Server starten** (muss laufen, solange die Extension genutzt wird): `scamguard api`
 2. **Chrome / Edge / Brave / Arc:** `chrome://extensions` → *Entwicklermodus* an →
    *Entpackte Erweiterung laden* → Ordner `extension/` wählen.
-3. **Firefox (ab Version 140):** `about:debugging#/runtime/this-firefox` →
-   *Temporäres Add-on laden …* → `extension/manifest.json` wählen.
+3. **Firefox (ab Version 140) – am einfachsten:** `python scripts/firefox_mit_extension.py`
+   startet Firefox mit eigenem Entwicklungsprofil, lädt die Extension und öffnet kleinanzeigen.de
+   (erneut aufrufen = Extension nach Code-Änderungen neu laden). Manuell geht es über
+   `about:debugging#/runtime/this-firefox` → *Temporäres Add-on laden …* → `extension/manifest.json`.
    - Temporäre Add-ons verschwinden beim Neustart. Dauerhaft: über addons.mozilla.org als
      „unlisted“ signieren lassen (`npx web-ext sign --channel=unlisted`, kostenloser AMO-Account).
    - Fragt Firefox nach Zugriffsrechten: Toolbar-Symbol → *Zugriff erlauben*.
