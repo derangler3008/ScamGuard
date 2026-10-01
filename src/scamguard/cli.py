@@ -2,6 +2,7 @@
 
   scamguard data list                 Registrierte Datensätze anzeigen
   scamguard data build [--only A B]   Datensätze laden → data/processed/{train,val,test}.jsonl
+  scamguard retrain [--bilder]        Datensätze + eigene Labels einlesen, Modelle neu trainieren
   scamguard train text-baseline       TF-IDF + LogReg (Sekunden, CPU)
   scamguard train text-transformer    GBERT-Feintuning (GPU empfohlen)
   scamguard train image               CNN-Feintuning auf Inseratsbildern
@@ -27,51 +28,78 @@ from urllib.parse import urlparse
 from scamguard.config import PROJECT_ROOT, load_config
 
 
-def _cmd_data(args) -> int:
-    from scamguard.data.registry import get_specs
-
-    if args.action == "list":
-        for s in get_specs(include_disabled=True):
-            status = "AKTIV " if s.enabled else "aus   "
-            print(f"[{status}] {s.name:28s} {s.source:12s} {s.modality:10s} {s.path}")
-            if s.notes:
-                print(f"         {s.notes}")
-        return 0
-
-    from scamguard.data.build import build_dataset
-
-    reports, stats = build_dataset(args.only)
+def _print_build(reports, stats) -> None:
     for r in reports:
-        line = (f"{r.name:28s} Zeilen={r.rows:6d} übernommen={len(r.listings):6d} "
+        line = (f"{r.name:32s} Zeilen={r.rows:6d} übernommen={len(r.listings):6d} "
                 f"ohne_Label={r.skipped_no_label} nicht_deutsch={r.skipped_not_german} leer={r.skipped_empty}")
         if r.error:
             line += f"  FEHLER: {r.error}"
         elif r.note:
             line += f"  Hinweis: {r.note}"
         print(line)
-    print(json.dumps(stats, indent=2, ensure_ascii=False))
+    splits = ", ".join(f"{k} {v['n']} ({v['scam']} Betrug)" for k, v in stats["splits"].items())
+    print(f"→ {stats['total']} Beispiele, {stats['with_images']} mit Bildern, "
+          f"{stats['duplicates_removed']} Duplikate entfernt · {splits}")
+
+
+def _cmd_data(args) -> int:
+    from scamguard.data.registry import get_specs
+
+    if args.action == "list":
+        for s in get_specs(include_disabled=True):
+            status = "AKTIV " if s.enabled else "aus   "
+            print(f"[{status}] {s.name:32s} {s.source:12s} {s.modality:10s} {s.path}")
+            if s.notes:
+                print(f"         {s.notes}")
+        return 0
+
+    from scamguard.data.build import build_dataset
+
+    _print_build(*build_dataset(args.only))
     return 0
+
+
+def _train(model: str, train, val, cfg) -> Path:
+    if model == "text-baseline":
+        from scamguard.models.text_classifier import train_text_baseline
+
+        return train_text_baseline(train, cfg)
+    if model == "text-transformer":
+        from scamguard.models.text_classifier import train_text_transformer
+
+        return train_text_transformer(train, val, cfg)
+    from scamguard.models.image_model import train_image_model
+
+    return train_image_model(train, val, cfg)
 
 
 def _cmd_train(args) -> int:
     from scamguard.data.build import read_split
 
-    cfg = load_config()
-    train, val = read_split("train"), read_split("val")
-    if args.model == "text-baseline":
-        from scamguard.models.text_classifier import train_text_baseline
-
-        out = train_text_baseline(train, cfg)
-    elif args.model == "text-transformer":
-        from scamguard.models.text_classifier import train_text_transformer
-
-        out = train_text_transformer(train, val, cfg)
-    else:
-        from scamguard.models.image_model import train_image_model
-
-        out = train_image_model(train, val, cfg)
+    out = _train(args.model, read_split("train"), read_split("val"), load_config())
     print(f"Modell gespeichert: {out}")
     print("Nächster Schritt: `scamguard evaluate`")
+    return 0
+
+
+def _cmd_retrain(args) -> int:
+    """Nach neuen Daten/Labels: alles neu einlesen, Modelle neu trainieren, kurz auswerten."""
+    from scamguard.data.build import build_dataset, read_split
+    from scamguard.evaluate import evaluate
+
+    _print_build(*build_dataset())
+    cfg = load_config()
+    train, val = read_split("train"), read_split("val")
+    models = ["text-baseline"] + ["text-transformer"] * args.transformer + ["image"] * args.bilder
+    for model in models:
+        print(f"Trainiere {model} …")
+        print(f"  gespeichert: {_train(model, train, val, cfg)}")
+    report = evaluate("test")
+    fusion = report["models"]["FUSION"]
+    auc = f", AUC {fusion['roc_auc']:.2f}" if "roc_auc" in fusion else ""
+    print(f"Testset ({fusion['n']} Beispiele): Precision {fusion['precision']:.2f}, "
+          f"Recall {fusion['recall']:.2f}, F1 {fusion['f1']:.2f}{auc}")
+    print("Ein laufender Server (`scamguard start`) nutzt das neue Textmodell ab dem nächsten Scan.")
     return 0
 
 
@@ -220,6 +248,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("train", help="Modell trainieren")
     p.add_argument("model", choices=["text-baseline", "text-transformer", "image"])
     p.set_defaults(func=_cmd_train)
+
+    p = sub.add_parser("retrain", help="Alle Datensätze + eigene Labels neu einlesen und trainieren")
+    p.add_argument("--bilder", action="store_true", help="Bildmodell (CNN) mittrainieren")
+    p.add_argument("--transformer", action="store_true", help="GBERT-Textmodell mittrainieren (langsam)")
+    p.set_defaults(func=_cmd_retrain)
 
     p = sub.add_parser("evaluate", help="Modelle auswerten")
     p.add_argument("--split", default="test", choices=["train", "val", "test"])

@@ -49,6 +49,7 @@ class Listing:
     label: int | None = None
     scam_type: str | None = None  # z. B. "fake_paypal", "vorkasse", "dreieck", "phishing_link"
     source: str | None = None     # Herkunft des Datensatzes (für Auswertung pro Quelle)
+    url: str | None = None        # Adresse des Inserats (z. B. beim Labeln aus der Extension)
 
     def __post_init__(self) -> None:
         if self.category not in CATEGORIES:

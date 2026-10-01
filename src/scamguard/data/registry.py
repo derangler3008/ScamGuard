@@ -1,6 +1,10 @@
-"""DATENSATZ-REGISTRY – hier tragt ihr eure Trainingsdaten ein.
+"""DATENSATZ-REGISTRY – für Sonderfälle mit Python-Code.
 
-So kommt ein neuer Datensatz (z. B. von Hugging Face) ins Training:
+Der einfache Weg ohne Code: Dateien in die Ablageordner legen (siehe discovery.py):
+  data/datensatz_fuellen_text/    CSV/JSONL/Parquet + huggingface.yaml
+  data/datensatz_fuellen_bilder/  Unterordner betrug/ und serioes/ mit Bildern
+
+Hier eintragen, wenn ein Datensatz Sonderbehandlung braucht (z. B. Texte zusammensetzen):
 
   1. Unten in `DATASETS` einen `DatasetSpec(...)`-Eintrag anlegen (Vorlagen kopieren).
   2. `column_map`: Welche Spalte des Datensatzes entspricht welchem Feld unseres Schemas?
@@ -32,8 +36,8 @@ from scamguard.schema import Label
 @dataclass
 class DatasetSpec:
     name: str
-    source: Literal["huggingface", "csv", "jsonl", "parquet"]
-    path: str                                   # HF-ID ("org/name") oder lokaler Pfad
+    source: Literal["huggingface", "csv", "jsonl", "parquet", "imagefolder"]
+    path: str                                   # HF-ID ("org/name"), Datei oder Bilderordner
     modality: Literal["text", "image", "multimodal"] = "text"
     split: str = "train"                        # HF-Split
     subset: str | None = None                   # HF-Konfiguration/Subset
@@ -49,6 +53,8 @@ class DatasetSpec:
     license: str = "unbekannt – vor Nutzung prüfen!"
     notes: str = ""
     hf_kwargs: dict[str, Any] = field(default_factory=dict)  # z. B. {"revision": "main"}
+    read_kwargs: dict[str, Any] = field(default_factory=dict)  # pandas.read_csv: sep, encoding …
+    base_dir: str | None = None                 # relative Bildpfade in der Datei beziehen sich hierauf
 
 
 def _beispiel_transform(row: dict) -> dict | None:
@@ -124,10 +130,14 @@ DATASETS: list[DatasetSpec] = [
 
 
 def get_specs(names: list[str] | None = None, include_disabled: bool = False) -> list[DatasetSpec]:
+    """Datensätze aus diesem Modul plus alles aus den Ablageordnern (data/datensatz_fuellen_*)."""
+    from scamguard.data.discovery import discover_specs
+
+    specs = [*DATASETS, *discover_specs()]
     if names:
-        known = {s.name: s for s in DATASETS}
+        known = {s.name: s for s in specs}
         missing = [n for n in names if n not in known]
         if missing:
             raise KeyError(f"Unbekannte Datensätze: {missing}. Verfügbar: {sorted(known)}")
         return [known[n] for n in names]
-    return [s for s in DATASETS if s.enabled or include_disabled]
+    return [s for s in specs if s.enabled or include_disabled]

@@ -29,12 +29,6 @@ def read_jsonl(path: Path) -> list[Listing]:
         return [Listing.from_dict(json.loads(line)) for line in f if line.strip()]
 
 
-def append_jsonl(listing: Listing, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(listing.to_dict(), ensure_ascii=False) + "\n")
-
-
 def read_split(split: str) -> list[Listing]:
     path = resolve_path(PROCESSED_DIR) / f"{split}.jsonl"
     if not path.exists():
@@ -42,7 +36,7 @@ def read_split(split: str) -> list[Listing]:
     return read_jsonl(path)
 
 
-def _fingerprint(listing: Listing) -> str:
+def listing_fingerprint(listing: Listing) -> str:
     """Gleiche Inserate (auch aus verschiedenen Quellen) nur einmal behalten → kein Train/Test-Leak."""
     norm = re.sub(r"\W+", " ", listing.full_text.lower()).strip()
     key = norm or "|".join(sorted(listing.image_paths))
@@ -73,7 +67,7 @@ def build_dataset(names: list[str] | None = None, val_size: float = 0.15, test_s
     duplicates = 0
     for report in reports:
         for listing in report.listings:
-            fp = _fingerprint(listing)
+            fp = listing_fingerprint(listing)
             if fp in seen:
                 duplicates += 1
                 continue

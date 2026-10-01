@@ -30,9 +30,14 @@ class ScamGuard:
         self.cfg = with_overrides(cfg, overrides) if overrides else cfg
         self.detectors = build_detectors(self.cfg)
 
-    def scan(self, listing: Listing) -> ScanResult:
+    def scan(self, listing: Listing, reuse: dict[str, ModelResult] | None = None) -> ScanResult:
+        """`reuse`: bereits berechnete Ergebnisse je Detektor (z. B. aus Stufe 1 der Extension) –
+        diese Detektoren laufen nicht noch einmal."""
         results: list[ModelResult] = []
         for det in self.detectors:
+            if reuse and det.name in reuse:
+                results.append(reuse[det.name])
+                continue
             if not det.available:
                 results.append(ModelResult(det.name, None, available=False, error=det.unavailable_reason))
                 continue

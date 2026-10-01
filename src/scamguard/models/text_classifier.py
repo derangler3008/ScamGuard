@@ -52,37 +52,54 @@ class TextBaselineDetector(Detector):
     def __init__(self, cfg: dict):
         self.path = resolve_path(cfg["text_model"]["baseline_path"])
         self._pipe = None
+        self._names = None  # Merkmalsnamen – einmal pro geladenem Modell, nicht pro Scan
+        self._mtime: float | None = None
         self._error: str | None = None
-        if self.path.exists():
-            try:
-                self._pipe = joblib.load(self.path)
-            except Exception as exc:  # noqa: BLE001 – beschädigte/inkompatible Datei
-                self._error = f"Baseline konnte nicht geladen werden: {exc}"
+        self._maybe_reload()
+
+    def _maybe_reload(self) -> None:
+        """Lädt das Modell (neu), wenn die Datei neu ist – `scamguard retrain` wirkt ohne Neustart."""
+        try:
+            mtime = self.path.stat().st_mtime
+        except FileNotFoundError:
+            return
+        if mtime == self._mtime:
+            return
+        try:
+            pipe = joblib.load(self.path)
+        except Exception as exc:  # noqa: BLE001 – beschädigte/inkompatible Datei
+            self._error = f"Baseline konnte nicht geladen werden: {exc}"
+            return
+        self._pipe, self._mtime, self._error = pipe, mtime, None
+        self._names = pipe.named_steps["features"].get_feature_names_out()
 
     @property
     def available(self) -> bool:
+        self._maybe_reload()
         return self._pipe is not None
 
     @property
     def unavailable_reason(self) -> str | None:
-        return self._error or "Noch nicht trainiert → `scamguard train text-baseline`"
+        return self._error or "Noch nicht trainiert → `scamguard retrain`"
 
     def predict(self, listing: Listing) -> ModelResult:
         text = listing.full_text
-        prob = float(self._pipe.predict_proba([text])[0][1])
-        return ModelResult(name=self.name, score=prob, signals=self._explain(text))
+        if not text:
+            return ModelResult(self.name, score=None, error="Kein Text im Inserat")
+        x = self._pipe.named_steps["features"].transform([text])  # nur einmal vektorisieren
+        prob = float(self._pipe.named_steps["clf"].predict_proba(x)[0][1])
+        return ModelResult(name=self.name, score=prob, signals=self._explain(x))
 
-    def _explain(self, text: str, top_k: int = 3) -> list[Signal]:
+    def _explain(self, x, top_k: int = 3) -> list[Signal]:
         """Welche Wörter/Wortpaare haben den Score am stärksten nach oben gedrückt?
 
         Nur Wort-n-Gramme (Zeichenfragmente wie „ zah“ sind für Menschen unlesbar) und
         keine reinen Stoppwörter („ich“, „das“) – die sind statistisch, aber nicht erklärend.
         """
-        union = self._pipe.named_steps["features"]
         coef = self._pipe.named_steps["clf"].coef_[0]
-        x = union.transform([text]).tocoo()
+        x = x.tocoo()
         contrib = x.data * coef[x.col]
-        names = union.get_feature_names_out()
+        names = self._names
         signals = []
         for idx in np.argsort(contrib)[::-1]:
             if contrib[idx] <= 0.05 or len(signals) >= top_k:
@@ -96,12 +113,22 @@ class TextBaselineDetector(Detector):
         return signals
 
 
+def with_text(listings: list[Listing]) -> list[Listing]:
+    """Nur Inserate mit Text – reine Bild-Datensätze gehören nicht ins Texttraining."""
+    return [l for l in listings if l.full_text]
+
+
 def train_text_baseline(train: list[Listing], cfg: dict) -> Path:
+    train = with_text(train)
+    if len({l.label for l in train}) < 2:
+        raise ValueError("Für das Textmodell braucht es Beispiele für Betrug UND seriös")
     pipe = build_baseline_pipeline()
     pipe.fit([l.full_text for l in train], [int(l.label) for l in train])
     out = resolve_path(cfg["text_model"]["baseline_path"])
     out.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(pipe, out)
+    tmp = out.with_suffix(".tmp")  # atomar ersetzen: der laufende Server liest nie eine halbe Datei
+    joblib.dump(pipe, tmp)
+    tmp.replace(out)
     return out
 
 
@@ -159,6 +186,7 @@ def train_text_transformer(train: list[Listing], val: list[Listing], cfg: dict) 
         TrainingArguments,
     )
 
+    train, val = with_text(train), with_text(val)
     tc = cfg["text_model"]
     out = resolve_path(tc["path"])
     tokenizer = AutoTokenizer.from_pretrained(tc["base_model"])

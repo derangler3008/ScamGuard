@@ -44,6 +44,15 @@
     .sub, .models, .foot, .hint { color: #475467; margin: 6px 0; }
     .summary { background: #f9fafb; border-radius: 8px; padding: 8px; margin: 8px 0; }
     .ai { margin: 6px 0; font-size: 12px; }
+    .labeling { border-top: 1px solid #eaecf0; margin-top: 10px; padding-top: 8px; }
+    .label-title, .label-status { margin: 0 0 6px; color: #475467; font-size: 12px; }
+    .label-status { margin: 6px 0 0; }
+    .label-row { display: flex; gap: 8px; }
+    .label-btn { flex: 1; border-radius: 8px; padding: 6px 8px; font-weight: 600; background: transparent;
+      border: 1px solid #d0d5dd; }
+    .label-btn.scam { color: #b42318; border-color: #fda29b; }
+    .label-btn.ok { color: #067647; border-color: #75e0a7; }
+    .label-btn:disabled { opacity: .5; cursor: wait; }
     ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
     .sig { display: grid; grid-template-columns: 16px 1fr; gap: 2px 6px; width: 100%; text-align: left;
       background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px; }
@@ -74,6 +83,9 @@
       .high .pct, .high .verdict { color: #fda29b; } .mid .pct, .mid .verdict { color: #fec84b; }
       .ok .pct, .ok .verdict { color: #75e0a7; }
       .link { color: #84caff; }
+      .labeling { border-color: #344054; }
+      .label-title, .label-status { color: #cbd2dc; }
+      .label-btn.scam { color: #fda29b; } .label-btn.ok { color: #75e0a7; }
     }`;
 
   let host = null;
@@ -81,6 +93,7 @@
   let collapsed = false;
   let lastState = null;
   let showAll = false;
+  let labelStatus = null; // bleibt bei der Stufe-2-Aktualisierung erhalten, ein neuer Scan setzt zurück
 
   function h(tag, props = {}, ...children) {
     const el = document.createElement(tag);
@@ -170,7 +183,30 @@
       onRetry && h("button", { class: "primary", type: "button", text: "Erneut versuchen", onclick: onRetry }));
   }
 
-  function renderResult({ result, marked, onFocus, onRescan, aiPending, aiError }) {
+  function renderLabeling(onLabel) {
+    const status = h("p", { class: "label-status", role: "status", text: labelStatus ?? "" });
+    const save = async (label) => {
+      buttons.forEach((b) => { b.disabled = true; });
+      status.textContent = "Speichere …";
+      const r = await onLabel(label);
+      labelStatus = r?.ok
+        ? `✓ Als ${r.label === "betrug" ? "Betrug" : "seriös"} gespeichert · ${r.count} eigene Labels. ` +
+          "Mit `scamguard retrain` lernt das Modell daraus."
+        : `Speichern fehlgeschlagen: ${r?.error?.message ?? "unbekannter Fehler"}`;
+      status.textContent = labelStatus;
+      buttons.forEach((b) => { b.disabled = false; });
+    };
+    const buttons = [
+      h("button", { class: "label-btn scam", type: "button", text: "⚠ Betrug", onclick: () => save("betrug") }),
+      h("button", { class: "label-btn ok", type: "button", text: "✓ Seriös", onclick: () => save("serioes") }),
+    ];
+    return h("div", { class: "labeling" },
+      h("p", { class: "label-title", text: "Deine Einstufung (wird zu Trainingsdaten):" }),
+      h("div", { class: "label-row" }, buttons),
+      status);
+  }
+
+  function renderResult({ result, marked, onFocus, onRescan, onLabel, aiPending, aiError }) {
     const pct = Math.round(result.score * 100);
     const v = VERDICTS[result.verdict] ?? { cls: "", icon: "", label: result.verdict };
     const summary = result.signals.find((s) => s.code === "LLM_SUMMARY");
@@ -237,6 +273,7 @@
       return h("span", { title: r.error ?? "" , text: `${name} ${state}` });
     });
     parts.push(h("p", { class: "models" }, "Modelle: ", models.flatMap((m, i) => (i ? [" · ", m] : [m]))));
+    if (onLabel) parts.push(renderLabeling(onLabel));
     parts.push(h("div", { class: "foot" },
       h("span", { text: "Einschätzung, kein Beweis." }),
       h("button", { class: "primary", type: "button", text: "Erneut prüfen", onclick: onRescan })));
@@ -250,7 +287,10 @@
   }
 
   SG.panel = {
-    showLoading: (source) => render({ kind: "loading", source }),
+    showLoading: (source) => {
+      labelStatus = null;
+      render({ kind: "loading", source });
+    },
     showError: (error, onRetry) => render({ kind: "error", error, onRetry }),
     showResult: (result, marked, handlers) => {
       showAll = false;

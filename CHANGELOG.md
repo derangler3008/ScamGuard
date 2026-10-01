@@ -2,6 +2,31 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.4.0] – 2026-10-02
+
+### Hinzugefügt
+- **Ablageordner ohne Code:** `data/datensatz_fuellen_text/` (CSV/TSV/JSONL/Parquet, deutsche
+  Excel-CSV, Spalten- und Label-Erkennung, `huggingface.yaml`) und `data/datensatz_fuellen_bilder/`
+  (Unterordner `betrug/` und `serioes/` = Label).
+- **Selbst einstufen in der Extension:** Buttons *Betrug*/*Seriös* im Panel → `POST /label` →
+  `data/raw/eigene_labels.jsonl`; erneutes Einstufen ersetzt das alte Label. Popup zeigt die Anzahl.
+  Streamlit-Labeln nutzt denselben Speicherweg.
+- `scamguard retrain [--bilder] [--transformer]`: alles neu einlesen, trainieren, auswerten.
+- PyTorch + CLIP installiert: Bildhinweise (Stockfoto, Screenshot, falsche Kategorie) laufen.
+
+### Geändert / optimiert (Senior-Review)
+- CLIP kodiert jedes Bild nur einmal, Vergleichstexte einmal beim Laden, Rechnung auf der
+  Apple-GPU (MPS): ~8× schneller pro Bild, Ergebnisse identisch.
+- Stufe 2 der Extension nutzt die Ergebnisse aus Stufe 1 wieder (Server-Zwischenspeicher) –
+  nur das LLM rechnet neu; der Service Worker lädt Inseratsbilder nur einmal.
+- Textmodell: Text wird einmal statt zweimal vektorisiert, Merkmalsnamen zwischengespeichert,
+  neues Modell wird ohne Server-Neustart geladen, Speichern atomar.
+- Bildhinweise ohne trainiertes CNN liefern keinen eigenen Score mehr (sonst hätte „nichts
+  Auffälliges im Bild“ den Gesamtscore von Betrugsinseraten gesenkt).
+- Reine Bild-Datensätze fließen nicht ins Texttraining; Inserate ohne Text bekommen kein Text-Urteil.
+- Parquet-Spalten werden aus dem Schema gelesen statt aus der ganzen Datei.
+- `append_jsonl` entfernt (durch `labels.save_label` ersetzt).
+
 ## [0.3.1] – 2026-10-01
 
 ### Hinzugefügt

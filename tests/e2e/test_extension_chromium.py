@@ -187,3 +187,21 @@ def test_ai_assessment_is_added_in_second_step(chromium):
         page.close()
     finally:
         worker.evaluate("() => chrome.storage.sync.set({ llmMode: 'off' })")
+
+
+def test_label_buttons_save_and_replace_training_data(chromium, label_file):
+    ctx, _ = chromium
+    page = ctx.new_page()
+    page.goto(SCAM_URL)
+    _score(page)
+    panel = page.locator("#scamguard-root")
+    panel.locator("button.label-btn.scam").click()
+    expect(panel.locator(".label-status")).to_contain_text("Als Betrug gespeichert", timeout=10_000)
+    stored = [json.loads(line) for line in label_file.read_text(encoding="utf-8").splitlines()]
+    assert stored[-1]["label"] == 1 and stored[-1]["url"] == SCAM_URL and stored[-1]["image_paths"]
+    # Umentscheiden ersetzt das Label, statt ein zweites anzulegen
+    panel.locator("button.label-btn.ok").click()
+    expect(panel.locator(".label-status")).to_contain_text("Als seriös gespeichert", timeout=10_000)
+    stored = [json.loads(line) for line in label_file.read_text(encoding="utf-8").splitlines()]
+    assert [r["label"] for r in stored if r["url"] == SCAM_URL] == [0]
+    page.close()

@@ -98,6 +98,12 @@ def api_server(test_image_bytes, tmp_path_factory):
     guard_llm = ScamGuard(cfg)
     guard_llm.detectors = [d for d in guard_llm.detectors if d.name != "llm"] + [_FakeLLM()]
 
+    # Eigene Labels in einen Temp-Ordner statt in data/raw/
+    from scamguard.data import labels
+
+    original_labels = labels.LABEL_FILE, labels.LABEL_IMAGE_DIR
+    labels.LABEL_FILE, labels.LABEL_IMAGE_DIR = str(tmp / "eigene_labels.jsonl"), str(tmp / "label_bilder")
+
     original = api._guard
     api._guard = lambda use_llm: guard_llm if use_llm else guard
     port = free_port()
@@ -113,3 +119,11 @@ def api_server(test_image_bytes, tmp_path_factory):
     server.should_exit = True
     thread.join(timeout=5)
     api._guard = original
+    labels.LABEL_FILE, labels.LABEL_IMAGE_DIR = original_labels
+
+
+@pytest.fixture(scope="session")
+def label_file(api_server):
+    from scamguard.data import labels
+
+    return Path(labels.LABEL_FILE)

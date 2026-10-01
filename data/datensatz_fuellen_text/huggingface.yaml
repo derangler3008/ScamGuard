@@ -1,0 +1,19 @@
+# Hugging-Face-Datensätze – eintragen, dann `scamguard retrain`.
+# Pro Datensatz ein Eintrag unter `datensaetze:`. Beispiel (mit # davor = inaktiv):
+#
+#  - id: organisation/datensatzname     # Hugging-Face-ID
+#    split: train
+#    spalten:                           # unser Feld: Spalte im Datensatz
+#      description: text
+#    label_spalte: label
+#    labels:                            # optional – sonst werden 1/0, spam/ham … erkannt
+#      1: betrug
+#      0: seriös
+#    # alles_ist: betrug                # statt label_spalte: ganzer Datensatz ist Betrug/seriös
+#    nur_deutsch: true                  # nicht-deutsche Texte verwerfen
+#    max_zeilen: 5000
+#    lizenz: CC-BY-4.0
+#
+# Felder: title, description, messages, price, category, scam_type, image (Bildspalte)
+
+datensaetze: []

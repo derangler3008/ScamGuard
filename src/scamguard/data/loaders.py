@@ -35,6 +35,9 @@ CATEGORY_KEYWORDS = {
 }
 
 
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+
+
 @dataclass
 class LoadReport:
     name: str
@@ -102,15 +105,18 @@ def _as_list(value: Any) -> list[str]:
     return [str(value)]
 
 
-def _save_image(value: Any, out_dir: Path, idx: int) -> str | None:
-    """HF-Bildspalten können PIL-Bilder, {"bytes": ...}/{"path": ...}-Dicts oder Pfade sein."""
+def _save_image(value: Any, out_dir: Path, idx: int, base_dir: str | None = None) -> str | None:
+    """HF-Bildspalten können PIL-Bilder, {"bytes": ...}/{"path": ...}-Dicts oder Pfade sein.
+    Relative Pfade gelten relativ zur Datensatzdatei (base_dir), sonst zum Projektordner."""
     from PIL import Image
 
     value = _clean(value)
     if value is None:
         return None
     if isinstance(value, str):
-        return str(resolve_path(value)) if resolve_path(value).exists() else None
+        candidates = [Path(base_dir) / value] if base_dir and not Path(value).is_absolute() else []
+        candidates.append(resolve_path(value))
+        return next((str(c) for c in candidates if c.exists()), None)
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / f"{idx:07d}.jpg"
     if isinstance(value, dict):
@@ -143,6 +149,11 @@ def _iter_rows(spec: DatasetSpec) -> Iterator[dict]:
     path = resolve_path(spec.path)
     if not path.exists():
         raise FileNotFoundError(f"Datei nicht gefunden: {path}")
+    if spec.source == "imagefolder":  # Label kommt aus dem Ordnernamen (fixed_label)
+        images = sorted(p for p in path.rglob("*") if p.suffix.lower() in IMAGE_SUFFIXES)
+        for image in images[:spec.max_rows] if spec.max_rows else images:
+            yield {"image_paths": [str(image)]}
+        return
     if spec.source == "jsonl":
         with path.open(encoding="utf-8") as f:
             for i, line in enumerate(f):
@@ -155,7 +166,7 @@ def _iter_rows(spec: DatasetSpec) -> Iterator[dict]:
     import pandas as pd
 
     if spec.source == "csv":
-        df = pd.read_csv(path, nrows=spec.max_rows)
+        df = pd.read_csv(path, nrows=spec.max_rows, **spec.read_kwargs)
     elif spec.source == "parquet":
         df = pd.read_parquet(path)
         if spec.max_rows:
@@ -200,7 +211,8 @@ def row_to_listing(row: dict, spec: DatasetSpec, idx: int) -> Listing | None:
     # Relative Bildpfade (z. B. aus dem Labeling-Tab) gegen den Projektordner auflösen
     images = [str(resolve_path(p)) for p in _as_list(data.pop("image_paths", None))]
     if "image" in data:
-        saved = _save_image(data.pop("image"), resolve_path("data/images") / spec.name, idx)
+        image_dir = resolve_path("data/images") / re.sub(r"[^\w.-]+", "_", spec.name)  # „hf:org/x“ → Ordnername
+        saved = _save_image(data.pop("image"), image_dir, idx, spec.base_dir)
         if saved:
             images.append(saved)
 

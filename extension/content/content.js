@@ -65,6 +65,18 @@
     }
   }
 
+  /** Eigene Einstufung → Trainingsdaten. Die URL ist der Schlüssel: erneutes Labeln derselben
+   *  Anzeige ersetzt das alte Label. Markierter Text hat keine eigene URL → dort zählt der Text. */
+  async function sendLabel(extracted, label) {
+    const listing = { ...extracted.listing };
+    if (extracted.source !== "selection") listing.url = location.origin + location.pathname;
+    try {
+      return await ext.runtime.sendMessage({ type: "label", listing, imageUrls: extracted.imageUrls, label });
+    } catch (err) {
+      return { ok: false, error: { kind: "extension", message: `Extension-Fehler: ${err.message}` } };
+    }
+  }
+
   function show(settings, response, extracted, handlers) {
     const { result, uploadedImageIndices } = response;
     const marked = applyMarks(result.signals, extracted, uploadedImageIndices);
@@ -83,6 +95,7 @@
     const handlers = {
       onFocus: (id) => SG.highlight.focus(id),
       onRescan: () => runScan(mode, text),
+      onLabel: (label) => sendLabel(extracted, label),
     };
     if (settings.showPanel) SG.panel.showLoading(extracted.source);
 

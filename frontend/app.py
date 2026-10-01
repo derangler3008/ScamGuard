@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
-import uuid
 from pathlib import Path
 
 import streamlit as st
@@ -17,12 +16,10 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scamguard.config import load_config, resolve_path
-from scamguard.data.build import append_jsonl
+from scamguard.data.labels import LABEL_FILE, count_labels, save_label, save_label_images
 from scamguard.pipeline import ScamGuard
 from scamguard.schema import CATEGORIES, Listing, ScanResult
 
-LABEL_FILE = "data/raw/eigene_labels.jsonl"
-LABEL_IMAGE_DIR = "data/images/eigene_labels"
 SAMPLE_FILE = "data/samples/sample_listings.jsonl"
 SCAM_TYPES = ["unbekannt", "fake_zahlungslink", "vorkasse", "paypal_freunde", "dreiecksbetrug",
               "phishing", "identitaetsdiebstahl", "ueberzahlung", "fake_inserat_sonstiges"]
@@ -189,7 +186,8 @@ with tab_scan:
 
 with tab_label:
     st.write("Gescannte Inserate mit dem echten Ergebnis labeln. Sie landen in "
-             f"`{LABEL_FILE}` und fließen beim nächsten `scamguard data build` ins Training ein.")
+             f"`{LABEL_FILE}` und fließen mit `scamguard retrain` ins Training ein. "
+             "Schneller geht es direkt in der Browser-Extension (Buttons im Panel).")
     st.caption("Datenschutz: Keine Namen, Telefonnummern oder Adressen echter Personen speichern – "
                "vorher im Text schwärzen (z. B. „[TELEFON]“).")
     last = st.session_state.get("last_scan")
@@ -206,25 +204,19 @@ with tab_label:
             if verdict is None:
                 st.warning("Bitte „Betrug“ oder „seriös“ auswählen.")
             else:
-                image_dir = resolve_path(LABEL_IMAGE_DIR)
-                image_dir.mkdir(parents=True, exist_ok=True)
-                stored = []
-                for name, data in last["images"]:
-                    target = image_dir / f"{uuid.uuid4().hex}{Path(name).suffix.lower() or '.jpg'}"
-                    target.write_bytes(data)
-                    stored.append(str(target.relative_to(resolve_path("."))))
-                labeled = Listing.from_dict({**listing.to_dict(), "image_paths": stored,
+                images = [(Path(name).suffix.lower() or ".jpg", data) for name, data in last["images"]]
+                labeled = Listing.from_dict({**listing.to_dict(), "image_paths": save_label_images(images),
                                              "label": int(verdict == "Betrug"),
                                              "scam_type": scam_type if verdict == "Betrug" else None,
                                              "source": "eigene_labels"})
-                append_jsonl(labeled, resolve_path(LABEL_FILE))
-                st.success("Gespeichert.")
+                save_label(labeled)  # gleicher Speicherweg wie die Extension (ersetzt alte Einstufung)
+                st.success("Gespeichert. Mit `scamguard retrain` lernt das Modell daraus.")
                 del st.session_state["last_scan"]
 
-    label_path = resolve_path(LABEL_FILE)
-    if label_path.exists():
-        n = sum(1 for line in label_path.read_text(encoding="utf-8").splitlines() if line.strip())
-        st.metric("Selbst gelabelte Inserate", n)
+    counts = count_labels()
+    if counts["gesamt"]:
+        st.metric("Selbst gelabelte Inserate", counts["gesamt"],
+                  help=f"{counts['betrug']} Betrug, {counts['serioes']} seriös")
 
 # --------------------------------------------------------------------------- Über
 

@@ -48,34 +48,61 @@ async function fetchImage(url) {
 // Server-Parameter use_llm je Modus. "auto" lässt den Server entscheiden (nur lokales LLM).
 const USE_LLM = { off: "false", auto: "auto", on: "true" };
 
-async function scanListing(listing, imageUrls, settings, llmMode) {
+// Bilder einer Seite werden für Stufe 1, Stufe 2 und das Labeln gebraucht → nur einmal laden.
+const IMAGE_CACHE_SIZE = 16;
+const imageCache = new Map(); // URL → Blob (älteste zuerst)
+
+async function cachedImage(url) {
+  if (!imageCache.has(url)) {
+    imageCache.set(url, await fetchImage(url));
+    if (imageCache.size > IMAGE_CACHE_SIZE) imageCache.delete(imageCache.keys().next().value);
+  }
+  return imageCache.get(url);
+}
+
+async function listingForm(listing, imageUrls, withImages) {
   const form = new FormData();
   form.append("listing", JSON.stringify(listing));
-  form.append("use_llm", USE_LLM[llmMode] ?? "false");
-
   // Index (auf der Seite) der Bilder, die tatsächlich hochgeladen wurden – der Server meldet
   // Bildsignale als "image:<Upload-Index>", das Content Script übersetzt zurück.
   const uploadedImageIndices = [];
-  if (settings.analyzeImages && imageUrls?.length) {
-    const results = await Promise.allSettled(imageUrls.slice(0, MAX_IMAGES).map(fetchImage));
+  if (withImages && imageUrls?.length) {
+    const results = await Promise.allSettled(imageUrls.slice(0, MAX_IMAGES).map(cachedImage));
     results.forEach((r, pageIndex) => {
       if (r.status !== "fulfilled") return;
       form.append("images", r.value, `bild_${pageIndex}.${IMAGE_EXT[r.value.type]}`);
       uploadedImageIndices.push(pageIndex);
     });
   }
+  return { form, uploadedImageIndices };
+}
 
+async function postToServer(path, form, settings, timeoutMs) {
   const resp = await fetchWithTimeout(
-    `${settings.apiUrl}/scan`,
+    `${settings.apiUrl}${path}`,
     { method: "POST", body: form, headers: { [CLIENT_HEADER]: `extension/${VERSION}` } },
-    llmMode === "off" ? 30_000 : 150_000, // lokales LLM: erster Aufruf lädt das Modell
+    timeoutMs,
   );
   if (!resp.ok) {
     let detail = `HTTP ${resp.status}`;
     try { detail = (await resp.json()).detail ?? detail; } catch { /* kein JSON */ }
     throw new ScanError("http", `Server-Fehler: ${detail}`);
   }
-  return { result: await resp.json(), uploadedImageIndices };
+  return resp.json();
+}
+
+async function scanListing(listing, imageUrls, settings, llmMode) {
+  const { form, uploadedImageIndices } = await listingForm(listing, imageUrls, settings.analyzeImages);
+  form.append("use_llm", USE_LLM[llmMode] ?? "false");
+  // lokales LLM: der erste Aufruf lädt das Modell → großzügiges Zeitlimit
+  const result = await postToServer("/scan", form, settings, llmMode === "off" ? 30_000 : 150_000);
+  return { result, uploadedImageIndices };
+}
+
+async function labelListing(listing, imageUrls, label, settings) {
+  const { form } = await listingForm(listing, imageUrls, settings.analyzeImages);
+  form.append("label", label);
+  return postToServer("/label", form, settings, 30_000);
 }
 
 async function setBadge(tabId, state) {
@@ -152,6 +179,15 @@ async function handleMessage(msg, sender) {
         await setBadge(tabId, { error: error.message });
         await rememberResult(tabId, { error, url: sender.tab?.url ?? "", time: Date.now() });
         return { ok: false, error };
+      }
+    }
+
+    case "label": {
+      const settings = await getSettings();
+      try {
+        return { ...(await labelListing(msg.listing, msg.imageUrls, msg.label, settings)), ok: true };
+      } catch (err) {
+        return { ok: false, error: { kind: err.kind ?? "unknown", message: err.message } };
       }
     }
 

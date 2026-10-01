@@ -18,3 +18,11 @@ dist/
 
 # Firefox-Entwicklungsprofil (scripts/firefox_mit_extension.py)
 .firefox-dev-profil/
+
+# Datensatz-Ablageordner: Daten lokal, Anleitungen und Vorlagen im Git
+data/datensatz_fuellen_text/*
+!data/datensatz_fuellen_text/LIESMICH.md
+!data/datensatz_fuellen_text/huggingface.yaml
+!data/datensatz_fuellen_text/_vorlage_*
+data/datensatz_fuellen_bilder/*/**
+!data/datensatz_fuellen_bilder/*/.gitkeep

@@ -71,6 +71,8 @@ class ImageDetector(Detector):
         self._known_hashes = []
         self._cnn = self._cnn_transform = None
         self._clip = self._clip_processor = None
+        self._clip_device = "cpu"
+        self._prompt_features: dict = {}
         self._clip_failed = False
         self._notes: list[str] = []
 
@@ -112,7 +114,8 @@ class ImageDetector(Detector):
         self._cnn_transform = weights.transforms()
 
     def _ensure_clip(self) -> bool:
-        """CLIP erst beim ersten Bild laden (ca. 600 MB, Download beim allerersten Mal)."""
+        """CLIP erst beim ersten Bild laden (ca. 600 MB, Download beim allerersten Mal).
+        Die Vergleichstexte werden dabei einmal kodiert – pro Bild bleibt nur die Bildkodierung."""
         if self._clip is not None:
             return True
         if self._clip_failed or not self.cfg.get("use_clip_consistency"):
@@ -120,13 +123,34 @@ class ImageDetector(Detector):
         try:
             from transformers import CLIPModel, CLIPProcessor
 
-            self._clip = CLIPModel.from_pretrained(self.cfg["clip_model"]).eval()
+            from scamguard.models.text_classifier import best_torch_device
+
+            self._clip_device = best_torch_device()
             self._clip_processor = CLIPProcessor.from_pretrained(self.cfg["clip_model"])
+            self._clip = CLIPModel.from_pretrained(self.cfg["clip_model"]).to(self._clip_device).eval()
+            self._prompt_features = {name: self._encode_prompts(prompts)
+                                     for name, prompts in (("style", STYLE_PROMPTS),
+                                                           ("category", CATEGORY_PROMPTS))}
             return True
         except Exception as exc:  # noqa: BLE001 – fehlende Pakete oder kein Netz beim ersten Download
+            self._clip = None
             self._clip_failed = True
             self._notes.append(f"CLIP nicht verfügbar: {exc}")
             return False
+
+    @staticmethod
+    def _normalized(features):
+        # transformers 5 liefert je nach Version Tensor oder Ausgabeobjekt mit pooler_output
+        features = getattr(features, "pooler_output", features)
+        return features / features.norm(dim=-1, keepdim=True)
+
+    def _encode_prompts(self, prompts: dict[str, str]):
+        import torch
+
+        inputs = self._clip_processor(text=list(prompts.values()), return_tensors="pt", padding=True)
+        with torch.no_grad():
+            features = self._clip.get_text_features(**inputs.to(self._clip_device))
+        return list(prompts), self._normalized(features)
 
     @property
     def available(self) -> bool:
@@ -139,14 +163,16 @@ class ImageDetector(Detector):
 
     # -- Vorhersage -----------------------------------------------------------
 
-    def _clip_probs(self, img, prompts: dict[str, str]) -> dict[str, float]:
+    def _clip_probs(self, img) -> dict[str, dict[str, float]]:
+        """Eine Bildkodierung, dann Ähnlichkeit zu allen Prompt-Gruppen (wie CLIP-Zero-Shot)."""
         import torch
 
-        inputs = self._clip_processor(text=list(prompts.values()), images=img,
-                                      return_tensors="pt", padding=True)
+        inputs = self._clip_processor(images=img, return_tensors="pt")
         with torch.no_grad():
-            probs = self._clip(**inputs).logits_per_image.softmax(dim=1)[0].tolist()
-        return dict(zip(prompts.keys(), probs))
+            image = self._normalized(self._clip.get_image_features(**inputs.to(self._clip_device)))
+            scale = self._clip.logit_scale.exp()
+            return {name: dict(zip(keys, (scale * image @ texts.T).softmax(dim=-1)[0].tolist()))
+                    for name, (keys, texts) in self._prompt_features.items()}
 
     def _cnn_prob(self, img) -> float:
         import torch
@@ -165,7 +191,7 @@ class ImageDetector(Detector):
 
         signals: list[Signal] = []
         cnn_scores: list[float] = []
-        neural_ran = False
+        clip_ran = False
         for idx, path in indexed:
             label = f"Bild {idx + 1}"  # Dateinamen sind intern (Upload/Temp) → für Menschen nummerieren
             target = f"image:{idx}"
@@ -183,19 +209,21 @@ class ImageDetector(Detector):
                                           0.9, evidence=label, hard=True, target=target))
 
             if self._ensure_clip():
-                neural_ran = True
-                style = self._clip_probs(img, STYLE_PROMPTS)
+                clip_ran = True
+                probs = self._clip_probs(img)
+                style = probs["style"]
                 if style["stock"] > 0.6:
+                    # Schwacher Hinweis: auch ehrliche Verkäufer fotografieren vor weißem Hintergrund
                     signals.append(Signal(self.name, "STOCK_PHOTO",
                                           "Wirkt wie ein professionelles Produktfoto – evtl. aus dem Netz "
                                           "kopiert (Google-Bilder-Rückwärtssuche empfohlen)",
-                                          0.3, evidence=f"{label} ({style['stock']:.0%})", target=target))
+                                          0.2, evidence=f"{label} ({style['stock']:.0%})", target=target))
                 if style["screenshot"] > 0.6 or style["text"] > 0.6:
                     signals.append(Signal(self.name, "SCREENSHOT_OR_TEXT",
                                           "Bild ist ein Screenshot/Textbild statt eines Artikelfotos",
                                           0.25, evidence=label, target=target))
                 if listing.category in CATEGORY_PROMPTS:
-                    cat = self._clip_probs(img, CATEGORY_PROMPTS)
+                    cat = probs["category"]
                     best = max(cat, key=cat.get)
                     if cat[listing.category] < 0.15 and cat[best] > 0.5:
                         signals.append(Signal(self.name, "CATEGORY_MISMATCH",
@@ -204,21 +232,20 @@ class ImageDetector(Detector):
                                               target=target))
 
             if self._cnn is not None:
-                neural_ran = True
                 cnn_scores.append(self._cnn_prob(img))
 
-        if not neural_ran:
-            # Nur Hash-Abgleich → kein eigener Score, harte Treffer wirken trotzdem über die Fusion
-            return ModelResult(self.name, score=None, signals=signals,
-                               error="Kein neuronales Bildmodell aktiv (nur Hash-Abgleich)")
+        if not cnn_scores:
+            # Ohne trainiertes CNN liefern Hash-Abgleich und CLIP nur Hinweise, keinen eigenen Score:
+            # „nichts Auffälliges im Bild“ ist kein Beleg für Seriosität und würde den Gesamtscore
+            # (gewichteter Mittelwert) sonst nach unten ziehen. Harte Treffer wirken über die Fusion.
+            note = ("Nur Hinweise (CLIP) – kein trainiertes Bildmodell" if clip_ran
+                    else "Kein neuronales Bildmodell aktiv (nur Hash-Abgleich)")
+            return ModelResult(self.name, score=None, signals=signals, error=note)
 
-        signal_score = noisy_or([s.weight for s in signals])
-        if cnn_scores:
-            cnn_mean = sum(cnn_scores) / len(cnn_scores)
-            score = 0.6 * cnn_mean + 0.4 * signal_score
-        else:
-            score = signal_score
-        return ModelResult(self.name, score=score, signals=signals)
+        # Trainiertes CNN: dessen Wahrscheinlichkeit ist der Score, Hinweise ergänzen ihn (Noisy-OR)
+        cnn_mean = sum(cnn_scores) / len(cnn_scores)
+        return ModelResult(self.name, score=noisy_or([cnn_mean, *(s.weight for s in signals)]),
+                           signals=signals)
 
 
 # --------------------------------------------------------------------------- Training

@@ -87,6 +87,7 @@ Einmal durchspielen:
 scamguard data list                  # welche Datensätze sind registriert?
 scamguard data build                 # → data/processed/{train,val,test}.jsonl
 scamguard train text-baseline        # Sekunden
+scamguard retrain                    # nach neuen Daten/Labels: einlesen + trainieren + auswerten
 scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell
 scamguard scan examples/inserat_beispiel.json
 scamguard ui                         # Frontend → http://127.0.0.1:8501
@@ -113,6 +114,7 @@ einen **Prozent-Score** – im Panel oben rechts und als Badge am Toolbar-Symbol
 - **Markierungen:** rot, durchgezogen, ⚠ = hoch · orange, gestrichelt = mittel · gelb, gepunktet =
   niedrig (nicht nur über Farbe unterscheidbar). Preis, Verkäufer und Bilder werden umrahmt.
   Klick auf ein Warnsignal im Panel springt zur Fundstelle.
+- **Selbst einstufen:** *⚠ Betrug* / *✓ Seriös* im Panel → wird zu Trainingsdaten (siehe unten).
 
 ```
 Webseite ──Content Script liest aus──► Service Worker (Chromium) / Hintergrundskript (Firefox)
@@ -235,43 +237,45 @@ Hinweise:
 
 ---
 
-## Trainingsdaten hinzufügen (der „Space“ für eure Datensätze)
+## Trainingsdaten: Datensätze einfüllen und selbst einstufen
 
-**Alles läuft über eine Datei: [`src/scamguard/data/registry.py`](src/scamguard/data/registry.py).**
-Dort steht pro Datensatz ein `DatasetSpec`-Eintrag. Vorlagen für CSV, Hugging-Face-Text,
-Phishing-Mails und Bild-Datensätze sind schon drin, nur deaktiviert.
+Drei Wege – keiner braucht Python-Code. Danach immer: **`scamguard retrain`** (liest alles neu ein,
+trainiert das Textmodell und zeigt die Kennzahlen; ein laufender Server nutzt das neue Modell
+sofort, ohne Neustart).
 
-```python
-DatasetSpec(
-    name="hf_mein_datensatz",
-    source="huggingface",                  # oder "csv", "jsonl", "parquet"
-    path="organisation/datensatz-name",    # Hugging-Face-ID
-    split="train",
-    column_map={"description": "text"},   # unser Feld → Spalte im Datensatz
-    label_column="label",
-    label_map={1: Label.SCAM, 0: Label.LEGIT},
-    enabled=True,
-    license="CC-BY-4.0",
-    notes="Wofür ist der Datensatz gut?",
-)
-```
+### 1. Text-Datensätze: `data/datensatz_fuellen_text/`
 
-- **`column_map`** übersetzt fremde Spaltennamen in unser Schema (`schema.Listing`).
-  Das Spezialfeld `"image"` übernimmt Bildspalten und speichert sie nach `data/images/`.
-- **Label**: entweder `label_column` + `label_map`, oder `fixed_label=Label.SCAM`, wenn ein
-  Datensatz *nur* Betrugsfälle enthält (z. B. eine Phishing-Sammlung). Dann braucht ihr
-  zwingend auch legitime Beispiele aus einer anderen Quelle.
-- **`transform`**: Python-Funktion für alles, was nicht 1:1 passt (Spalten zusammenführen,
-  filtern). Beispiel: `_beispiel_transform` in der Registry.
-- **`german_only=True`** (Standard) verwirft nicht-deutsche Texte beim Import.
-- `scamguard data build` dedupliziert über alle Quellen (kein Train/Test-Leck durch doppelte
-  Inserate), teilt stratifiziert auf und schreibt `data/processed/stats.json`.
+CSV (auch deutsche Excel-CSV mit `;`), TSV, JSONL oder Parquet hineinlegen. Spalten werden an
+üblichen Namen erkannt (`titel`, `beschreibung`/`text`, `preis`, `kategorie`, `nachrichten`) und das
+Label an `betrug`/`label`/`fake` mit Werten wie `ja`/`nein`, `betrug`/`seriös`, `fake`/`echt`, `1`/`0`.
+Vorlage: `_vorlage_inserate.csv` (Dateien mit `_` am Anfang werden ignoriert).
+Hugging-Face-Datensätze: in `data/datensatz_fuellen_text/huggingface.yaml` eintragen.
 
-### Eigene Labels über das Frontend
+### 2. Bild-Datensätze: `data/datensatz_fuellen_bilder/`
 
-Im Tab **„Labeln“** kann jedes gescannte Inserat mit dem echten Ergebnis (Betrug/seriös +
-Masche) gespeichert werden → `data/raw/eigene_labels.jsonl` (in der Registry schon aktiv).
-Bilder landen in `data/images/eigene_labels/`. **Vorher personenbezogene Daten schwärzen.**
+Bilder in `betrug/` oder `serioes/` legen – der Ordner ist das Label. Training des Bildmodells:
+`scamguard retrain --bilder` (sinnvoll ab einigen hundert Bildern pro Ordner).
+
+### 3. Selbst entscheiden, was Betrug ist
+
+- **In der Browser-Extension:** Im Panel unter jedem Ergebnis *⚠ Betrug* oder *✓ Seriös* klicken.
+  Gespeichert wird in `data/raw/eigene_labels.jsonl` (Bilder in `data/images/eigene_labels/`);
+  erneutes Klicken auf derselben Anzeige ersetzt die alte Einstufung. Das Popup zeigt, wie viele
+  Inserate ihr schon eingestuft habt.
+- **Im Streamlit-Frontend:** Tab *Labeln* (gleicher Speicherort).
+- **Regeln:** Was die Regel-Erkennung als verdächtig wertet, steht in
+  `data/lexicons/scam_signals_de.yaml` (Formulierungen, Gewichte) – ohne Code erweiterbar.
+
+`scamguard data list` zeigt, was erkannt wurde (inkl. Hinweisen wie „keine Label-Spalte“).
+Datenschutz: keine Namen, Telefonnummern oder Adressen echter Personen weitergeben – die
+Datenordner landen bewusst nicht im Git.
+
+### Sonderfälle mit Code: `src/scamguard/data/registry.py`
+
+Wenn ein Datensatz Sonderbehandlung braucht (Texte zusammensetzen, filtern), dort einen
+`DatasetSpec` mit `transform`-Funktion anlegen – Vorlagen sind enthalten. `scamguard data build`
+dedupliziert über alle Quellen (kein Train/Test-Leck durch doppelte Inserate) und teilt
+stratifiziert auf.
 
 ### Wo Daten herkommen können (ohne Scraping)
 
@@ -297,6 +301,8 @@ Sinnvolle Alternativen:
 ScamGuard/
 ├── config.yaml                  Schwellen, Fusion-Gewichte, Modellpfade, LLM-Einstellungen
 ├── data/
+│   ├── datensatz_fuellen_text/  ← HIER Text-Datensätze ablegen (CSV/JSONL/Parquet, huggingface.yaml)
+│   ├── datensatz_fuellen_bilder/← HIER Bilder ablegen: betrug/ und serioes/
 │   ├── lexicons/                ← Betrugsphrasen, Preisreferenzen, Fake-Bild-Hashes (YAML/TXT)
 │   ├── samples/                 synthetische Demo-Inserate
 │   ├── raw/  images/            eure Rohdaten (nicht im Git)
@@ -313,7 +319,9 @@ ScamGuard/
 ├── scripts/                     Hilfsskripte (z. B. Extension-Icons erzeugen)
 ├── src/scamguard/
 │   ├── schema.py                einheitliches Datenschema (Listing, Signal, ScanResult)
-│   ├── data/registry.py         ← HIER Datensätze eintragen
+│   ├── data/discovery.py        erkennt die Ablageordner automatisch
+│   ├── data/labels.py           eigene Einstufungen (Extension, Streamlit)
+│   ├── data/registry.py         Sonderfälle mit Code (transform-Funktionen)
 │   ├── data/loaders.py          HF/CSV/JSONL/Parquet → Listing
 │   ├── data/build.py            Dedup + Split
 │   ├── features/                URL/Mail/IBAN/Telefon, Sprache, Lexikon, Preis
