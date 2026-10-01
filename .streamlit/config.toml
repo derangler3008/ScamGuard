@@ -1,0 +1,8 @@
+# Nur lokal erreichbar. Zum Teilen im Netz bewusst ändern (z. B. für eine Demo):
+#   scamguard ui --public
+[server]
+address = "127.0.0.1"
+headless = true
+
+[browser]
+gatherUsageStats = false

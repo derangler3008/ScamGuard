@@ -1,0 +1,108 @@
+# Betrugssignale (Regex, case-insensitive) für deutschsprachige Kleinanzeigen.
+# Erweitern ohne Code-Änderung: neue Gruppe oder neues Pattern hinzufügen.
+#   weight: Schwere 0..1 (mehrere Treffer werden per Noisy-OR kombiniert)
+#   hard:   true = sehr starkes Indiz, hebt den Gesamtscore auf eine Mindesthöhe
+#
+# Quellen für Maschen: Verbraucherzentrale, Polizei-Beratung (polizei-beratung.de),
+# Kleinanzeigen-Sicherheitshinweise, eigene gesammelte Fälle.
+
+groups:
+  fake_payment_link:
+    message: "Masche „Sicher bezahlen“/Zahlungslink: Aufforderung, über einen Link Geld zu „empfangen“ oder Daten zu bestätigen"
+    weight: 0.85
+    hard: true
+    patterns:
+      - "zahlung (wurde )?(bereits )?(erhalten|getätigt|veranlasst).{0,60}(link|klick)"
+      - "geld (abholen|empfangen|freischalten)"
+      - "(klicke?n?|klicken sie) (auf|den) (den |diesen )?link"
+      - "(karten|kredit ?karten|bank)daten.{0,40}(eingeben|bestätigen|verifizieren)"
+      - "bestätigungs ?code|sms[- ]?code|tan[- ]?nummer"
+      - "(käuferschutz|verkäuferschutz)[- ]?(gebühr|aktivier)"
+
+  offplatform_payment:
+    message: "Zahlung außerhalb sicherer Wege (z. B. PayPal Freunde & Familie, Gutscheinkarten, Krypto, Bargeldtransfer)"
+    weight: 0.6
+    patterns:
+      - "freunde (und|&) familie"
+      - "friends (and|&) family"
+      - "western ?union|money ?gram|ria ?money"
+      - "paysafe ?card|amazon[- ]?gutschein|itunes|google ?play[- ]?karte|steam[- ]?karte"
+      - "bitcoin|btc|krypto|usdt|ethereum"
+      - "nur (per )?vorkasse|vorkasse (only|ausschließlich)"
+      - "überweisung ins ausland"
+
+  shipping_or_escrow_story:
+    message: "Typische Versand-/Treuhand-Geschichte (Spediteur, Treuhandservice, Kurier-Abholung)"
+    weight: 0.55
+    patterns:
+      - "spedit(ion|eur)|transportunternehmen|kurierdienst holt"
+      - "treuhand(service|konto|dienst)?"
+      - "dhl[- ]?(treuhand|sicher|express-?zahlung)"
+      - "(mein|ein) kurier (holt|kommt|wird)"
+      - "versand (nur|ausschließlich) (per|mit) (spedition|kurier)"
+
+  seller_abroad:
+    message: "Verkäufer angeblich im Ausland / nicht erreichbar (klassische Vorkasse-Geschichte)"
+    weight: 0.45
+    patterns:
+      - "(derzeit|momentan|zurzeit|gerade) im ausland"
+      - "(auf|bei) (montage|bohrinsel|offshore)"
+      - "(militär|soldat|bundeswehr)[^.]{0,40}(einsatz|stationiert|ausland)"
+      - "(nach|in) (england|spanien|frankreich|italien|rumänien|polen|nigeria) (gezogen|umgezogen|versetzt)"
+      - "kann (leider )?nicht (persönlich|vorbei|telefonieren)"
+
+  identity_phishing:
+    message: "Forderung nach Ausweis, Selfie oder persönlichen Daten (Identitätsdiebstahl)"
+    weight: 0.7
+    hard: true
+    patterns:
+      - "(personal)?ausweis.{0,40}(schick|send|foto|kopie|bild)"
+      - "selfie mit (dem |deinem |ihrem )?ausweis"
+      - "video[- ]?ident"
+      - "(führerschein|reisepass).{0,30}(schick|send|foto|kopie)"
+
+  offplatform_contact:
+    message: "Kontakt soll außerhalb der Plattform stattfinden (WhatsApp, Telegram, E-Mail)"
+    weight: 0.35
+    patterns:
+      - "whats ?app|telegram|signal[- ]?messenger|wickr"
+      - "(nur|bitte) (per |über |via )?(e-?mail|mail) (kontaktieren|melden|schreiben)"
+      - "schreib(en sie)? mir (per|eine) (e-?mail|mail)"
+      - "(antworte|melde) (mich|dich) nicht (hier|über die (app|plattform))"
+
+  pressure_urgency:
+    message: "Zeitdruck / künstliche Verknappung"
+    weight: 0.2
+    patterns:
+      - "(nur|bis) (noch )?heute"
+      - "wer zuerst (zahlt|überweist)"
+      - "viele (andere )?(interessenten|anfragen)"
+      - "sofort(ige)? (zahlung|überweisung)"
+      - "schnell entscheiden|muss schnell weg"
+
+  overpayment_reverse:
+    message: "Überzahlungs-/Rückerstattungsmasche (Betrug gegen Verkäufer)"
+    weight: 0.6
+    patterns:
+      - "überzahl(ung|t)|zu viel (überwiesen|bezahlt)"
+      - "differenz(betrag)? (zurück|überweisen|erstatten)"
+      - "ich zahle (mehr|extra|zusätzlich) (für|wenn)"
+
+  triangle_fraud:
+    message: "Hinweis auf Dreiecksbetrug (Zahlung durch/an Dritte)"
+    weight: 0.5
+    patterns:
+      - "zahlung (erfolgt )?(durch|über) (einen )?(dritte|bekannte|kunden)"
+      - "(für|an) einen (bekannten|kunden|freund) (überweisen|bezahlen)"
+      - "konto (meines|meiner) (bruders|schwester|freundes|freundin|bekannten)"
+
+  translated_phrasing:
+    message: "Typische maschinell übersetzte oder vorgefertigte Formulierungen"
+    weight: 0.25
+    patterns:
+      - "hallo (lieber|liebe) (käufer|kunde|herr|frau)"
+      - "ich bin (der|die) (eigentümer|besitzer)(in)? (dieses|des) artikels"
+      - "ist (der|die|das) artikel noch (verfügbar|erhältlich)\\?\\s*$"
+      - "(ohne|keine) (fehler|kratzer|probleme) und (ohne|keine) (fehler|kratzer|probleme)"
+      - "ich (würde|möchte) gerne (ihren|deinen) artikel kaufen"
+      - "bitte (kontaktieren|kontaktiere) (sie )?mich per"

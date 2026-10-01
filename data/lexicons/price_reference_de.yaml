@@ -1,0 +1,54 @@
+# Grobe Gebrauchtpreis-Spannen (EUR) für häufig betroffene Artikel.
+# Platzhalterwerte – bitte mit echten Marktdaten (z. B. eigene Recherche,
+# Preisvergleich, Datensätze) aktualisieren. Schlüssel = Regex auf Titel/Beschreibung.
+# Reihenfolge zählt: das erste passende Muster gewinnt → Spezifisches nach oben.
+
+items:
+  - pattern: "iphone ?1[67] ?pro"
+    min: 650
+    max: 1300
+  - pattern: "iphone ?1[45] ?pro"
+    min: 450
+    max: 950
+  - pattern: "iphone ?1[3-7]"
+    min: 300
+    max: 900
+  - pattern: "samsung galaxy s2[3-6]"
+    min: 300
+    max: 1000
+  - pattern: "playstation ?5|ps ?5"
+    min: 280
+    max: 500
+  - pattern: "nintendo switch ?2"
+    min: 300
+    max: 500
+  - pattern: "nintendo switch"
+    min: 120
+    max: 280
+  - pattern: "macbook (air|pro)"
+    min: 450
+    max: 2500
+  - pattern: "rtx ?50[789]0|rtx ?4090"
+    min: 900
+    max: 2500
+  - pattern: "airpods ?pro"
+    min: 80
+    max: 220
+  - pattern: "thermomix|tm ?[67]"
+    min: 500
+    max: 1400
+  - pattern: "dyson (v1[0-5]|gen5|airwrap)"
+    min: 150
+    max: 550
+  - pattern: "(waschmaschine|trockner|geschirrspüler|spülmaschine)"
+    min: 80
+    max: 700
+  - pattern: "kühlschrank|kühl-gefrier"
+    min: 60
+    max: 900
+  - pattern: "(vw|volkswagen) golf"
+    min: 3000
+    max: 35000
+  - pattern: "bmw [1-5]er|audi a[3-6]|mercedes (a|c|e)[- ]?klasse"
+    min: 4000
+    max: 50000

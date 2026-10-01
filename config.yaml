@@ -1,0 +1,60 @@
+# ScamGuard – zentrale Konfiguration
+# Alle Pfade relativ zum Projektordner.
+
+paths:
+  data_dir: data
+  models_dir: models
+  lexicon: data/lexicons/scam_signals_de.yaml
+  price_reference: data/lexicons/price_reference_de.yaml
+
+# Ab welchem Gesamt-Score gilt ein Inserat als verdächtig / hochriskant?
+thresholds:
+  suspicious: 0.40
+  high_risk: 0.70
+
+# Late Fusion: gewichteter Mittelwert der Einzelmodelle.
+# Nicht verfügbare Modelle (nicht trainiert / deaktiviert) werden ignoriert,
+# die übrigen Gewichte automatisch renormalisiert.
+fusion:
+  weights:
+    rules: 1.0
+    text_model: 1.5
+    image_model: 0.7
+    llm: 1.2
+  # Ein einzelnes "hartes" Signal (z. B. Fake-Bezahlseite) hebt den Score mindestens hierauf.
+  hard_signal_floor: 0.75
+
+text_model:
+  enabled: true
+  # Deutsches BERT als Basis. Alternativen: "dbmdz/bert-base-german-cased",
+  # "deepset/gelectra-base", "FacebookAI/xlm-roberta-base" (mehrsprachig).
+  base_model: deepset/gbert-base
+  path: models/text_classifier
+  # Klassischer Fallback ohne GPU: TF-IDF + logistische Regression
+  baseline_path: models/text_baseline.joblib
+  max_length: 384
+  epochs: 3
+  batch_size: 16
+  learning_rate: 2.0e-5
+
+image_model:
+  enabled: true
+  path: models/image_classifier.pt
+  backbone: efficientnet_b0          # torchvision-Modellname
+  clip_model: openai/clip-vit-base-patch32
+  use_clip_consistency: true         # passt das Bild zur Kategorie/zum Titel?
+  # Perceptual Hashes bekannter Fake-/Stockfotos (eine Hash-Zeile pro Bild)
+  known_fake_hashes: data/lexicons/known_fake_image_hashes.txt
+  epochs: 5
+  batch_size: 32
+  learning_rate: 1.0e-4
+
+llm:
+  enabled: false                     # kostet API-Credits → bewusst einschalten
+  model: claude-opus-5-5
+  effort: low                        # Klassifikation braucht kein tiefes Nachdenken
+  max_tokens: 2048
+  # Server-seitiger Fallback, falls das Modell eine Anfrage ablehnt
+  use_fallbacks: true
+  # Bilder ebenfalls an Claude senden (multimodale Bewertung). Datenschutz beachten!
+  send_images: false

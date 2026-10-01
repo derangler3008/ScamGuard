@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scamguard"
+version = "0.1.0"
+description = "Betrugserkennung für deutschsprachige Kleinanzeigen (DHBW Mannheim KI-Projekt)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "DHBW Mannheim – KI-Projektgruppe" }]
+
+# Kern: läuft ohne GPU und ohne ML-Frameworks (Regel-Baseline + Frontend).
+dependencies = [
+    "pyyaml>=6.0",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+    "joblib>=1.3",
+    "pillow>=10.0",
+    "streamlit>=1.35",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+    "tldextract>=5.1",
+]
+
+[project.optional-dependencies]
+# Trainingsdaten von Hugging Face laden
+data = ["datasets>=2.19", "huggingface_hub>=0.23"]
+# Text-Transformer (z. B. GBERT) feintunen
+text = ["torch>=2.2", "transformers>=4.41", "accelerate>=0.30", "datasets>=2.19"]
+# Bildmodelle (CNN-Klassifikator, CLIP-Konsistenz, Perceptual Hash)
+vision = ["torch>=2.2", "torchvision>=0.17", "transformers>=4.41", "imagehash>=4.3"]
+# LLM-Judge über die Claude API
+llm = ["anthropic>=1.11"]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+all = ["scamguard[data,text,vision,llm,dev]"]
+
+[project.scripts]
+scamguard = "scamguard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

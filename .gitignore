@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Große Dateien nicht ins Repo – Datensätze und Gewichte separat teilen
+data/raw/*
+data/processed/*
+data/images/*
+models/*
+!**/.gitkeep

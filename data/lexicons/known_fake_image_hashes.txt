@@ -1,0 +1,3 @@
+# Perceptual Hashes (pHash, 64 bit hex) von bekannten Fake-/Stockfotos – eine pro Zeile.
+# Erzeugen mit:  scamguard images hash pfad/zum/bild.jpg
+# Kommentare mit # sind erlaubt.
