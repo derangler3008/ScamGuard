@@ -16,7 +16,7 @@ import streamlit as st
 # Erlaubt `streamlit run frontend/app.py` auch ohne `pip install -e .`
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from scamguard.config import resolve_path
+from scamguard.config import load_config, resolve_path
 from scamguard.data.build import append_jsonl
 from scamguard.pipeline import ScamGuard
 from scamguard.schema import CATEGORIES, Listing, ScanResult
@@ -116,10 +116,17 @@ def render_result(result: ScanResult) -> None:
 
 with st.sidebar:
     st.header("Einstellungen")
-    use_llm = st.toggle("LLM-Analyse (Claude) zuschalten", value=False,
-                        help="Sendet Titel, Beschreibung und Nachrichten an die Claude API. "
-                             "Verkäufername und Ort werden nicht übertragen. Kostet API-Guthaben.")
-    send_images = st.toggle("Bilder an LLM senden", value=False, disabled=not use_llm)
+    llm_cfg = load_config()["llm"]
+    is_local = llm_cfg.get("provider", "local") == "local"
+    llm_model = llm_cfg.get(llm_cfg.get("provider", "local"), {}).get("model", "").split("/")[-1]
+    use_llm = st.toggle(f"KI-Analyse zuschalten ({llm_model})", value=False,
+                        help=("Lokales Modell: kostenlos, Daten bleiben auf dem Rechner. "
+                              "Server vorher starten: `scamguard llm-server`. Dauer: ca. 10–30 s pro Prüfung."
+                              if is_local else
+                              "Sendet Titel, Beschreibung und Nachrichten an die Claude API. "
+                              "Verkäufername und Ort werden nicht übertragen. Kostet API-Guthaben."))
+    send_images = st.toggle("Bilder an LLM senden", value=False, disabled=not use_llm or is_local,
+                            help="Nur mit Claude (provider: anthropic) möglich.")
     guard = get_guard(use_llm, send_images)
 
     st.header("Modellstatus")

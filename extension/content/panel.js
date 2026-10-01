@@ -43,6 +43,7 @@
     .mid .meter span { background: #f79009; }
     .sub, .models, .foot, .hint { color: #475467; margin: 6px 0; }
     .summary { background: #f9fafb; border-radius: 8px; padding: 8px; margin: 8px 0; }
+    .ai { margin: 6px 0; font-size: 12px; }
     ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
     .sig { display: grid; grid-template-columns: 16px 1fr; gap: 2px 6px; width: 100%; text-align: left;
       background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px; }
@@ -169,7 +170,7 @@
       onRetry && h("button", { class: "primary", type: "button", text: "Erneut versuchen", onclick: onRetry }));
   }
 
-  function renderResult({ result, marked, onFocus, onRescan }) {
+  function renderResult({ result, marked, onFocus, onRescan, aiPending, aiError }) {
     const pct = Math.round(result.score * 100);
     const v = VERDICTS[result.verdict] ?? { cls: "", icon: "", label: result.verdict };
     const summary = result.signals.find((s) => s.code === "LLM_SUMMARY");
@@ -196,7 +197,16 @@
           : "Keine Warnsignale gefunden.",
       }),
     ];
-    if (summary) parts.push(h("p", { class: "summary" }, h("strong", { text: "Claude: " }), summary.message));
+    if (summary) parts.push(h("p", { class: "summary" }, h("strong", { text: "KI-Einschätzung: " }), summary.message));
+    // KI-Analyse: läuft noch / nicht verfügbar (z. B. lokales Modell nicht gestartet)
+    const llm = result.model_results.find((r) => r.name === "llm");
+    const llmProblem = aiError ?? (llm?.available && llm.score == null ? llm.error : null);
+    if (aiPending) {
+      parts.push(h("p", { class: "ai", role: "status" },
+        h("span", { class: "spinner", "aria-hidden": "true" }), "KI-Analyse läuft – Ergebnis wird ergänzt …"));
+    } else if (llmProblem) {
+      parts.push(h("p", { class: "ai hint", role: "status", text: `KI-Analyse nicht verfügbar: ${llmProblem}` }));
+    }
 
     if (visible.length) {
       parts.push(h("ol", { "aria-label": "Warnsignale" }, visible.map((s) => {

@@ -3,6 +3,7 @@
     scamguard api                                   # Server (in einem zweiten Terminal)
     python scripts/firefox_mit_extension.py         # Firefox + Extension + kleinanzeigen.de
     python scripts/firefox_mit_extension.py URL …   # stattdessen bestimmte Seiten öffnen
+    python scripts/firefox_mit_extension.py --reload # nur Extension neu laden (nach Code-Änderungen)
 
 - Eigenes Entwicklungsprofil (.firefox-dev-profil/, nicht im Git): eure normalen Firefox-Profile
   mit Lesezeichen und Logins bleiben unberührt.
@@ -173,9 +174,14 @@ def main(urls: list[str]) -> None:
 
     # Seiten erst nach der Installation öffnen, damit die Content Scripts sicher aktiv sind.
     # Firefox reicht die Adressen an die bereits laufende Instanz dieses Profils weiter.
-    _run_firefox(binary, ["-profile", str(PROFILE), *urls])
-    print(f"✓ Geöffnet: {', '.join(urls)}")
+    if urls:
+        _run_firefox(binary, ["-profile", str(PROFILE), *urls])
+        print(f"✓ Geöffnet: {', '.join(urls)}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or DEFAULT_URLS)
+    args = sys.argv[1:]
+    if args == ["--reload"]:  # nur die Extension neu laden (nach Code-Änderungen), keine neuen Tabs
+        main([])
+    else:
+        main(args or DEFAULT_URLS)

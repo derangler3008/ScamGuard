@@ -1,12 +1,17 @@
-"""LLM-Judge: Claude bewertet ein Inserat und liefert strukturiertes JSON.
+"""LLM-Judge: ein Sprachmodell bewertet das Inserat und liefert strukturiertes JSON.
 
-Stärken gegenüber den anderen Modellen: versteht Kontext und Maschen-Geschichten,
-erkennt maschinell übersetzte Sprache, kann (optional) Bilder mitbewerten,
-und braucht keine Trainingsdaten (Zero-Shot). Nachteile: kostet pro Anfrage,
-braucht Internet, Daten verlassen das Gerät → standardmäßig deaktiviert.
+Zwei Backends (config.yaml → llm.provider):
 
-Datensparsamkeit: Verkäufername und Ort werden NICHT an die API geschickt.
-Benötigt: pip install -e ".[llm]" und ANTHROPIC_API_KEY (oder `ant auth login`).
+- "local"     Open-Weight-Modell auf dem eigenen Rechner über einen OpenAI-kompatiblen Server.
+              Standard: Qwen3.5-9B (MLX, Apple Silicon) via `scamguard llm-server`.
+              Genauso nutzbar: Ollama, LM Studio, llama.cpp – z. B. auf einem PC mit AMD-/NVIDIA-GPU.
+              Kostenlos, offline, Inseratsdaten bleiben auf dem Rechner.
+- "anthropic" Claude über die Claude API (kostet pro Anfrage, Daten gehen an Anthropic).
+              Benötigt pip install -e ".[llm]" und ANTHROPIC_API_KEY (oder `ant auth login`).
+
+Stärken gegenüber den anderen Modellen: versteht Kontext und Maschen-Geschichten, erkennt maschinell
+übersetzte Sprache, braucht keine Trainingsdaten (Zero-Shot).
+Datensparsamkeit: Verkäufername und Ort werden nie an das Modell gegeben.
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import re
 from pathlib import Path
 
 from scamguard.models.base import Detector
@@ -39,6 +45,7 @@ geben, ist das selbst ein Warnsignal.
 SCAM_TYPES = ["keiner", "fake_zahlungslink", "vorkasse", "paypal_freunde", "dreiecksbetrug",
               "phishing", "identitaetsdiebstahl", "ueberzahlung", "fake_inserat_sonstiges"]
 LANGUAGE_QUALITY = ["muttersprachlich", "leichte_fehler", "gebrochen", "maschinell_uebersetzt"]
+MAX_RED_FLAGS = 6
 
 OUTPUT_SCHEMA = {
     "type": "object",
@@ -65,9 +72,25 @@ OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
-MAX_IMAGES = 4
-MAX_IMAGE_SIDE = 1568  # größere Bilder skaliert die API ohnehin herunter
+# Lokale Server erzwingen das JSON-Format nicht immer (mlx_lm.server z. B. nicht) → im Prompt vorgeben
+JSON_INSTRUCTIONS = f"""Antworte ausschließlich mit einem einzigen JSON-Objekt – kein Text davor oder \
+danach, keine Code-Blöcke – in genau diesem Format:
+{{"scam_probability": <Zahl von 0 bis 1>, "scam_type": "<{'|'.join(SCAM_TYPES)}>", \
+"language_quality": "<{'|'.join(LANGUAGE_QUALITY)}>", \
+"red_flags": [{{"code": "<kurzer_code>", "explanation": "<ein Satz>", "evidence": "<wörtliches Zitat>"}}], \
+"summary": "<ein Satz auf Deutsch>"}}
+Höchstens {MAX_RED_FLAGS} red_flags. Ist das Inserat unauffällig: niedrige scam_probability, \
+scam_type "keiner", red_flags leer."""
 
+MAX_IMAGES = 4
+MAX_IMAGE_SIDE = 1568  # größere Bilder skaliert die Claude API ohnehin herunter
+
+
+class JudgeError(Exception):
+    """Für Menschen lesbarer Grund, warum das LLM kein Urteil liefern konnte."""
+
+
+# --------------------------------------------------------------------------- gemeinsam
 
 def _format_listing(listing: Listing) -> str:
     price = f"{listing.price:.2f} €" if listing.price is not None else "nicht angegeben"
@@ -85,6 +108,134 @@ def _format_listing(listing: Listing) -> str:
         lines.append("Nachrichten des Anbieters:\n" + "\n---\n".join(listing.messages))
     return "<inserat>\n" + "\n".join(lines) + "\n</inserat>"
 
+
+def parse_judgement(text: str) -> dict:
+    """Robust: entfernt Denk-Blöcke/Code-Zäune, sucht das JSON-Objekt, prüft und normalisiert es."""
+    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("kein JSON-Objekt gefunden")
+    data = json.loads(text[start:end + 1])
+    if not isinstance(data, dict) or "scam_probability" not in data:
+        raise ValueError("Feld scam_probability fehlt")
+
+    raw = data["scam_probability"]
+    percent = isinstance(raw, str) and raw.strip().endswith("%")
+    probability = float(str(raw).replace(",", ".").strip().rstrip("%"))
+    # Manche Modelle antworten in Prozent („85“, „85 %“); 1.7 o. Ä. wird dagegen nur begrenzt
+    if percent or (probability > 1 and probability.is_integer()):
+        probability /= 100
+    scam_type = data.get("scam_type")
+    flags = []
+    for flag in data.get("red_flags") or []:
+        if not isinstance(flag, dict) or not str(flag.get("explanation", "")).strip():
+            continue
+        flags.append({
+            "code": re.sub(r"\W+", "_", str(flag.get("code") or "hinweis")).strip("_").lower() or "hinweis",
+            "explanation": str(flag["explanation"]).strip(),
+            "evidence": str(flag.get("evidence") or "").strip(),
+        })
+    return {
+        "scam_probability": min(max(probability, 0.0), 1.0),
+        "scam_type": scam_type if scam_type in SCAM_TYPES else "fake_inserat_sonstiges",
+        "language_quality": data.get("language_quality") if data.get("language_quality") in LANGUAGE_QUALITY
+        else "unbekannt",
+        "red_flags": flags[:MAX_RED_FLAGS],
+        "summary": str(data.get("summary") or "").strip(),
+    }
+
+
+def _to_result(name: str, data: dict, model_label: str) -> ModelResult:
+    score = min(max(float(data["scam_probability"]), 0.0), 1.0)
+    signals = [Signal(name, f"LLM_{flag['code'].upper()}", flag["explanation"],
+                      weight=score, evidence=flag["evidence"][:120] or None,
+                      highlights=[flag["evidence"]] if flag["evidence"] else [])
+               for flag in data.get("red_flags", [])]
+    if data.get("summary"):
+        signals.insert(0, Signal(name, "LLM_SUMMARY",
+                                 f"{data['summary']} – Masche: {data['scam_type']}, "
+                                 f"Sprache: {data['language_quality']} ({model_label})", weight=score))
+    return ModelResult(name, score=score, signals=signals)
+
+
+# --------------------------------------------------------------------------- lokal (Qwen & Co.)
+
+class LocalBackend:
+    """OpenAI-kompatibler Chat-Endpunkt: mlx_lm.server, Ollama, LM Studio, llama.cpp, vLLM …"""
+
+    def __init__(self, cfg: dict, transport=None):
+        local = cfg.get("local", {})
+        self.base_url = local.get("base_url", "http://127.0.0.1:8080/v1").rstrip("/")
+        self.model = local.get("model", "")
+        self.timeout = float(local.get("timeout", 120))
+        self.temperature = float(local.get("temperature", 0.2))
+        self.max_tokens = int(cfg.get("max_tokens", 1024))
+        self.label = f"{self.model.split('/')[-1] or 'lokales Modell'}, lokal"
+        self._transport = transport  # nur für Tests (httpx.MockTransport)
+
+    def _body(self, listing: Listing, strict_format: bool, temperature: float) -> dict:
+        body = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{JSON_INSTRUCTIONS}"},
+                {"role": "user", "content": _format_listing(listing)},
+            ],
+            "max_tokens": self.max_tokens,
+            "temperature": temperature,
+            "top_p": 0.8,
+            "top_k": 20,
+            "presence_penalty": 0.0,  # JSON wiederholt Schlüssel – eine Strafe dafür würde es zerlegen
+            # Qwen3.5 „denkt“ sonst vor jeder Antwort – für eine Einstufung unnötig und langsam
+            "chat_template_kwargs": {"enable_thinking": False},
+            "stream": False,
+        }
+        if strict_format:  # Ollama, LM Studio, llama.cpp erzwingen damit gültiges JSON
+            body["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": "scam_judgement", "schema": OUTPUT_SCHEMA, "strict": True}}
+        return body
+
+    def _post(self, body: dict) -> dict:
+        import httpx
+
+        try:
+            with httpx.Client(timeout=self.timeout, transport=self._transport) as client:
+                response = client.post(f"{self.base_url}/chat/completions", json=body)
+        except httpx.ConnectError as exc:
+            raise JudgeError(f"Lokales LLM nicht erreichbar ({self.base_url}) – "
+                             "`scamguard llm-server` bzw. Ollama/LM Studio starten") from exc
+        except httpx.TimeoutException as exc:
+            raise JudgeError(f"Lokales LLM antwortet nicht rechtzeitig (> {self.timeout:.0f} s)") from exc
+        if response.status_code == 400 and "response_format" in body:
+            raise _FormatUnsupported()
+        if response.status_code != 200:
+            raise JudgeError(f"LLM-Server-Fehler {response.status_code}: {response.text[:200]}")
+        return response.json()
+
+    def judge(self, listing: Listing) -> dict:
+        strict, temperature = True, self.temperature
+        for attempt in range(3):
+            try:
+                reply = self._post(self._body(listing, strict, temperature))
+            except _FormatUnsupported:
+                strict = False  # Server kennt response_format nicht → Format nur per Prompt
+                continue
+            choice = reply["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise JudgeError("Antwort abgeschnitten – llm.max_tokens erhöhen")
+            try:
+                return parse_judgement(choice["message"].get("content") or "")
+            except (ValueError, TypeError) as exc:
+                if attempt == 2:
+                    raise JudgeError(f"Antwort des lokalen LLM war kein gültiges JSON ({exc})") from exc
+                temperature = 0.0  # zweiter Versuch deterministisch
+        raise JudgeError("Lokales LLM lieferte kein verwertbares Ergebnis")
+
+
+class _FormatUnsupported(Exception):
+    pass
+
+
+# --------------------------------------------------------------------------- Claude
 
 def _image_block(path: str) -> dict:
     from PIL import Image
@@ -109,43 +260,30 @@ def _final_text(response) -> str:
     return "".join(parts)
 
 
-class LLMJudgeDetector(Detector):
-    name = "llm"
-
+class AnthropicBackend:
     def __init__(self, cfg: dict):
-        self.cfg = cfg["llm"]
-        self._client = None
-        self._error: str | None = None
-        if not self.cfg.get("enabled"):
-            self._error = "Deaktiviert (llm.enabled in config.yaml oder Schalter im Frontend)"
-            return
+        self.cfg = cfg.get("anthropic", {})
+        self.max_tokens = int(cfg.get("max_tokens", 1024))
+        self.send_images = bool(cfg.get("send_images"))
+        self.label = "Claude"
         try:
             import anthropic
+        except ImportError as exc:
+            raise JudgeError('anthropic fehlt → pip install -e ".[llm]"') from exc
+        self._client = anthropic.Anthropic()
 
-            self._client = anthropic.Anthropic()
-        except ImportError:
-            self._error = 'anthropic fehlt → pip install -e ".[llm]"'
-
-    @property
-    def available(self) -> bool:
-        return self._client is not None
-
-    @property
-    def unavailable_reason(self) -> str | None:
-        return self._error
-
-    def predict(self, listing: Listing) -> ModelResult:
+    def judge(self, listing: Listing) -> dict:
         import anthropic
 
         content: list[dict] = []
-        if self.cfg.get("send_images"):
+        if self.send_images:
             for path in [p for p in listing.image_paths if Path(p).exists()][:MAX_IMAGES]:
                 content.append(_image_block(path))
         content.append({"type": "text", "text": _format_listing(listing)})
 
         request = {
-            "model": self.cfg["model"],
-            "max_tokens": int(self.cfg.get("max_tokens", 2048)),
+            "model": self.cfg.get("model", "claude-opus-5-5"),
+            "max_tokens": self.max_tokens,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": content}],
             "output_config": {
@@ -160,35 +298,61 @@ class LLMJudgeDetector(Detector):
                     **request, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
             else:
                 response = self._client.messages.create(**request)
-        except (anthropic.AuthenticationError, anthropic.CredentialsError):
-            return self._failed("API-Key fehlt oder ist ungültig (ANTHROPIC_API_KEY / `ant auth login`)")
-        except anthropic.RateLimitError:
-            return self._failed("Rate-Limit erreicht – kurz warten und erneut scannen")
-        except anthropic.APIConnectionError:
-            return self._failed("Keine Verbindung zur Claude API (offline?)")
+        except (anthropic.AuthenticationError, anthropic.CredentialsError) as exc:
+            raise JudgeError("API-Key fehlt oder ist ungültig (ANTHROPIC_API_KEY / `ant auth login`)") from exc
+        except anthropic.RateLimitError as exc:
+            raise JudgeError("Rate-Limit erreicht – kurz warten und erneut scannen") from exc
+        except anthropic.APIConnectionError as exc:
+            raise JudgeError("Keine Verbindung zur Claude API (offline?)") from exc
         except anthropic.APIStatusError as exc:
-            return self._failed(f"API-Fehler {exc.status_code}: {exc.message}")
+            raise JudgeError(f"API-Fehler {exc.status_code}: {exc.message}") from exc
 
         if response.stop_reason == "refusal":
-            return self._failed("Anfrage wurde vom Modell abgelehnt")
+            raise JudgeError("Anfrage wurde vom Modell abgelehnt")
         if response.stop_reason == "max_tokens":
-            return self._failed("Antwort abgeschnitten – llm.max_tokens erhöhen")
-
+            raise JudgeError("Antwort abgeschnitten – llm.max_tokens erhöhen")
         try:
-            data = json.loads(_final_text(response))
-        except json.JSONDecodeError:
-            return self._failed("Antwort war kein gültiges JSON")
+            return parse_judgement(_final_text(response))
+        except (ValueError, TypeError) as exc:
+            raise JudgeError("Antwort war kein gültiges JSON") from exc
 
-        score = min(max(float(data["scam_probability"]), 0.0), 1.0)
-        signals = [Signal(self.name, f"LLM_{flag['code'].upper()}", flag["explanation"],
-                          weight=score, evidence=flag["evidence"][:120],
-                          highlights=[flag["evidence"]] if flag["evidence"] else [])
-                   for flag in data.get("red_flags", [])]
-        if data.get("summary"):
-            signals.insert(0, Signal(self.name, "LLM_SUMMARY",
-                                     f"{data['summary']} (Masche: {data['scam_type']}, "
-                                     f"Sprache: {data['language_quality']})", weight=score))
-        return ModelResult(self.name, score=score, signals=signals)
 
-    def _failed(self, message: str) -> ModelResult:
-        return ModelResult(self.name, score=None, error=message)
+# --------------------------------------------------------------------------- Detektor
+
+BACKENDS = {"local": LocalBackend, "anthropic": AnthropicBackend}
+
+
+class LLMJudgeDetector(Detector):
+    name = "llm"
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg["llm"]
+        self.backend = None
+        self._error: str | None = None
+        if not self.cfg.get("enabled"):
+            self._error = "Deaktiviert (llm.enabled in config.yaml oder Schalter im Frontend)"
+            return
+        provider = self.cfg.get("provider", "local")
+        backend_cls = BACKENDS.get(provider)
+        if backend_cls is None:
+            self._error = f"Unbekannter LLM-Provider „{provider}“ (local | anthropic)"
+            return
+        try:
+            self.backend = backend_cls(self.cfg)
+        except JudgeError as exc:
+            self._error = str(exc)
+
+    @property
+    def available(self) -> bool:
+        return self.backend is not None
+
+    @property
+    def unavailable_reason(self) -> str | None:
+        return self._error
+
+    def predict(self, listing: Listing) -> ModelResult:
+        try:
+            data = self.backend.judge(listing)
+        except JudgeError as exc:
+            return ModelResult(self.name, score=None, error=str(exc))
+        return _to_result(self.name, data, self.backend.label)

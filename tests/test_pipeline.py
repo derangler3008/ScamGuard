@@ -126,6 +126,22 @@ def test_api_rejects_foreign_origin_but_accepts_extension(api):
     assert (evil.status_code, lookalike.status_code, ext.status_code) == (403, 403, 200)
 
 
+def test_api_llm_auto_mode_only_uses_local_models(api, monkeypatch):
+    from fastapi import HTTPException
+
+    from scamguard import api as api_module
+
+    monkeypatch.setattr(api_module, "_llm_provider", lambda: "local")
+    assert api_module.resolve_llm_mode("auto") is True       # lokal: kostenlos, Daten bleiben hier
+    monkeypatch.setattr(api_module, "_llm_provider", lambda: "anthropic")
+    assert api_module.resolve_llm_mode("auto") is False      # Claude nur auf ausdrücklichen Wunsch
+    assert api_module.resolve_llm_mode("true") is True
+    with pytest.raises(HTTPException):
+        api_module.resolve_llm_mode("vielleicht")
+    llm = api.get("/health").json()["llm"]
+    assert {"provider", "model", "auto"} <= set(llm)
+
+
 def test_api_rejects_invalid_json(api):
     assert api.post("/scan", data={"listing": "{kaputt"}, headers=CLIENT).status_code == 422
     assert api.post("/scan", data={"listing": "[1, 2]"}, headers=CLIENT).status_code == 422

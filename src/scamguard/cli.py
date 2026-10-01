@@ -10,15 +10,18 @@
   scamguard images hash bild.jpg ...  pHash für die Liste bekannter Fake-Bilder
   scamguard ui [--public]             Streamlit-Frontend starten (Standard: nur lokal)
   scamguard api                       REST-API starten (FastAPI)
+  scamguard llm-server [--model ID]   Lokales LLM (Qwen, MLX) für die KI-Analyse starten
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import platform
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from scamguard.config import PROJECT_ROOT, load_config
 
@@ -127,6 +130,27 @@ def _cmd_api(args) -> int:
     return 0
 
 
+def _cmd_llm_server(args) -> int:
+    local = load_config()["llm"]["local"]
+    model = args.model or local["model"]
+    port = urlparse(local["base_url"]).port or 8080
+    if sys.platform != "darwin" or platform.machine() != "arm64":
+        print("MLX läuft nur auf Macs mit Apple Silicon. Auf anderen Rechnern einen OpenAI-kompatiblen\n"
+              "Server nutzen und llm.local.base_url/model in config.yaml anpassen, z. B.:\n"
+              "  Ollama:    ollama pull <qwen-modell> && ollama serve   → http://127.0.0.1:11434/v1\n"
+              "  LM Studio: Modell laden, Server starten              → http://127.0.0.1:1234/v1")
+        return 1
+    print(f"Starte {model} auf http://127.0.0.1:{port}/v1 (erster Start lädt das Modell, ~6–7 GB) …")
+    return subprocess.call([
+        sys.executable, "-m", "mlx_lm.server", "--model", model,
+        "--host", "127.0.0.1", "--port", str(port),
+        # Qwen3.5 „denkt“ sonst vor jeder Antwort – für die Einstufung unnötig und langsam
+        "--chat-template-args", json.dumps({"enable_thinking": False}),
+        # Kein CORS für fremde Webseiten: nur der ScamGuard-Server (ohne Browser) nutzt das Modell
+        "--allowed-origins", "http://127.0.0.1:8000",
+    ])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scamguard", description="Betrugserkennung für Kleinanzeigen")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -158,6 +182,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--public", action="store_true",
                    help="Im ganzen Netzwerk erreichbar machen (Standard: nur dieser Rechner)")
     p.set_defaults(func=_cmd_ui)
+
+    p = sub.add_parser("llm-server", help="Lokales LLM (MLX, Apple Silicon) starten")
+    p.add_argument("--model", help="Hugging-Face-ID eines MLX-Modells (Standard: config.yaml)")
+    p.set_defaults(func=_cmd_llm_server)
 
     p = sub.add_parser("api", help="REST-API starten")
     p.add_argument("--host", default="127.0.0.1")

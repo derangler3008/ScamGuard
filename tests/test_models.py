@@ -73,9 +73,10 @@ class FakeClient:
 
 
 def _judge(response):
+    """Claude-Backend mit Fake-Client (kein echter API-Aufruf)."""
     pytest.importorskip("anthropic")
-    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True}}))
-    det._client = FakeClient(response)
+    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "anthropic"}}))
+    det.backend._client = FakeClient(response)
     return det
 
 
@@ -91,9 +92,9 @@ def test_llm_parses_structured_output_and_minimizes_data():
     result = det.predict(listing)
     assert result.score == pytest.approx(0.92)
     assert any(s.code == "LLM_FAKE_LINK" for s in result.signals)
-    sent = json.dumps(det._client.last_request, ensure_ascii=False)
+    sent = json.dumps(det.backend._client.last_request, ensure_ascii=False)
     assert "Max Muster" not in sent and "Mannheim" not in sent  # Datensparsamkeit
-    assert det._client.last_request["output_config"]["format"]["type"] == "json_schema"
+    assert det.backend._client.last_request["output_config"]["format"]["type"] == "json_schema"
 
 
 def test_llm_refusal_and_truncation_are_reported_not_raised():
@@ -104,3 +105,79 @@ def test_llm_refusal_and_truncation_are_reported_not_raised():
 def test_llm_score_is_clamped():
     det = _judge(_response([_text(json.dumps({**VALID, "scam_probability": 1.7}))]))
     assert det.predict(Listing(title="x")).score == 1.0
+
+
+# --------------------------------------------------------------------------- lokales LLM (Qwen)
+
+httpx = pytest.importorskip("httpx")
+
+
+def _local(handler):
+    """Lokales Backend gegen einen simulierten OpenAI-kompatiblen Server."""
+    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "local"}}))
+    det.backend._transport = httpx.MockTransport(handler)
+    return det
+
+
+def _chat_reply(content: str, finish_reason: str = "stop") -> httpx.Response:
+    return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": content},
+                                                  "finish_reason": finish_reason}]})
+
+
+def test_local_llm_parses_reply_and_disables_thinking():
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        # Lokale Modelle verpacken JSON gern in Denk-Blöcke oder Code-Zäune
+        return _chat_reply(f"<think>kurz</think>\n```json\n{json.dumps(VALID)}\n```")
+
+    listing = Listing(title="PS5", description="klicken Sie hier", seller_name="Max Muster", location="Mannheim")
+    result = _local(handler).predict(listing)
+    assert result.score == pytest.approx(0.92)
+    summary = next(s for s in result.signals if s.code == "LLM_SUMMARY")
+    assert "Qwen3.5-9B" in summary.message  # Modell wird in der Begründung genannt
+    body = requests[0]
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
+    assert body["response_format"]["type"] == "json_schema"
+    sent = json.dumps(body, ensure_ascii=False)
+    assert "Max Muster" not in sent and "Mannheim" not in sent
+
+
+def test_local_llm_retries_without_response_format_and_after_invalid_json():
+    calls = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        if "response_format" in body:
+            return httpx.Response(400, json={"error": "unknown field response_format"})
+        if len(calls) == 2:
+            return _chat_reply("Das Inserat wirkt verdächtig.")  # kein JSON → erneuter Versuch
+        return _chat_reply(json.dumps({**VALID, "scam_probability": "85 %"}))
+
+    result = _local(handler).predict(Listing(title="x"))
+    assert result.score == pytest.approx(0.85)
+    assert len(calls) == 3 and calls[-1]["temperature"] == 0.0
+
+
+def test_local_llm_unreachable_or_truncated_is_reported_not_raised():
+    def offline(request):
+        raise httpx.ConnectError("Verbindung abgelehnt", request=request)
+
+    assert "nicht erreichbar" in _local(offline).predict(Listing(title="x")).error
+    truncated = _local(lambda request: _chat_reply('{"scam_probability": 0.4', "length"))
+    assert "abgeschnitten" in truncated.predict(Listing(title="x")).error
+
+
+def test_parse_judgement_normalizes_unknown_values():
+    from scamguard.models.llm_judge import parse_judgement
+
+    data = parse_judgement('{"scam_probability": 0.3, "scam_type": "betrug!", "language_quality": "ok",'
+                           ' "red_flags": [{"code": "Link Prüfen!", "explanation": "x", "evidence": ""},'
+                           ' "kaputt"], "summary": "s"}')
+    assert data["scam_type"] == "fake_inserat_sonstiges"
+    assert data["language_quality"] == "unbekannt"
+    assert data["red_flags"] == [{"code": "link_prüfen", "explanation": "x", "evidence": ""}]
+    with pytest.raises(ValueError):
+        parse_judgement("Kein JSON hier")

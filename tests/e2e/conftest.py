@@ -55,6 +55,25 @@ def test_image_bytes() -> bytes:
     return buf.getvalue()
 
 
+class _FakeLLM:
+    """Antwortet wie der echte LLM-Judge, aber sofort und ohne Modell."""
+
+    name = "llm"
+    available = True
+    unavailable_reason = None
+
+    def predict(self, listing):
+        from scamguard.schema import ModelResult, Signal
+
+        time.sleep(1.0)  # die Extension zeigt so sichtbar „KI-Analyse läuft …“
+        return ModelResult("llm", score=0.95, signals=[
+            Signal("llm", "LLM_SUMMARY", "Typische Vorkasse-Masche – Masche: vorkasse, Sprache: "
+                   "leichte_fehler (Test-LLM)", 0.95),
+            Signal("llm", "LLM_AUSLAND", "Verkäufer angeblich im Ausland", 0.95,
+                   evidence="auf Montage", highlights=["auf Montage"]),
+        ])
+
+
 @pytest.fixture(scope="session")
 def api_server(test_image_bytes, tmp_path_factory):
     """Echter ScamGuard-Server (uvicorn) – das Testbild ist als bekanntes Fake-Bild registriert."""
@@ -71,12 +90,16 @@ def api_server(test_image_bytes, tmp_path_factory):
     image.write_bytes(test_image_bytes)
     hashes = tmp / "hashes.txt"
     hashes.write_text(phash_of(image) + "\n", encoding="utf-8")
-    guard = ScamGuard(with_overrides(load_config(), {
+    cfg = with_overrides(load_config(), {
         "image_model": {"known_fake_hashes": str(hashes), "use_clip_consistency": False},
-    }))
+    })
+    guard = ScamGuard(cfg)
+    # Für Anfragen mit KI-Analyse: echtes Setup, aber simuliertes LLM (kein Modell/Server nötig)
+    guard_llm = ScamGuard(cfg)
+    guard_llm.detectors = [d for d in guard_llm.detectors if d.name != "llm"] + [_FakeLLM()]
 
     original = api._guard
-    api._guard = lambda use_llm: guard
+    api._guard = lambda use_llm: guard_llm if use_llm else guard
     port = free_port()
     server = uvicorn.Server(uvicorn.Config(api.app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)

@@ -90,7 +90,7 @@ details[open] summary { margin-bottom: 8px; }
 label { display: block; margin: 6px 0 2px; }
 label.check { display: grid; grid-template-columns: 18px 1fr; gap: 0 6px; align-items: start; }
 label.check small { grid-column: 2; }
-input[type="url"] {
+input[type="url"], select {
   width: 100%;
   font: inherit;
   padding: 6px 8px;
@@ -122,3 +122,5 @@ code {
 }
 .notice p { margin: 0 0 8px; }
 .notice[hidden] { display: none; }
+
+#llm-info { display: block; margin-top: 4px; }

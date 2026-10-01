@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 
 from scamguard import __version__
+from scamguard.config import load_config
 from scamguard.data.loaders import normalize_category, parse_price
 from scamguard.pipeline import ScamGuard
 from scamguard.schema import Listing
@@ -47,24 +48,47 @@ def require_trusted_client(request: Request) -> None:
             raise HTTPException(403, f"Origin {origin} ist nicht erlaubt")
 
 
+LLM_FLAGS = {"true": True, "1": True, "on": True, "false": False, "0": False, "off": False}
+
+
 @lru_cache(maxsize=2)
 def _guard(use_llm: bool) -> ScamGuard:
     return ScamGuard(overrides={"llm": {"enabled": use_llm}})
 
 
+def _llm_provider() -> str:
+    return load_config()["llm"].get("provider", "local")
+
+
+def resolve_llm_mode(mode: str) -> bool:
+    """"auto" = nur ein lokales LLM automatisch nutzen (kostenlos, Daten bleiben auf dem Rechner);
+    Claude (kostenpflichtig) nur, wenn ausdrücklich "true" angefragt wird."""
+    mode = mode.strip().lower()
+    if mode == "auto":
+        return _llm_provider() == "local"
+    if mode in LLM_FLAGS:
+        return LLM_FLAGS[mode]
+    raise HTTPException(422, "use_llm muss auto, true oder false sein")
+
+
 @app.get("/health")
 def health() -> dict:
     guard = _guard(False)
+    llm = load_config()["llm"]
+    provider = llm.get("provider", "local")
+    model = llm.get(provider, {}).get("model", "")
     return {"status": "ok", "version": __version__,
-            "detectors": {d.name: d.available for d in guard.detectors}}
+            "detectors": {d.name: d.available for d in guard.detectors},
+            "llm": {"provider": provider, "model": model, "auto": provider == "local"}}
 
 
 @app.post("/scan", dependencies=[Depends(require_trusted_client)])
 def scan(  # sync: FastAPI führt es im Threadpool aus, der Scan blockiert so nicht den Event-Loop
     listing: Annotated[str, Form(description="Inserat als JSON (Felder siehe schema.Listing)")],
     images: Annotated[list[UploadFile] | None, File()] = None,
-    use_llm: Annotated[bool, Form()] = False,
+    use_llm: Annotated[str, Form(description="auto | true | false")] = "false",
 ) -> dict:
+    run_llm = resolve_llm_mode(use_llm)
     images = images or []
     try:
         data = json.loads(listing)
@@ -90,5 +114,5 @@ def scan(  # sync: FastAPI führt es im Threadpool aus, der Scan blockiert so ni
             path.write_bytes(content)
             paths.append(str(path))
         data["image_paths"] = paths
-        result = _guard(use_llm).scan(Listing.from_dict(data))
+        result = _guard(run_llm).scan(Listing.from_dict(data))
     return result.to_dict()

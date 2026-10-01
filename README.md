@@ -23,8 +23,8 @@ bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstel
        ▼                  ▼                   ▼                      ▼
  ┌───────────┐   ┌────────────────┐   ┌───────────────┐   ┌────────────────────┐
  │  Regeln   │   │   Textmodell   │   │  Bildmodell   │   │ LLM-Judge (opt.)   │
- │ Lexikon,  │   │ TF-IDF-Baseline│   │ pHash, CLIP   │   │ Claude, strukt.    │
- │ URL/Mail/ │   │ oder GBERT     │   │ Zero-Shot,    │   │ JSON-Ausgabe       │
+ │ Lexikon,  │   │ TF-IDF-Baseline│   │ pHash, CLIP   │   │ Qwen lokal oder    │
+ │ URL/Mail/ │   │ oder GBERT     │   │ Zero-Shot,    │   │ Claude, JSON       │
  │ IBAN,Preis│   │ (feingetunt)   │   │ CNN (Effic.)  │   │                    │
  │ Sprache   │   │                │   │               │   │                    │
  └─────┬─────┘   └───────┬────────┘   └──────┬────────┘   └─────────┬──────────┘
@@ -48,7 +48,7 @@ bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstel
 | **Bild: pHash** | Wiederverwendete Fake-/Stockfotos | nein (Hash-Liste pflegen) | CPU |
 | **Bild: CLIP** | Stockfoto, Screenshot, Bild passt nicht zur Kategorie | nein (Zero-Shot) | CPU ok |
 | **Bild: CNN** | Muster in Betrugsbildern (EfficientNet, Transfer Learning) | ja | GPU empfohlen |
-| **LLM-Judge** | Maschen-Geschichten, maschinell übersetzte Sprache, Gesamtbild | nein | API (kostet) |
+| **LLM-Judge** | Maschen-Geschichten, maschinell übersetzte Sprache, Gesamtbild | nein | lokal: Qwen (~7 GB Speicher), alternativ Claude-API (kostet) |
 
 ---
 
@@ -71,6 +71,7 @@ Optionale Pakete je nach Aufgabe:
 pip install -e ".[data]"     # Hugging-Face-Datensätze laden
 pip install -e ".[text]"     # GBERT feintunen (torch, transformers)
 pip install -e ".[vision]"   # Bildmodelle (torch, torchvision, CLIP, imagehash)
+pip install -e ".[local-llm]" # lokales LLM (Qwen via MLX, nur Apple Silicon)
 pip install -e ".[llm]"      # Claude als LLM-Judge
 pip install -e ".[all]"      # alles
 pip install -e ".[e2e]"      # Browser-Tests der Extension (danach: playwright install chromium)
@@ -171,6 +172,60 @@ pytest -m e2e      # echte Extension in Chromium (Playwright) und im installiert
 Kleinanzeigen wird dabei **nicht** aufgerufen: Die Tests liefern nachgebaute Seiten aus
 (`tests/e2e/fixtures`) und starten den Server im Testprozess. Screenshots für den Bericht:
 `SCAMGUARD_SCREENSHOTS=docs/screenshots pytest -m e2e -k scam_listing`
+
+---
+
+## KI-Analyse mit lokalem LLM (Qwen)
+
+Das LLM ist die „dritte Meinung“ neben Regeln und Textmodell: Es liest das Inserat wie ein Mensch,
+erkennt Maschen-Geschichten und maschinell übersetzte Sprache und begründet sein Urteil mit Zitaten
+(die die Extension ebenfalls markiert). Standard ist ein **lokales Open-Weight-Modell** – kostenlos,
+offline, Inseratsdaten verlassen den Rechner nicht.
+
+**Mac mit Apple Silicon** (z. B. MacBook M4 mit 16 GB):
+
+```bash
+pip install -e ".[local-llm]"      # Apple MLX
+scamguard llm-server               # erster Start lädt Qwen3.5-9B (~6,6 GB) und startet den Server
+scamguard api                      # zweites Terminal
+```
+
+In der Extension: Popup → *Einstellungen* → *KI-Analyse: Automatisch* (Standard). Die Extension zeigt
+sofort das Ergebnis der schnellen Modelle und ergänzt danach die KI-Einschätzung.
+
+**Modellwahl nach Hardware** (Stand 2026-10; Qwen-Modelle unter Apache 2.0):
+
+| Rechner | Modell | Größe | Server |
+|---|---|---|---|
+| MacBook M4, 16 GB gemeinsamer Speicher | Qwen3.5-9B, MLX OptiQ 4-Bit (neuestes Qwen, das passt) | 6,6 GB | `scamguard llm-server` |
+| PC mit 16 GB Grafikspeicher (z. B. RX 7800 XT) | Qwen3.8-27B, GGUF `UD-Q3_K_XL` (alternativ `UD-IQ4_XS`, 14,3 GB) | 13,1 GB | LM Studio oder Ollama |
+| PC/Mac mit wenig Speicher | Qwen3.5-4B, 4-Bit | ~3 GB | wie oben |
+
+**Andere Rechner (Windows/Linux, AMD- oder NVIDIA-GPU):** GGUF-Modell in LM Studio oder Ollama laden,
+dessen Server starten und in `config.yaml` eintragen – am Code ändert sich nichts:
+
+```yaml
+llm:
+  provider: local
+  local:
+    base_url: http://127.0.0.1:1234/v1   # LM Studio (Ollama: http://127.0.0.1:11434/v1)
+    model: qwen3.8-27b                   # Modellname, wie ihn der Server anzeigt
+```
+
+**Claude statt lokal:** `provider: anthropic` und API-Key (`ANTHROPIC_API_KEY`). In der Extension
+dann *KI-Analyse: Immer* wählen – *Automatisch* nutzt bewusst nie ein kostenpflichtiges Modell.
+
+Hinweise:
+- Qwen3.5 „denkt“ standardmäßig vor jeder Antwort. ScamGuard schaltet das ab
+  (`enable_thinking: false`): Für die Einstufung reicht die direkte Antwort, und sie kommt viel schneller.
+- Lokale Modelle erzwingen das JSON-Format nicht immer; ScamGuard prüft die Antwort, normalisiert
+  sie und fragt bei ungültigem JSON ein zweites Mal (deterministisch) nach.
+- Der MLX-Server läuft nur auf `127.0.0.1` und gibt fremden Webseiten keine CORS-Freigabe
+  (Standard von mlx_lm wäre „jede Seite“).
+- 16-GB-Mac: Solange Qwen läuft, sind rund 7 GB belegt. `Ctrl+C` beendet den Server und gibt den
+  Speicher frei.
+- Für den Projektbericht: `scamguard evaluate` mit `llm.enabled: true` vergleicht das LLM auf euren
+  Testdaten mit den anderen Modellen.
 
 ---
 

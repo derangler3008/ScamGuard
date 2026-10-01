@@ -143,7 +143,7 @@ def firefox(api_server, site, tmp_path_factory):
         driver.get(POPUP_URL)
         driver.execute_async_script(
             "const done = arguments[arguments.length - 1];"
-            "browser.storage.sync.set({ apiUrl: arguments[0] }).then(() => done(true));",
+            "browser.storage.sync.set({ apiUrl: arguments[0], llmMode: 'off' }).then(() => done(true));",
             api_server,
         )
         yield driver

@@ -49,36 +49,66 @@
     return marked;
   }
 
-  async function runScan(mode = "auto", text = "") {
-    const settings = await ext.runtime.sendMessage({ type: "getSettings" });
-    const extracted = SG.extract.forMode(mode, text);
-    const rescan = () => runScan(mode, text);
-    if (settings.showPanel) SG.panel.showLoading(extracted.source);
+  let currentRun = 0; // ein neuer Scan (z. B. „Erneut prüfen“) verwirft ältere, noch laufende Antworten
 
-    let response;
+  async function requestScan(extracted, llm) {
     try {
-      response = await ext.runtime.sendMessage({
+      return await ext.runtime.sendMessage({
         type: "scan",
         listing: extracted.listing,
         imageUrls: extracted.imageUrls,
         source: extracted.source,
+        llm,
       });
     } catch (err) {
-      response = { ok: false, error: { kind: "extension", message: `Extension-Fehler: ${err.message}` } };
+      return { ok: false, error: { kind: "extension", message: `Extension-Fehler: ${err.message}` } };
     }
+  }
 
-    if (!response?.ok) {
-      SG.highlight.clearAll();
-      if (settings.showPanel) SG.panel.showError(response?.error, rescan);
-      return { ok: false, error: response?.error };
-    }
-
+  function show(settings, response, extracted, handlers) {
     const { result, uploadedImageIndices } = response;
     const marked = applyMarks(result.signals, extracted, uploadedImageIndices);
-    if (settings.showPanel) {
-      SG.panel.showResult(result, marked, { onFocus: (id) => SG.highlight.focus(id), onRescan: rescan });
+    if (settings.showPanel) SG.panel.showResult(result, marked, handlers);
+    return marked;
+  }
+
+  /** Zweistufig: erst die schnellen Detektoren anzeigen, dann (falls gewünscht) die KI-Analyse
+   *  nachreichen – ein lokales LLM braucht auf einem Laptop schnell 10–30 Sekunden. */
+  async function runScan(mode = "auto", text = "") {
+    const run = ++currentRun;
+    const superseded = { ok: false, error: { kind: "superseded", message: "durch neueren Scan ersetzt" } };
+    const settings = await ext.runtime.sendMessage({ type: "getSettings" });
+    const extracted = SG.extract.forMode(mode, text);
+    const wantsLlm = settings.llmMode !== "off";
+    const handlers = {
+      onFocus: (id) => SG.highlight.focus(id),
+      onRescan: () => runScan(mode, text),
+    };
+    if (settings.showPanel) SG.panel.showLoading(extracted.source);
+
+    // Stufe 1: Regeln, Textmodell, Bilder
+    const fast = await requestScan(extracted, "off");
+    if (run !== currentRun) return superseded;
+    if (!fast?.ok) {
+      SG.highlight.clearAll();
+      if (settings.showPanel) SG.panel.showError(fast?.error, handlers.onRescan);
+      return { ok: false, error: fast?.error };
     }
-    return { ok: true, score: result.score, verdict: result.verdict, marked: marked.size };
+    let marked = show(settings, fast, extracted, { ...handlers, aiPending: wantsLlm });
+    let final = fast.result;
+
+    // Stufe 2: KI-Analyse (welches LLM, entscheidet der Server)
+    if (wantsLlm) {
+      const full = await requestScan(extracted, settings.llmMode);
+      if (run !== currentRun) return superseded;
+      if (full?.ok) {
+        marked = show(settings, full, extracted, handlers);
+        final = full.result;
+      } else if (settings.showPanel) {
+        SG.panel.showResult(fast.result, marked, { ...handlers, aiError: full?.error?.message });
+      }
+    }
+    return { ok: true, score: final.score, verdict: final.verdict, marked: marked.size };
   }
 
   ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

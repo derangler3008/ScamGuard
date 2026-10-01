@@ -2,6 +2,24 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.3.0] – 2026-10-01
+
+### Hinzugefügt
+- **Lokales LLM als KI-Analyse:** Qwen3.5-9B (MLX, 4-Bit mixed precision) läuft auf dem Mac über
+  `scamguard llm-server`; kostenlos, offline, Inseratsdaten bleiben auf dem Rechner. Neuer
+  `llm.provider: local` spricht jeden OpenAI-kompatiblen Server an (MLX, Ollama, LM Studio,
+  llama.cpp) – Claude bleibt als `provider: anthropic` verfügbar.
+- Robuste JSON-Auswertung für lokale Modelle (Denk-Blöcke, Code-Zäune, Prozentangaben,
+  unbekannte Werte), Wiederholung bei ungültiger Antwort; Denkmodus von Qwen3.5 abgeschaltet.
+- Extension: **zweistufige Prüfung** – sofortiges Ergebnis aus Regeln/Text/Bildern, danach ergänzt
+  die KI-Analyse Einschätzung, Score und Fundstellen. Popup-Einstellung „KI-Analyse“:
+  Automatisch (nur lokales Modell) / Immer / Aus, mit Anzeige des Server-Modells.
+- API: `use_llm=auto` (LLM nur, wenn lokal), `/health` meldet LLM-Provider und Modell.
+
+### Sicherheit
+- Der lokale MLX-Server wird ohne CORS-Freigabe für fremde Webseiten gestartet
+  (Standard von mlx_lm wäre `*`).
+
 ## [0.2.0] – 2026-10-01
 
 ### Hinzugefügt

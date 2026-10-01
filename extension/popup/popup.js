@@ -6,7 +6,7 @@ const VERDICTS = {
   "verdächtig": { cls: "mid", icon: "⚠️", label: "Verdächtig" },
   "unauffällig": { cls: "ok", icon: "✅", label: "Unauffällig" },
 };
-const TOGGLES = ["autoScan", "analyzeImages", "showPanel", "useLlm"];
+const TOGGLES = ["autoScan", "analyzeImages", "showPanel"];
 const $ = (id) => document.getElementById(id);
 
 function el(tag, cls, text) {
@@ -64,6 +64,12 @@ async function checkServer() {
   status.classList.add(health?.ok ? "online" : "offline");
   status.textContent = health?.ok ? "Server verbunden" : "Server aus";
   status.title = health?.ok ? `ScamGuard ${health.data.version}` : health?.error ?? "";
+  const llm = health?.data?.llm;
+  $("llm-info").textContent = !llm
+    ? "Modell: unbekannt (Server aus)"
+    : llm.provider === "local"
+      ? `Modell: ${llm.model.split("/").pop()} – lokal, kostenlos, Daten bleiben auf dem Rechner`
+      : `Modell: ${llm.model} (Claude API) – kostet pro Prüfung, Text geht an Anthropic`;
 }
 
 async function initSettings() {
@@ -73,6 +79,10 @@ async function initSettings() {
     box.checked = Boolean(settings[key]);
     box.addEventListener("change", () => saveSettings({ [key]: box.checked }));
   }
+  const llmMode = $("llmMode");
+  llmMode.value = settings.llmMode;
+  llmMode.addEventListener("change", () => saveSettings({ llmMode: llmMode.value }));
+
   const url = $("apiUrl");
   url.value = settings.apiUrl;
   url.addEventListener("change", async () => {

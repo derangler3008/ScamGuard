@@ -45,10 +45,13 @@ async function fetchImage(url) {
   return blob;
 }
 
-async function scanListing(listing, imageUrls, settings) {
+// Server-Parameter use_llm je Modus. "auto" lässt den Server entscheiden (nur lokales LLM).
+const USE_LLM = { off: "false", auto: "auto", on: "true" };
+
+async function scanListing(listing, imageUrls, settings, llmMode) {
   const form = new FormData();
   form.append("listing", JSON.stringify(listing));
-  form.append("use_llm", settings.useLlm ? "true" : "false");
+  form.append("use_llm", USE_LLM[llmMode] ?? "false");
 
   // Index (auf der Seite) der Bilder, die tatsächlich hochgeladen wurden – der Server meldet
   // Bildsignale als "image:<Upload-Index>", das Content Script übersetzt zurück.
@@ -65,7 +68,7 @@ async function scanListing(listing, imageUrls, settings) {
   const resp = await fetchWithTimeout(
     `${settings.apiUrl}/scan`,
     { method: "POST", body: form, headers: { [CLIENT_HEADER]: `extension/${VERSION}` } },
-    settings.useLlm ? 90_000 : 30_000,
+    llmMode === "off" ? 30_000 : 150_000, // lokales LLM: erster Aufruf lädt das Modell
   );
   if (!resp.ok) {
     let detail = `HTTP ${resp.status}`;
@@ -131,7 +134,8 @@ async function handleMessage(msg, sender) {
       const tabId = sender.tab?.id;
       const settings = await getSettings();
       try {
-        const { result, uploadedImageIndices } = await scanListing(msg.listing, msg.imageUrls, settings);
+        const llmMode = msg.llm ?? "off";
+        const { result, uploadedImageIndices } = await scanListing(msg.listing, msg.imageUrls, settings, llmMode);
         await setBadge(tabId, result);
         await rememberResult(tabId, {
           score: result.score,

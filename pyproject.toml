@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scamguard"
-version = "0.2.0"
+version = "0.3.0"
 description = "Betrugserkennung für deutschsprachige Kleinanzeigen (DHBW Mannheim KI-Projekt)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ dependencies = [
     "uvicorn>=0.29",
     "python-multipart>=0.0.9",
     "tldextract>=5.1",
+    "httpx>=0.27",  # lokales LLM (OpenAI-kompatibler Server)
 ]
 
 [project.optional-dependencies]
@@ -34,10 +35,12 @@ text = ["torch>=2.2", "transformers>=4.41", "accelerate>=0.30", "datasets>=2.19"
 vision = ["torch>=2.2", "torchvision>=0.17", "transformers>=4.41", "imagehash>=4.3"]
 # LLM-Judge über die Claude API
 llm = ["anthropic>=1.11"]
+# Lokales LLM auf Apple Silicon (Qwen via MLX): `scamguard llm-server`
+local-llm = ["mlx-lm>=0.32; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 dev = ["pytest>=8.0", "ruff>=0.4"]
 # Browser-Tests der Extension: danach `playwright install chromium`; Firefox muss installiert sein
 e2e = ["playwright>=1.48", "selenium>=4.25", "imagehash>=4.3"]
-all = ["scamguard[data,text,vision,llm,dev]"]
+all = ["scamguard[data,text,vision,llm,local-llm,dev]"]
 
 [project.scripts]
 scamguard = "scamguard.cli:main"

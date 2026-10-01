@@ -50,11 +50,26 @@ image_model:
   learning_rate: 1.0e-4
 
 llm:
-  enabled: false                     # kostet API-Credits → bewusst einschalten
-  model: claude-opus-5-5
-  effort: low                        # Klassifikation braucht kein tiefes Nachdenken
-  max_tokens: 2048
-  # Server-seitiger Fallback, falls das Modell eine Anfrage ablehnt
-  use_fallbacks: true
-  # Bilder ebenfalls an Claude senden (multimodale Bewertung). Datenschutz beachten!
+  # Für CLI/Streamlit; die Browser-Extension entscheidet pro Anfrage (Einstellung „KI-Analyse“).
+  enabled: false
+  # local     = Open-Weight-Modell auf diesem Rechner (kostenlos, Daten bleiben lokal)
+  # anthropic = Claude API (kostet pro Anfrage, Daten gehen an Anthropic)
+  provider: local
+  max_tokens: 1024
+
+  local:
+    # OpenAI-kompatibler Server. Mac (Apple Silicon): `scamguard llm-server` (MLX).
+    # PC mit AMD/NVIDIA-GPU: Ollama → http://127.0.0.1:11434/v1, LM Studio → http://127.0.0.1:1234/v1
+    base_url: http://127.0.0.1:8080/v1
+    # Neuestes Qwen, das in 16 GB passt (Stand 2026-10): Qwen3.5-9B, MLX-4-Bit (mixed precision)
+    model: mlx-community/Qwen3.5-9B-OptiQ-4bit
+    timeout: 120
+    temperature: 0.2
+
+  anthropic:
+    model: claude-opus-5-5
+    effort: low                      # Klassifikation braucht kein tiefes Nachdenken
+    use_fallbacks: true              # server-seitiger Fallback, falls das Modell ablehnt
+
+  # Bilder ebenfalls ans LLM senden (nur provider: anthropic). Datenschutz beachten!
   send_images: false

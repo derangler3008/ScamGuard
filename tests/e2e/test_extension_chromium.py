@@ -67,7 +67,8 @@ def chromium(api_server, test_image_bytes, tmp_path_factory):
         ctx.route("https://img.kleinanzeigen.de/**",
                   lambda route: route.fulfill(status=200, content_type="image/jpeg", body=test_image_bytes))
         worker = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker")
-        worker.evaluate("url => chrome.storage.sync.set({ apiUrl: url })", api_server)
+        # KI-Analyse standardmäßig aus → deterministische Tests; eigener Test für Stufe 2 unten
+        worker.evaluate("url => chrome.storage.sync.set({ apiUrl: url, llmMode: 'off' })", api_server)
         yield ctx, worker
         ctx.close()
 
@@ -168,3 +169,21 @@ def test_offline_server_shows_hint_instead_of_marks(chromium, api_server):
         page.close()
     finally:
         worker.evaluate("url => chrome.storage.sync.set({ apiUrl: url })", api_server)
+
+
+def test_ai_assessment_is_added_in_second_step(chromium):
+    ctx, worker = chromium
+    worker.evaluate("() => chrome.storage.sync.set({ llmMode: 'auto' })")
+    try:
+        page = ctx.new_page()
+        page.goto(SCAM_URL)
+        panel = page.locator("#scamguard-root")
+        # Stufe 1 ist sofort sichtbar, die KI-Analyse läuft noch …
+        expect(panel.locator(".ai")).to_contain_text("KI-Analyse läuft", timeout=15_000)
+        # … und ergänzt danach Einschätzung und eigene Fundstellen
+        expect(panel.locator(".summary")).to_contain_text("KI-Einschätzung", timeout=15_000)
+        expect(panel.locator(".ai")).to_have_count(0)
+        assert "auf Montage" in " ".join(page.locator("mark.scamguard-mark").all_inner_texts())
+        page.close()
+    finally:
+        worker.evaluate("() => chrome.storage.sync.set({ llmMode: 'off' })")

@@ -33,8 +33,13 @@
       <label class="check"><input type="checkbox" id="autoScan"> Kleinanzeigen-Anzeigen automatisch prüfen</label>
       <label class="check"><input type="checkbox" id="analyzeImages"> Inseratsbilder mitprüfen</label>
       <label class="check"><input type="checkbox" id="showPanel"> Ergebnis-Panel auf der Seite anzeigen</label>
-      <label class="check"><input type="checkbox" id="useLlm"> Claude-Analyse zuschalten
-        <small>Text des Inserats geht an die Claude API, kostet Guthaben.</small></label>
+      <label for="llmMode">KI-Analyse (LLM)</label>
+      <select id="llmMode" aria-describedby="llm-info">
+        <option value="auto">Automatisch – nur lokales Modell</option>
+        <option value="on">Immer (auch Claude, kostet)</option>
+        <option value="off">Aus</option>
+      </select>
+      <small id="llm-info">Modell: wird geladen …</small>
       <label for="apiUrl">Server-Adresse (nur lokal)</label>
       <input type="url" id="apiUrl" spellcheck="false" aria-describedby="apiUrl-error">
       <small id="apiUrl-error" class="error" role="alert"></small>
