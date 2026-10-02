@@ -6,9 +6,10 @@ Ein Inserat (Text, Preis, Bilder, Chatverlauf) wird hochgeladen – oder direkt 
 **Extension für Chromium und Firefox** geprüft – und von mehreren unabhängigen Detektoren
 bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstellen.
 
-> **Status:** Entwurf v0.2.0. Pipeline, Web-Frontend und Browser-Extension laufen Ende-zu-Ende,
-> die Modelle sind aber nur auf 24 synthetischen Demo-Inseraten trainiert. Aussagekräftig wird
-> es erst mit euren echten Datensätzen.
+> **Status:** Entwurf v0.5.0. Pipeline, Web-Frontend, Browser-Extension und lokales LLM laufen
+> Ende-zu-Ende; Inserate lassen sich per Screenshot hochladen und mit einem Klick einstufen. Die
+> trainierbaren Modelle kennen aber erst 24 synthetische Demo-Inserate – aussagekräftig wird es
+> mit euren eingestuften Inseraten (siehe [Trainingsdaten](#trainingsdaten-inserate-einstufen-und-datensätze-einfüllen)).
 
 ---
 
@@ -50,6 +51,13 @@ bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstel
 | **Bild: CNN** | Muster in Betrugsbildern (EfficientNet, Transfer Learning) | ja | GPU empfohlen |
 | **LLM-Judge** | Maschen-Geschichten, maschinell übersetzte Sprache, Gesamtbild | nein | lokal: Qwen (~7 GB Speicher), alternativ Claude-API (kostet) |
 
+**Wo sind die neuronalen Netze?** Selbst trainiert werden GBERT (Transformer für Text,
+`models/text_classifier.py` → `train_text_transformer`) und EfficientNet-B0 (CNN für Produktfotos,
+`models/image_model.py` → `train_image_model`) – beide per Transfer Learning auf euren Daten.
+Vortrainiert genutzt werden CLIP (Bildhinweise), Qwen (KI-Analyse) und Apple Vision (Texterkennung
+beim Screenshot-Upload). Die TF-IDF-Baseline ist bewusst *kein* neuronales Netz: Sie ist der
+Vergleichsmaßstab, an dem sich GBERT messen muss.
+
 ---
 
 ## Schnellstart
@@ -90,7 +98,7 @@ scamguard train text-baseline        # Sekunden
 scamguard retrain                    # nach neuen Daten/Labels: einlesen + trainieren + auswerten
 scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell
 scamguard scan examples/inserat_beispiel.json
-scamguard ui                         # Frontend → http://127.0.0.1:8501
+scamguard ui                         # Frontend → http://127.0.0.1:8501 (Inserat hochladen & einstufen)
 scamguard api                        # REST-API → http://127.0.0.1:8000/docs
 scamguard start                      # für die Extension: Qwen (lokales LLM) + API zusammen
 pytest                               # Tests
@@ -237,13 +245,36 @@ Hinweise:
 
 ---
 
-## Trainingsdaten: Datensätze einfüllen und selbst einstufen
+## Trainingsdaten: Inserate einstufen und Datensätze einfüllen
 
-Drei Wege – keiner braucht Python-Code. Danach immer: **`scamguard retrain`** (liest alles neu ein,
-trainiert das Textmodell und zeigt die Kennzahlen; ein laufender Server nutzt das neue Modell
-sofort, ohne Neustart).
+Kein Weg braucht Python-Code. Danach immer neu trainieren: im Frontend Tab *Meine Daten & Training* →
+**Jetzt neu trainieren**, oder `scamguard retrain` (liest alles neu ein, trainiert das Textmodell, zeigt
+die Kennzahlen; ein laufender Server nutzt das neue Modell sofort). Für Zahlen im Projektbericht:
+`scamguard retrain --ohne-demo` bzw. das Häkchen bei den Demo-Inseraten entfernen.
 
-### 1. Text-Datensätze: `data/datensatz_fuellen_text/`
+### 1. Ein Inserat hochladen und einstufen (Frontend)
+
+`scamguard ui` → Tab **Inserat hochladen & einstufen**: Screenshot(s), gespeicherte Seite (`.html`),
+PDF oder Text hineinziehen → ScamGuard liest Titel, Preis, Ort, Kategorie, Kontoalter und
+Beschreibung selbst aus (Texterkennung mit Apple Vision, lokal) → **⚠ Betrug** oder **✓ Seriös**
+klicken. Ein Chatverlauf (Screenshot oder Text) kann dazu. Bilder mit wenig Text gelten als
+Produktfotos. Die ScamGuard-Einschätzung ist beim Einstufen standardmäßig verborgen, damit sie euer
+Urteil nicht beeinflusst; nach dem Klick wird sie angezeigt. Screenshots selbst werden nicht
+gespeichert – nur der erkannte Text und Produktfotos.
+
+### 2. Live-Inserate in der Browser-Extension
+
+Im Panel unter jedem Ergebnis *⚠ Betrug* oder *✓ Seriös* klicken. Erneutes Klicken auf derselben
+Anzeige ersetzt die alte Einstufung; das Popup zeigt, wie viele Inserate ihr schon eingestuft habt.
+Wege 1 und 2 speichern in `data/raw/eigene_labels.jsonl` (Fotos in `data/images/eigene_labels/`).
+
+### 3. Viele Inserate auf einmal: `data/datensatz_fuellen_inserate/`
+
+Screenshots, gespeicherte Seiten, PDFs oder `.txt` in `betrug/` bzw. `serioes/` legen – eine Datei
+= ein Inserat; mehrere Dateien eines Inserats (z. B. drei Screenshots + Fotos) in einen
+Unterordner. Ausgelesen wird beim Training, genauso wie beim Hochladen.
+
+### 4. Fertige Tabellen: `data/datensatz_fuellen_text/`
 
 CSV (auch deutsche Excel-CSV mit `;`), TSV, JSONL oder Parquet hineinlegen. Spalten werden an
 üblichen Namen erkannt (`titel`, `beschreibung`/`text`, `preis`, `kategorie`, `nachrichten`) und das
@@ -251,23 +282,18 @@ Label an `betrug`/`label`/`fake` mit Werten wie `ja`/`nein`, `betrug`/`seriös`,
 Vorlage: `_vorlage_inserate.csv` (Dateien mit `_` am Anfang werden ignoriert).
 Hugging-Face-Datensätze: in `data/datensatz_fuellen_text/huggingface.yaml` eintragen.
 
-### 2. Bild-Datensätze: `data/datensatz_fuellen_bilder/`
+### 5. Nur Produktfotos: `data/datensatz_fuellen_bilder/`
 
-Bilder in `betrug/` oder `serioes/` legen – der Ordner ist das Label. Training des Bildmodells:
-`scamguard retrain --bilder` (sinnvoll ab einigen hundert Bildern pro Ordner).
+Fotos in `betrug/` oder `serioes/` legen – der Ordner ist das Label. Für das Bildmodell (CNN):
+`scamguard retrain --bilder` (sinnvoll ab einigen hundert Bildern pro Ordner). Keine Screenshots
+ganzer Inserate hier ablegen – die gehören nach `datensatz_fuellen_inserate/`.
 
-### 3. Selbst entscheiden, was Betrug ist
+**Regeln:** Was die Regel-Erkennung als verdächtig wertet, steht in
+`data/lexicons/scam_signals_de.yaml` (Formulierungen, Gewichte) – ohne Code erweiterbar.
 
-- **In der Browser-Extension:** Im Panel unter jedem Ergebnis *⚠ Betrug* oder *✓ Seriös* klicken.
-  Gespeichert wird in `data/raw/eigene_labels.jsonl` (Bilder in `data/images/eigene_labels/`);
-  erneutes Klicken auf derselben Anzeige ersetzt die alte Einstufung. Das Popup zeigt, wie viele
-  Inserate ihr schon eingestuft habt.
-- **Im Streamlit-Frontend:** Tab *Labeln* (gleicher Speicherort).
-- **Regeln:** Was die Regel-Erkennung als verdächtig wertet, steht in
-  `data/lexicons/scam_signals_de.yaml` (Formulierungen, Gewichte) – ohne Code erweiterbar.
-
-`scamguard data list` zeigt, was erkannt wurde (inkl. Hinweisen wie „keine Label-Spalte“).
-Datenschutz: keine Namen, Telefonnummern oder Adressen echter Personen weitergeben – die
+`scamguard data list` (oder der Tab *Meine Daten & Training*) zeigt, was erkannt wurde – inkl.
+Hinweisen wie „keine Label-Spalte“. Datenschutz: Der Name des Anbieters wird beim Auslesen nicht
+übernommen, Straße und Hausnummer auch nicht; trotzdem keine Daten echter Personen weitergeben – die
 Datenordner landen bewusst nicht im Git.
 
 ### Sonderfälle mit Code: `src/scamguard/data/registry.py`
@@ -287,7 +313,7 @@ Sinnvolle Alternativen:
   Modell (`FacebookAI/xlm-roberta-base`) oder nach Übersetzung nutzen.
 - **Öffentliche Warnungen**: Verbraucherzentrale (Phishing-Radar), polizei-beratung.de,
   Sicherheitshinweise der Plattformen. Beschriebene Maschen abtippen → `fixed_label=SCAM`.
-- **Eigene Sammlung**: Betrugsversuche aus dem Umfeld (Screenshots abtippen, anonymisieren).
+- **Eigene Sammlung**: Betrugsversuche aus dem Umfeld – Screenshots direkt hochladen (Weg 1 oder 3).
 - **Seriöse Gegenbeispiele**: eigene/befreundete echte Inserate. Wichtig, sonst lernt das Modell
   nur „Inserat = Betrug“.
 - **Synthetisch (mit Vorsicht)**: Varianten bekannter Maschen per LLM generieren. Immer als
@@ -301,15 +327,16 @@ Sinnvolle Alternativen:
 ScamGuard/
 ├── config.yaml                  Schwellen, Fusion-Gewichte, Modellpfade, LLM-Einstellungen
 ├── data/
-│   ├── datensatz_fuellen_text/  ← HIER Text-Datensätze ablegen (CSV/JSONL/Parquet, huggingface.yaml)
-│   ├── datensatz_fuellen_bilder/← HIER Bilder ablegen: betrug/ und serioes/
+│   ├── datensatz_fuellen_inserate/ ← HIER ganze Inserate (Screenshots, .html, PDF): betrug/, serioes/
+│   ├── datensatz_fuellen_text/  ← HIER Tabellen ablegen (CSV/JSONL/Parquet, huggingface.yaml)
+│   ├── datensatz_fuellen_bilder/← HIER Produktfotos ablegen: betrug/ und serioes/
 │   ├── lexicons/                ← Betrugsphrasen, Preisreferenzen, Fake-Bild-Hashes (YAML/TXT)
 │   ├── samples/                 synthetische Demo-Inserate
 │   ├── raw/  images/            eure Rohdaten (nicht im Git)
 │   └── processed/               train/val/test nach `data build` (nicht im Git)
 ├── models/                      trainierte Gewichte (nicht im Git)
 ├── examples/                    Beispiel-Inserat für `scamguard scan`
-├── frontend/app.py              Streamlit-Oberfläche (Prüfen + Labeln)
+├── frontend/app.py              Streamlit: Hochladen & Einstufen, Prüfen, Daten & Training
 ├── extension/                   Browser-Extension (Manifest V3, Chromium + Firefox)
 │   ├── manifest.json
 │   ├── background.js            Service Worker/Hintergrundskript: Server, Badge, Kontextmenü
@@ -321,19 +348,35 @@ ScamGuard/
 │   ├── schema.py                einheitliches Datenschema (Listing, Signal, ScanResult)
 │   ├── data/discovery.py        erkennt die Ablageordner automatisch
 │   ├── data/labels.py           eigene Einstufungen (Extension, Streamlit)
+│   ├── data/listing_import.py   Screenshot/.html/PDF/Text → Inserat (Titel, Preis, Beschreibung …)
+│   ├── data/ocr.py              Texterkennung (Apple Vision) inkl. Spalten-/Absatz-Erkennung
 │   ├── data/registry.py         Sonderfälle mit Code (transform-Funktionen)
 │   ├── data/loaders.py          HF/CSV/JSONL/Parquet → Listing
 │   ├── data/build.py            Dedup + Split
 │   ├── features/                URL/Mail/IBAN/Telefon, Sprache, Lexikon, Preis
 │   ├── models/                  rules, text_classifier, image_model, llm_judge, fusion
 │   ├── pipeline.py              alle Detektoren → Fusion
+│   ├── training.py              neu trainieren (CLI `retrain` und Frontend-Button)
 │   ├── evaluate.py              Kennzahlen pro Modell und Quelle
 │   ├── api.py                   FastAPI (Backend für Extension & Co.)
 │   └── cli.py                   `scamguard …`
-└── tests/                       Unit-Tests · e2e/ = Browser-Tests der Extension
+└── tests/                       Unit-Tests · e2e/ = Browser-Tests (Extension, Upload im Frontend)
 ```
 
 ---
+
+## Eigenleistung: Was ihr beitragt
+
+Der Code ist ein Gerüst (mit KI-Unterstützung erstellt – das gehört in eure Erklärung zu den
+Hilfsmitteln; klärt mit eurer Betreuung, wie das bewertet wird). Die eigentliche Projektarbeit:
+
+- **Datensatz**: Inserate sammeln und einstufen, ein *Labeling-Leitfaden* (wann ist es Betrug, welche
+  Masche?), Quellen und Lizenzen dokumentieren, Klassenverteilung, Dubletten, Datenschutz.
+- **Training & Experimente**: Baseline vs. GBERT vs. LLM vs. Fusion auf demselben, festen Testset;
+  CNN auf Produktfotos; Hyperparameter; Ablation (was bringt welcher Baustein?).
+- **Auswertung**: Precision/Recall/F1, Fehleranalyse (warum wurden seriöse Inserate markiert?),
+  Fairness (gebrochenes Deutsch ≠ Betrug), Grenzen.
+- **Weiterentwicklung**: Regeln/Lexikon aus echten Fällen, Fusion-Gewichte lernen, Prompt des LLM.
 
 ## Vorschlag: Aufgabenteilung für 3 Personen
 

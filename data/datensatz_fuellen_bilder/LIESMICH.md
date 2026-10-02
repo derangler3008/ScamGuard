@@ -10,4 +10,5 @@ Unterordner dürfen weitere Ordner enthalten. Andere Ordnernamen: `scam`/`fake` 
 Danach trainieren: `scamguard retrain --bilder` (Bildmodell, braucht ein paar hundert Bilder pro Klasse).
 Prüfen, was erkannt wurde: `scamguard data list`
 
+Nur Produktfotos – Screenshots ganzer Inserate gehören nach `../datensatz_fuellen_inserate/`.
 Die Bilder landen nicht im Git (siehe .gitignore).

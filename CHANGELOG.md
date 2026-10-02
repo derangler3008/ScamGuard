@@ -2,6 +2,32 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.5.0] – 2026-10-02
+
+### Hinzugefügt
+- **Inserat hochladen & einstufen** (neuer erster Tab im Frontend): Screenshots, gespeicherte Seite
+  (`.html`), PDF oder Text hineinziehen → Titel, Preis, Ort, Kategorie, Kontoalter und Beschreibung
+  werden ausgelesen → *⚠ Betrug* / *✓ Seriös* klicken. Chatverlauf optional. Felder lassen sich
+  korrigieren, müssen aber nicht. Die ScamGuard-Einschätzung ist beim Einstufen standardmäßig verborgen
+  (kein Anker-Effekt) und wird nach dem Klick gezeigt.
+- Texterkennung lokal mit Apple Vision (`data/ocr.py`): sehr hohe Screenshots in Kacheln, rechte
+  Seitenspalte (Anbieter/Login) vom Inserat getrennt, umbrochene Absätze wieder zusammengesetzt;
+  ~0,2–0,6 s pro Screenshot. Bilder mit wenig Text gelten als Produktfotos.
+- `data/listing_import.py`: Kleinanzeigen-Seiten über dieselben Stellen wie die Extension, sonst
+  Textanalyse (Titel über dem Preis, Abschnitt „Beschreibung“). Anbietername, Straße und Hausnummer
+  werden nicht übernommen.
+- Ordner `data/datensatz_fuellen_inserate/{betrug,serioes}/` für viele Inserate auf einmal
+  (Datei = Inserat, Unterordner = Inserat aus mehreren Dateien).
+- Tab **Meine Daten & Training**: Zähler, Ordner im Finder öffnen, alle Datensätze, Button
+  „Jetzt neu trainieren“ (inkl. CNN/GBERT) mit Kennzahlen; `scamguard retrain --ohne-demo`.
+- Extension-Popup erklärt auf Seiten ohne Inserat, wo die automatische Prüfung läuft.
+
+### Geändert
+- Einstufen im Tab „Felder selbst eingeben“ direkt unter dem Ergebnis (ersetzt den Tab „Labeln“).
+- Trainingslogik aus der CLI nach `scamguard/training.py` (CLI und Frontend nutzen dieselbe).
+- „Über das Projekt“ und README: welche Bausteine neuronale Netze sind, was vortrainiert ist und was
+  ihr trainiert; Abschnitt „Eigenleistung“.
+
 ## [0.4.1] – 2026-10-02
 
 ### Behoben

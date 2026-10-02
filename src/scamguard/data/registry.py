@@ -36,7 +36,7 @@ from scamguard.schema import Label
 @dataclass
 class DatasetSpec:
     name: str
-    source: Literal["huggingface", "csv", "jsonl", "parquet", "imagefolder"]
+    source: Literal["huggingface", "csv", "jsonl", "parquet", "imagefolder", "listingfolder"]
     path: str                                   # HF-ID ("org/name"), Datei oder Bilderordner
     modality: Literal["text", "image", "multimodal"] = "text"
     split: str = "train"                        # HF-Split

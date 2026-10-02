@@ -154,6 +154,8 @@ def test_popup_shows_server_status(chromium):
     popup.goto(f"chrome-extension://{extension_id}/popup/popup.html")
     expect(popup.locator("#server-status")).to_have_text("Server verbunden", timeout=5_000)
     expect(popup.locator("#permissions")).to_be_hidden()
+    # Kein Inserat im aktiven Tab → Hinweis, wo die Prüfung automatisch läuft (statt „leer“)
+    expect(popup.locator("#result")).to_contain_text("Öffne eine einzelne Anzeige")
     popup.close()
 
 

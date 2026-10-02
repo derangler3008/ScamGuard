@@ -4,8 +4,27 @@
     {
       "name": "scamguard-ui",
       "runtimeExecutable": ".venv/bin/streamlit",
-      "runtimeArgs": ["run", "frontend/app.py", "--server.port", "8501", "--server.address", "127.0.0.1", "--server.headless", "true", "--browser.gatherUsageStats", "false"],
+      "runtimeArgs": [
+        "run",
+        "frontend/app.py",
+        "--server.port",
+        "8501",
+        "--server.address",
+        "127.0.0.1",
+        "--server.headless",
+        "true",
+        "--browser.gatherUsageStats",
+        "false"
+      ],
       "port": 8501
+    },
+    {
+      "name": "scamguard-start",
+      "runtimeExecutable": ".venv/bin/scamguard",
+      "runtimeArgs": [
+        "start"
+      ],
+      "port": 8000
     }
   ]
 }

@@ -2,7 +2,7 @@
 
   scamguard data list                 Registrierte Datensätze anzeigen
   scamguard data build [--only A B]   Datensätze laden → data/processed/{train,val,test}.jsonl
-  scamguard retrain [--bilder]        Datensätze + eigene Labels einlesen, Modelle neu trainieren
+  scamguard retrain [--bilder] [--ohne-demo]  Daten + eigene Labels einlesen, neu trainieren
   scamguard train text-baseline       TF-IDF + LogReg (Sekunden, CPU)
   scamguard train text-transformer    GBERT-Feintuning (GPU empfohlen)
   scamguard train image               CNN-Feintuning auf Inseratsbildern
@@ -59,24 +59,11 @@ def _cmd_data(args) -> int:
     return 0
 
 
-def _train(model: str, train, val, cfg) -> Path:
-    if model == "text-baseline":
-        from scamguard.models.text_classifier import train_text_baseline
-
-        return train_text_baseline(train, cfg)
-    if model == "text-transformer":
-        from scamguard.models.text_classifier import train_text_transformer
-
-        return train_text_transformer(train, val, cfg)
-    from scamguard.models.image_model import train_image_model
-
-    return train_image_model(train, val, cfg)
-
-
 def _cmd_train(args) -> int:
     from scamguard.data.build import read_split
+    from scamguard.training import train_model
 
-    out = _train(args.model, read_split("train"), read_split("val"), load_config())
+    out = train_model(args.model, read_split("train"), read_split("val"), load_config())
     print(f"Modell gespeichert: {out}")
     print("Nächster Schritt: `scamguard evaluate`")
     return 0
@@ -84,18 +71,13 @@ def _cmd_train(args) -> int:
 
 def _cmd_retrain(args) -> int:
     """Nach neuen Daten/Labels: alles neu einlesen, Modelle neu trainieren, kurz auswerten."""
-    from scamguard.data.build import build_dataset, read_split
-    from scamguard.evaluate import evaluate
+    from scamguard.training import retrain
 
-    _print_build(*build_dataset())
-    cfg = load_config()
-    train, val = read_split("train"), read_split("val")
-    models = ["text-baseline"] + ["text-transformer"] * args.transformer + ["image"] * args.bilder
-    for model in models:
-        print(f"Trainiere {model} …")
-        print(f"  gespeichert: {_train(model, train, val, cfg)}")
-    report = evaluate("test")
-    fusion = report["models"]["FUSION"]
+    result = retrain(transformer=args.transformer, images=args.bilder, include_demo=not args.ohne_demo)
+    _print_build(result.reports, result.stats)
+    for model, path in result.saved.items():
+        print(f"  {model} gespeichert: {path}")
+    fusion = result.fusion
     auc = f", AUC {fusion['roc_auc']:.2f}" if "roc_auc" in fusion else ""
     print(f"Testset ({fusion['n']} Beispiele): Precision {fusion['precision']:.2f}, "
           f"Recall {fusion['recall']:.2f}, F1 {fusion['f1']:.2f}{auc}")
@@ -314,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("retrain", help="Alle Datensätze + eigene Labels neu einlesen und trainieren")
     p.add_argument("--bilder", action="store_true", help="Bildmodell (CNN) mittrainieren")
     p.add_argument("--transformer", action="store_true", help="GBERT-Textmodell mittrainieren (langsam)")
+    p.add_argument("--ohne-demo", action="store_true",
+                   help="Die 24 künstlichen Demo-Inserate weglassen (für echte Auswertungen)")
     p.set_defaults(func=_cmd_retrain)
 
     p = sub.add_parser("evaluate", help="Modelle auswerten")

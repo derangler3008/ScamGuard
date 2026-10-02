@@ -154,6 +154,19 @@ def _iter_rows(spec: DatasetSpec) -> Iterator[dict]:
         for image in images[:spec.max_rows] if spec.max_rows else images:
             yield {"image_paths": [str(image)]}
         return
+    if spec.source == "listingfolder":  # ganze Inserate: je Datei bzw. Unterordner eines
+        from scamguard.data.listing_import import SUPPORTED_SUFFIXES, import_paths
+
+        def supported(p: Path) -> bool:
+            return p.is_file() and p.suffix.lower() in SUPPORTED_SUFFIXES and not p.name.startswith(("_", "."))
+
+        items = sorted(p for p in path.iterdir()
+                       if supported(p) or (p.is_dir() and not p.name.startswith(("_", "."))))
+        for item in items[:spec.max_rows] if spec.max_rows else items:
+            files = sorted(f for f in item.rglob("*") if supported(f)) if item.is_dir() else [item]
+            if files:
+                yield import_paths(files).listing.to_dict()
+        return
     if spec.source == "jsonl":
         with path.open(encoding="utf-8") as f:
             for i, line in enumerate(f):

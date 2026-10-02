@@ -21,12 +21,17 @@ async function activeTab() {
   return tab;
 }
 
-function renderResult(entry) {
+const LISTING_PAGE = /^https:\/\/www\.kleinanzeigen\.de\/s-anzeige\//;
+
+function renderResult(entry, tabUrl) {
   const box = $("result");
   box.className = "";
   box.replaceChildren();
   if (!entry) {
-    box.append(el("p", "muted", "Dieser Tab wurde noch nicht geprüft."));
+    box.append(el("p", "muted", LISTING_PAGE.test(tabUrl ?? "")
+      ? "Dieser Tab wurde noch nicht geprüft."
+      : "Öffne eine einzelne Anzeige auf kleinanzeigen.de – dort prüft ScamGuard automatisch und " +
+        "markiert Warnsignale. Andere Seiten: „Diese Seite prüfen“."));
     return;
   }
   if (entry.error) {
@@ -50,10 +55,10 @@ function renderResult(entry) {
   }
 }
 
-async function refreshResult(tabId) {
-  const key = `tab:${tabId}`;
+async function refreshResult(tab) {
+  const key = `tab:${tab.id}`;
   const stored = await ext.storage.session.get(key);
-  renderResult(stored[key]);
+  renderResult(stored[key], tab.url);
 }
 
 async function checkServer() {
@@ -123,7 +128,7 @@ async function initScanButton(tab) {
       renderResult({ error: response.error });
       return;
     }
-    await refreshResult(tab.id);
+    await refreshResult(tab);
   });
 }
 
@@ -150,9 +155,9 @@ initSettings();
 checkServer();
 initScanButton(tab);
 if (tab?.id) {
-  refreshResult(tab.id);
+  refreshResult(tab);
   // Ergebnis live aktualisieren, falls der automatische Scan gerade fertig wird
   ext.storage.onChanged.addListener((changes, area) => {
-    if (area === "session" && changes[`tab:${tab.id}`]) refreshResult(tab.id);
+    if (area === "session" && changes[`tab:${tab.id}`]) refreshResult(tab);
   });
 }

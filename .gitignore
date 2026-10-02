@@ -26,6 +26,8 @@ data/datensatz_fuellen_text/*
 !data/datensatz_fuellen_text/_vorlage_*
 data/datensatz_fuellen_bilder/*/**
 !data/datensatz_fuellen_bilder/*/.gitkeep
+data/datensatz_fuellen_inserate/*/**
+!data/datensatz_fuellen_inserate/*/.gitkeep
 
 # macOS-Finder-Metadaten
 .DS_Store

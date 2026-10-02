@@ -5,8 +5,13 @@ data/datensatz_fuellen_text/
   Labels werden über übliche Namen und Werte zugeordnet (deutsch oder englisch); deutsche
   Excel-CSVs (Semikolon, Windows-Zeichensatz) gehen auch. Hugging-Face-Datensätze: huggingface.yaml.
 
+data/datensatz_fuellen_inserate/
+  Ganze Inserate: Screenshots, gespeicherte Seiten (.html), PDFs oder .txt – eine Datei = ein Inserat,
+  ein Unterordner = ein Inserat aus mehreren Dateien. Unterordner betrug/ bzw. serioes/ = Label.
+
 data/datensatz_fuellen_bilder/
-  Unterordner geben das Label vor: betrug/ (auch scam/, fake/) und serioes/ (auch echt/, legit/).
+  Nur Produktfotos (fürs Bildmodell). Unterordner geben das Label vor: betrug/ (auch scam/, fake/)
+  und serioes/ (auch echt/, legit/).
 
 Dateien und Ordner, die mit „_“ beginnen, werden ignoriert (Vorlagen, Entwürfe).
 Für Sonderfälle (Texte zusammensetzen, filtern …) bleibt registry.py mit `transform`-Funktionen.
@@ -22,11 +27,13 @@ from typing import Any
 import yaml
 
 from scamguard.config import resolve_path
+from scamguard.data.listing_import import SUPPORTED_SUFFIXES
 from scamguard.data.loaders import IMAGE_SUFFIXES
 from scamguard.data.registry import DatasetSpec
 
 TEXT_DIR = "data/datensatz_fuellen_text"
 IMAGE_DIR = "data/datensatz_fuellen_bilder"
+LISTING_DIR = "data/datensatz_fuellen_inserate"
 HF_FILE = "huggingface.yaml"
 FILE_TYPES = {".csv": "csv", ".tsv": "csv", ".jsonl": "jsonl", ".parquet": "parquet"}
 
@@ -162,17 +169,25 @@ def _specs_from_hf_file(path: Path) -> list[DatasetSpec]:
     return specs
 
 
-def _specs_from_image_dir(folder: Path) -> list[DatasetSpec]:
-    """Ein Datensatz pro Label-Unterordner (betrug/, serioes/ …)."""
+def _specs_from_label_dirs(folder: Path, kind: str) -> list[DatasetSpec]:
+    """Ein Datensatz pro Label-Unterordner (betrug/, serioes/ …).
+    kind "bilder": jedes Bild ist ein Beispiel; kind "inserate": jede Datei bzw. jeder Unterordner
+    (mehrere Screenshots/Fotos eines Inserats) ist ein Beispiel."""
     specs = []
     for sub in sorted(p for p in folder.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))):
         label = label_of(sub.name)
-        count = sum(1 for f in sub.rglob("*") if f.suffix.lower() in IMAGE_SUFFIXES)
+        if kind == "bilder":
+            count = sum(1 for f in sub.rglob("*") if f.suffix.lower() in IMAGE_SUFFIXES)
+            unit, source, modality = "Bilder", "imagefolder", "image"
+        else:
+            count = sum(1 for f in sub.iterdir() if not f.name.startswith(("_", "."))
+                        and (f.is_dir() or f.suffix.lower() in SUPPORTED_SUFFIXES))
+            unit, source, modality = "Inserate", "listingfolder", "multimodal"
         specs.append(DatasetSpec(
-            name=f"bilder:{sub.name}", source="imagefolder", path=str(sub), modality="image",
+            name=f"{kind}:{sub.name}", source=source, path=str(sub), modality=modality,
             fixed_label=label, german_only=False, enabled=label is not None and count > 0,
-            license="eigene Bilder – Quelle im Bericht angeben",
-            notes=(f"{count} Bilder, Label {'Betrug' if label else 'seriös'}" if label is not None
+            license=f"eigene {unit} – Quelle im Bericht angeben",
+            notes=(f"{count} {unit}, Label {'Betrug' if label else 'seriös'}" if label is not None
                    else "Ordnername ist kein Label – „betrug“ oder „serioes“ verwenden"),
         ))
     return specs
@@ -189,7 +204,8 @@ def discover_specs() -> list[DatasetSpec]:
                 specs.extend(_specs_from_hf_file(path))
             elif path.suffix.lower() in FILE_TYPES:
                 specs.append(_spec_for_file(path))
-    image_dir = resolve_path(IMAGE_DIR)
-    if image_dir.is_dir():
-        specs.extend(_specs_from_image_dir(image_dir))
+    for folder, kind in ((LISTING_DIR, "inserate"), (IMAGE_DIR, "bilder")):
+        path = resolve_path(folder)
+        if path.is_dir():
+            specs.extend(_specs_from_label_dirs(path, kind))
     return specs
