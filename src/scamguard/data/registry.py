@@ -80,6 +80,7 @@ DATASETS: list[DatasetSpec] = [
         source="jsonl",
         path="data/raw/eigene_labels.jsonl",     # wird vom Labeling-Tab im Frontend befüllt
         enabled=True,
+        german_only=False,                       # selbst eingestuft → nie per Sprachfilter verwerfen
         license="eigene Daten",
         notes="Im Frontend gescannte und von uns gelabelte Inserate.",
     ),

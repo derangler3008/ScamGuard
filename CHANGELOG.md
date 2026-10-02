@@ -2,6 +2,17 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.6.1] – 2026-10-02
+
+### Behoben
+- Sprachfilter verwarf kurze deutsche Inserate ohne Füllwörter („iPhone 13 128GB – Top Zustand, Akku 89 %“)
+  und deutsche Phishing-Betreffzeilen – seriöse Inserate sind oft knapp, das hätte die Trainingsdaten
+  einseitig gemacht. Jetzt wird nur bei klaren Hinweisen auf Englisch verworfen; Links/Domains zählen
+  nicht mit („mob-willhaben.at“). Gesammelte Warnungen: 617 statt 610 Texte geladen.
+- Eigene Einstufungen (`eigene_labels`) laufen nie durch den Sprachfilter.
+- Gefunden beim Prüfen, ob Teammitglieder ihre Einstufungen als Datei teilen können (geht: JSONL in
+  `data/datensatz_fuellen_text/`).
+
 ## [0.6.0] – 2026-10-02
 
 ### Hinzugefügt

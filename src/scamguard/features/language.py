@@ -22,7 +22,7 @@ WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß]+")
 GERMAN_STOPWORDS = {
     "der", "die", "das", "den", "dem", "des", "und", "ist", "nicht", "ich", "sie", "es",
     "ein", "eine", "einen", "einem", "einer", "eines", "mit", "für", "auf", "zu", "von", "im",
-    "am", "um", "aus", "bei", "nach", "vor", "über", "unter", "ohne", "bis", "durch", "gegen",
+    "am", "um", "aus", "bei", "nach", "vor", "über", "unter", "ohne", "bis", "durch", "gegen", "in", "an",
     "zum", "zur", "vom", "beim", "ins", "auch", "noch", "wie", "nur", "schon", "mal", "sehr",
     "wird", "werden", "wurde", "sind", "war", "waren", "hat", "habe", "haben", "hatte",
     "kann", "können", "muss", "müssen", "soll", "sollte", "wollen", "möchte", "gibt",
@@ -39,6 +39,7 @@ ENGLISH_STOPWORDS = {
     "shipping", "condition", "available",
 }
 _UMLAUT_RE = re.compile(r"[äöüÄÖÜß]")
+_LINK_RE = re.compile(r"\S*[./@]\S*\.[a-z]{2,}\S*|\S+\.[a-z]{2,}/\S*", re.IGNORECASE)
 
 # Wörter, die korrekt mit Umlaut geschrieben werden, aber oft mit ae/oe/ue (Tastatur ohne Umlaute)
 UMLAUT_SUBSTITUTES = {
@@ -95,13 +96,16 @@ def looks_german(text: str, min_ratio: float = 0.05) -> bool:
 
     Im Zweifel True: Lieber ein fremdsprachiges Beispiel behalten als deutsche Daten verwerfen.
     """
-    words = [w.lower() for w in WORD_RE.findall(text)]
+    # Links/Domains zählen nicht („mob-willhaben.at“ enthielte sonst das englische „at“)
+    words = [w.lower() for w in WORD_RE.findall(_LINK_RE.sub(" ", text))]
     if len(words) < 5:
         return True  # zu kurz für ein Urteil → nicht verwerfen
     de = sum(w in GERMAN_STOPWORDS for w in words) / len(words)
     en = sum(w in ENGLISH_STOPWORDS for w in words) / len(words)
     if _UMLAUT_RE.search(text):
         de += 0.05
+    if de == 0 and en == 0:
+        return True  # Stichpunkte ohne Füllwörter („iPhone 13, Top Zustand, Akku 89 %“) → behalten
     return de >= min_ratio and de >= en
 
 

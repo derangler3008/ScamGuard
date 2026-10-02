@@ -167,3 +167,13 @@ def test_highlights_contain_exact_page_text():
     assert next(s for s in f.signals if s.code == "EMAIL_IN_TEXT").highlights == ["info@example.com"]
     lang = analyze_language("Der Auto ist gut und die Handy auch.")
     assert next(s for s in lang.signals if s.code == "ARTICLE_ERRORS").highlights == ["Der Auto", "die Handy"]
+
+
+def test_terse_german_listings_are_kept_but_english_is_dropped():
+    from scamguard.features.language import looks_german
+
+    for text in ("Waschmaschine\nAbholung in Mannheim, bar", "iPhone 13 128GB\nTop Zustand, Akku 89 %",
+                 "Kinderwagen Bugaboo\nGut erhalten, Regenschutz dabei"):
+        assert looks_german(text), text
+    assert not looks_german("Brand new iPhone, shipping is available, please pay with the link")
+    assert looks_german("Name, Ware via Willhaben bezahlt mob-willhaben.at/123456 – bitte bestätigen")
