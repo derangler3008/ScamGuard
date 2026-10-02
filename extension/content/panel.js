@@ -6,15 +6,12 @@
   if (SG.panel) return;
 
   const VERDICTS = {
-    "hohes Risiko": { cls: "high", icon: "⛔", label: "Hohes Risiko" },
-    "verdächtig": { cls: "mid", icon: "⚠️", label: "Verdächtig" },
-    "unauffällig": { cls: "ok", icon: "✅", label: "Unauffällig" },
+    "hohes Risiko": { cls: "high", icon: "danger", label: "Hohes Risiko" },
+    "verdächtig": { cls: "mid", icon: "warning", label: "Verdächtig" },
+    "unauffällig": { cls: "ok", icon: "ok", label: "Unauffällig" },
   };
-  const SEVERITY = {
-    high: { icon: "▲", label: "Hoch" },
-    mid: { icon: "◆", label: "Mittel" },
-    low: { icon: "●", label: "Niedrig" },
-  };
+  // Schwere nicht nur über Farbe: Dreieck / Raute / Kreis (CSS-Formen, siehe .sev)
+  const SEVERITY = { high: "Hoch", mid: "Mittel", low: "Niedrig" };
   const MODEL_NAMES = { rules: "Regeln", text_model: "Text", image_model: "Bild", llm: "LLM" };
   const MAX_VISIBLE_SIGNALS = 6;
 
@@ -33,7 +30,8 @@
     .content { padding: 12px; }
     .score { display: flex; align-items: baseline; gap: 10px; }
     .pct { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
-    .verdict { font-size: 15px; font-weight: 600; }
+    .verdict { font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+    .sg-icon { flex: none; }
     .high .pct, .high .verdict { color: #b42318; }
     .mid .pct, .mid .verdict { color: #b54708; }
     .ok .pct, .ok .verdict { color: #067647; }
@@ -57,8 +55,11 @@
     .sig { display: grid; grid-template-columns: 16px 1fr; gap: 2px 6px; width: 100%; text-align: left;
       background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px; }
     .sig:hover { background: #f9fafb; border-color: #eaecf0; }
-    .sig .sev { grid-row: span 3; font-size: 11px; padding-top: 2px; }
-    .sig.high .sev { color: #d92d20; } .sig.mid .sev { color: #dc6803; } .sig.low .sev { color: #ca8504; }
+    .sig .sev { grid-row: span 3; display: block; width: 10px; height: 10px; margin: 5px 0 0 2px;
+      background: currentColor; }
+    .sig.high .sev { color: #d92d20; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+    .sig.mid .sev { color: #dc6803; transform: rotate(45deg) scale(.8); border-radius: 1px; }
+    .sig.low .sev { color: #ca8504; border-radius: 50%; transform: scale(.8); }
     .sig .ev { color: #475467; font-size: 12px; overflow-wrap: anywhere; }
     .sig .where { color: #667085; font-size: 11px; }
     .link { border: 0; background: none; color: #175cd3; padding: 4px 0; text-decoration: underline; }
@@ -129,7 +130,7 @@
 
   function header() {
     return h("header", { class: "head" },
-      h("span", { "aria-hidden": "true", text: "🛡️" }),
+      SG.icon("brand", { size: 18 }),
       h("strong", { text: "ScamGuard" }),
       h("span", { class: "spacer" }),
       h("button", {
@@ -166,7 +167,7 @@
     return h("button", {
       class: `pill ${cls}`, type: "button", "aria-label": `ScamGuard: ${text}. Panel ausklappen`,
       onclick: () => { collapsed = false; render(lastState); },
-    }, h("span", { "aria-hidden": "true", text: "🛡️" }), h("span", { class: "verdict", text: `ScamGuard ${text}` }));
+    }, SG.icon("brand", { size: 18 }), h("span", { class: "verdict", text: `ScamGuard ${text}` }));
   }
 
   function renderLoading(state) {
@@ -190,15 +191,15 @@
       status.textContent = "Speichere …";
       const r = await onLabel(label);
       labelStatus = r?.ok
-        ? `✓ Als ${r.label === "betrug" ? "Betrug" : "seriös"} gespeichert · ${r.count} eigene Labels. ` +
-          "Mit `scamguard retrain` lernt das Modell daraus."
+        ? `Gespeichert als ${r.label === "betrug" ? "Betrug" : "seriös"} · ${r.count} eigene Labels. ` +
+          "Neu trainieren: Web-App → „Meine Daten & Training“."
         : `Speichern fehlgeschlagen: ${r?.error?.message ?? "unbekannter Fehler"}`;
       status.textContent = labelStatus;
       buttons.forEach((b) => { b.disabled = false; });
     };
     const buttons = [
-      h("button", { class: "label-btn scam", type: "button", text: "⚠ Betrug", onclick: () => save("betrug") }),
-      h("button", { class: "label-btn ok", type: "button", text: "✓ Seriös", onclick: () => save("serioes") }),
+      h("button", { class: "label-btn scam", type: "button", text: "Betrug", onclick: () => save("betrug") }),
+      h("button", { class: "label-btn ok", type: "button", text: "Seriös", onclick: () => save("serioes") }),
     ];
     return h("div", { class: "labeling" },
       h("p", { class: "label-title", text: "Deine Einstufung (wird zu Trainingsdaten):" }),
@@ -208,7 +209,7 @@
 
   function renderResult({ result, marked, onFocus, onRescan, onLabel, aiPending, aiError }) {
     const pct = Math.round(result.score * 100);
-    const v = VERDICTS[result.verdict] ?? { cls: "", icon: "", label: result.verdict };
+    const v = VERDICTS[result.verdict] ?? { cls: "", icon: null, label: result.verdict };
     const summary = result.signals.find((s) => s.code === "LLM_SUMMARY");
     const signals = result.signals.filter((s) => s.code !== "LLM_SUMMARY");
     const visible = showAll ? signals : signals.slice(0, MAX_VISIBLE_SIGNALS);
@@ -221,7 +222,7 @@
       h("div", { class: v.cls },
         h("div", { class: "score", role: "status", "aria-live": "polite" },
           h("span", { class: "pct", text: `${pct} %` }),
-          h("span", { class: "verdict", text: `${v.icon} ${v.label}` })),
+          h("span", { class: "verdict" }, v.icon && SG.icon(v.icon, { size: 18 }), v.label)),
         h("div", {
           class: "meter", role: "meter", "aria-label": "Betrugswahrscheinlichkeit",
           "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(pct),
@@ -253,10 +254,10 @@
           title: isMarked ? "Zur Fundstelle springen" : "Nicht auf der Seite markierbar",
           onclick: () => onFocus(s.id),
         },
-          h("span", { class: "sev", "aria-hidden": "true", text: SEVERITY[sev].icon }),
-          h("span", {}, h("span", { class: "sr-only", text: `${SEVERITY[sev].label}: ` }), s.message),
+          h("span", { class: "sev", "aria-hidden": "true" }),
+          h("span", {}, h("span", { class: "sr-only", text: `${SEVERITY[sev]}: ` }), s.message),
           s.evidence && h("span", { class: "ev", text: `„${s.evidence}“` }),
-          h("span", { class: "where", text: isMarked ? "↳ auf der Seite markiert" : "nicht auf der Seite markierbar" })));
+          h("span", { class: "where", text: isMarked ? "auf der Seite markiert" : "nicht auf der Seite markierbar" })));
       })));
     }
     if (signals.length > MAX_VISIBLE_SIGNALS) {

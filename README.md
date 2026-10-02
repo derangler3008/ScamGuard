@@ -306,16 +306,22 @@ stratifiziert auf.
 ### Wo Daten herkommen können (ohne Scraping)
 
 Scraping von Kleinanzeigen ist technisch geblockt und verstößt gegen die Nutzungsbedingungen.
-Sinnvolle Alternativen:
+Einen öffentlichen deutschen Datensatz mit Kleinanzeigen-Betrug gibt es nicht (Stand 10/2026) –
+der Kern eures Datensatzes ist deshalb selbst gesammelt. Das ist zugleich eure Eigenleistung.
 
-- **Hugging Face Hub**: Suchbegriffe `phishing`, `spam`, `fraud`, `scam`, `german`, `sms spam`,
-  `fake reviews`. Deutschsprachige Daten sind selten. Englische Daten nur mit mehrsprachigem
-  Modell (`FacebookAI/xlm-roberta-base`) oder nach Übersetzung nutzen.
-- **Öffentliche Warnungen**: Verbraucherzentrale (Phishing-Radar), polizei-beratung.de,
-  Sicherheitshinweise der Plattformen. Beschriebene Maschen abtippen → `fixed_label=SCAM`.
-- **Eigene Sammlung**: Betrugsversuche aus dem Umfeld – Screenshots direkt hochladen (Weg 1 oder 3).
-- **Seriöse Gegenbeispiele**: eigene/befreundete echte Inserate. Wichtig, sonst lernt das Modell
-  nur „Inserat = Betrug“.
+- **Seriöse Inserate** (einfach, viele): normale Anzeigen in der Extension mit *Seriös* einstufen.
+  Wichtig, sonst lernt das Modell nur „Inserat = Betrug“.
+- **Betrugsfälle mit Screenshots**: Watchlist Internet (watchlist-internet.at, zeigt Kleinanzeigen-/
+  willhaben-Maschen mit Screenshots), Phishing-Radar der Verbraucherzentrale (gefälschte
+  „Sicher bezahlen“-Mails), polizei-beratung.de, Sicherheitshinweise von Kleinanzeigen,
+  Erfahrungsberichte in Foren. Screenshots hochladen (Weg 1 oder 3), **Quelle notieren** und im
+  Bericht angeben; die Bilder selbst nicht weitergeben (Urheberrecht).
+- **Eigene Chats**: Wenn jemand aus der Gruppe ohnehin etwas verkauft, Betrugsnachrichten (Fake-
+  Zahlungslinks, „Ich bin im Ausland …“) als Screenshot sichern – nicht antworten, nichts anklicken.
+  Keine Fake-Inserate einstellen (verstößt gegen die Nutzungsbedingungen).
+- **Hugging Face** (nur Ergänzung für Chat-Nachrichten): zwei deutsche Spam-Datensätze sind in
+  `data/datensatz_fuellen_text/huggingface.yaml` vorbereitet (`aktiv: false` → `true`). Weitere
+  Suchbegriffe: `phishing`, `spam`, `scam`, `fraud` mit Sprachfilter Deutsch.
 - **Synthetisch (mit Vorsicht)**: Varianten bekannter Maschen per LLM generieren. Immer als
   eigene `source` markieren und **nie** im Testset verwenden.
 

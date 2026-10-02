@@ -92,7 +92,7 @@ def test_upload_screenshot_and_label_as_scam(streamlit_app, tmp_path):
         page.get_by_text("Noch leer").wait_for(timeout=90_000)
         page.locator("input[type=file]").first.set_input_files(str(shot))
         page.get_by_text("PlayStation 5 Disc Edition").first.wait_for(timeout=60_000)
-        page.get_by_role("button", name="⚠ Betrug").click()
+        page.get_by_role("button", name="Betrug", exact=True).click()
         page.get_by_text("Gespeichert als").wait_for(timeout=60_000)
         browser.close()
     stored = [json.loads(line) for line in label_file.read_text(encoding="utf-8").splitlines()]

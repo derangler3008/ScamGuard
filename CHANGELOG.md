@@ -2,6 +2,19 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.5.2] – 2026-10-02
+
+### Geändert
+- Keine Emojis mehr (User-Wunsch: „sieht zu sehr nach KI aus“). Extension: schlichte SVG-Linien-Icons
+  (`extension/lib/icons.js`, Schild mit Lupe wie das Toolbar-Icon), Schweregrade als CSS-Formen
+  (Dreieck/Raute/Kreis – weiterhin nicht nur über Farbe unterscheidbar), Buttons nur mit Text.
+  Web-App: Text-Tabs, farbige Labels („Hoch“, „aktiv“), dezente Material-Icons, App-Icon = Extension-Icon.
+- `huggingface.yaml`: zwei deutsche Spam-Datensätze vorbereitet (aus), README: konkrete Datenquellen.
+
+### Behoben
+- Content Scripts für „markierten Text prüfen“ kommen jetzt aus dem Manifest (eine Liste statt zwei) –
+  sonst hätte das neue Icon-Skript auf fremden Seiten gefehlt (von den Browser-Tests gefunden).
+
 ## [0.5.1] – 2026-10-02
 
 ### Behoben

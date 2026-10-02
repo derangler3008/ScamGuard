@@ -16,4 +16,34 @@
 #
 # Felder: title, description, messages, price, category, scam_type, image (Bildspalte)
 
-datensaetze: []
+# Hinweis: Einen deutschen Datensatz mit Kleinanzeigen-Betrug gibt es öffentlich nicht (Stand 10/2026).
+# Die zwei Einträge unten sind SMS-/Spam-Texte – nützlich nur als Ergänzung für Chat-Nachrichten.
+# Auf aktiv: true setzen. max_zeilen klein halten, sonst überstimmen sie eure echten Inserate.
+# Nie zum Auswerten nutzen (Testset), nur zum Trainieren.
+
+datensaetze:
+  - id: tanaos/synthetic-spam-detection-dataset-german
+    split: train
+    spalten:
+      messages: text
+    label_spalte: labels
+    labels:
+      spam: betrug
+      not_spam: seriös
+    max_zeilen: 500
+    aktiv: false
+    lizenz: MIT
+    notiz: "Deutsch, synthetisch erzeugte Spam-/Normal-Nachrichten (10–20 Tsd.)"
+
+  - id: dbarbedillo/SMS_Spam_Multilingual_Collection_Dataset
+    split: train
+    spalten:
+      messages: text_de
+    label_spalte: labels
+    labels:
+      spam: betrug
+      ham: seriös
+    max_zeilen: 500
+    aktiv: false
+    lizenz: GPL
+    notiz: "SMS-Spam-Sammlung, maschinell ins Deutsche übersetzt (holprig)"

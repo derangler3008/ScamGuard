@@ -47,7 +47,8 @@ CATEGORY_LABELS = {
 UPLOAD_TYPES = sorted(s.lstrip(".") for s in SUPPORTED_SUFFIXES)
 CHAT_TYPES = sorted(s.lstrip(".") for s in IMAGE_SUFFIXES | {".txt"})
 
-st.set_page_config(page_title="ScamGuard – Kleinanzeigen-Check", page_icon="🛡️", layout="wide")
+APP_ICON = Path(__file__).resolve().parents[1] / "extension" / "icons" / "icon32.png"  # wie die Extension
+st.set_page_config(page_title="ScamGuard – Kleinanzeigen-Check", page_icon=str(APP_ICON), layout="wide")
 
 # Startwerte des Formulars „Felder selbst eingeben“ (Widgets lesen sie über ihren key)
 for _key, _default in {"title": "", "description": "", "messages": "", "price": None,
@@ -143,9 +144,9 @@ def label_buttons(key: str) -> bool | None:
     st.selectbox("Masche (optional, nur bei Betrug)", list(SCAM_TYPES), key=f"{key}_type",
                  format_func=SCAM_TYPES.get)
     left, right, _ = st.columns([1, 1, 2])
-    if left.button("⚠ Betrug", key=f"{key}_scam", type="primary", width="stretch"):
+    if left.button("Betrug", key=f"{key}_scam", type="primary", width="stretch"):
         return True
-    if right.button("✓ Seriös", key=f"{key}_ok", width="stretch"):
+    if right.button("Seriös", key=f"{key}_ok", width="stretch"):
         return False
     return None
 
@@ -153,11 +154,14 @@ def label_buttons(key: str) -> bool | None:
 def render_result(result: ScanResult, compact: bool = False) -> None:
     pct = round(result.score * 100)
     if result.verdict == "hohes Risiko":
-        st.error(f"**Hohes Risiko – {pct} %**  \nFinger weg: mehrere starke Betrugsmerkmale.", icon="⛔")
+        st.error(f"**Hohes Risiko – {pct} %**  \nFinger weg: mehrere starke Betrugsmerkmale.",
+                 icon=":material/gpp_bad:")
     elif result.verdict == "verdächtig":
-        st.warning(f"**Verdächtig – {pct} %**  \nVorsicht, prüfe die Warnsignale unten genau.", icon="⚠️")
+        st.warning(f"**Verdächtig – {pct} %**  \nVorsicht, prüfe die Warnsignale unten genau.",
+                   icon=":material/warning:")
     else:
-        st.success(f"**Unauffällig – {pct} %**  \nKeine deutlichen Betrugsmerkmale gefunden.", icon="✅")
+        st.success(f"**Unauffällig – {pct} %**  \nKeine deutlichen Betrugsmerkmale gefunden.",
+                   icon=":material/verified_user:")
     if not compact:
         st.progress(result.score, text=f"Betrugswahrscheinlichkeit (Modell-Schätzung): {pct} %")
 
@@ -167,7 +171,8 @@ def render_result(result: ScanResult, compact: bool = False) -> None:
     if not result.signals:
         st.write("Keine Warnsignale gefunden.")
     for s in shown:
-        marker = "🔴" if s.hard or s.weight >= 0.6 else "🟠" if s.weight >= 0.3 else "🟡"
+        marker = (":red-badge[Hoch]" if s.hard or s.weight >= 0.6
+                  else ":orange-badge[Mittel]" if s.weight >= 0.3 else ":gray-badge[Niedrig]")
         evidence = f"  \n<small>Fundstelle: `{s.evidence}`</small>" if s.evidence else ""
         st.markdown(f"{marker} **{s.message}** · _{s.source}_{evidence}", unsafe_allow_html=True)
     if compact and len(result.signals) > 3:
@@ -251,25 +256,26 @@ with st.sidebar:
     st.header("Modellstatus")
     for det in guard.detectors:
         if det.available:
-            st.markdown(f"✅ **{det.name}**")
+            st.markdown(f"**{det.name}** :green-badge[aktiv]")
         else:
-            st.markdown(f"⚪ **{det.name}**  \n<small>{det.unavailable_reason}</small>", unsafe_allow_html=True)
+            st.markdown(f"**{det.name}** :gray-badge[aus]  \n<small>{det.unavailable_reason}</small>",
+                        unsafe_allow_html=True)
 
-st.title("🛡️ ScamGuard")
+st.title("ScamGuard")
 st.caption("Betrugserkennung für deutschsprachige Kleinanzeigen · DHBW Mannheim KI-Projekt · "
            "Ergebnis ist eine Einschätzung, kein Beweis.")
 
 tab_upload, tab_manual, tab_data, tab_about = st.tabs(
-    ["📥 Inserat hochladen & einstufen", "✏️ Felder selbst eingeben", "📊 Meine Daten & Training",
-     "ℹ️ Über das Projekt"])
+    ["Inserat hochladen & einstufen", "Felder selbst eingeben", "Meine Daten & Training",
+     "Über das Projekt"])
 
 # --------------------------------------------------------------------------- Hochladen & einstufen
 
 with tab_upload:
     if flash := st.session_state.pop("flash", None):
-        st.success(flash, icon="✅")
-    st.markdown("**So geht's:** ① Inserat hineinziehen → ② kurz ansehen, was erkannt wurde → "
-                "③ **Betrug** oder **Seriös** klicken. Jede Einstufung wird zu Trainingsdaten.")
+        st.success(flash)
+    st.markdown("**So geht's:** 1. Inserat hineinziehen · 2. kurz ansehen, was erkannt wurde · "
+                "3. **Betrug** oder **Seriös** klicken. Jede Einstufung wird zu Trainingsdaten.")
     n = st.session_state.setdefault("upload_round", 0)  # neue Runde = leere Upload-Felder
     files = st.file_uploader(
         "Inserat hochladen", type=UPLOAD_TYPES, accept_multiple_files=True, key=f"files_{n}",
@@ -288,7 +294,7 @@ with tab_upload:
     if not (file_data or pasted.strip() or chat_data or chat_text.strip()):
         st.info("Noch leer – zieh oben z. B. einen Screenshot einer Anzeige hinein. Inserate, die gerade "
                 "online sind, gehen noch schneller mit der Browser-Extension (Buttons *Betrug*/*Seriös* "
-                "im Panel auf der Anzeige).", icon="👆")
+                "im Panel auf der Anzeige).")
     else:
         result = read_upload(file_data, pasted, chat_data, chat_text)
         for note in result.notes:
@@ -370,7 +376,7 @@ with tab_data:
     m1.metric("Selbst eingestuft", counts["gesamt"])
     m2.metric("davon Betrug", counts["betrug"])
     m3.metric("davon seriös", counts["serioes"])
-    st.caption(f"Gespeichert in `{LABEL_FILE}` – aus diesem Tab, der Extension und „Felder selbst eingeben“.")
+    st.caption(f"Gespeichert in `{LABEL_FILE}` – aus dem Upload, der Extension und „Felder selbst eingeben“.")
 
     st.subheader("Wohin mit großen Mengen?")
     st.markdown(
@@ -384,11 +390,12 @@ with tab_data:
         cols = st.columns(3)
         for col, (label, folder) in zip(cols, (("Inserate-Ordner", LISTING_DIR), ("Text-Ordner", TEXT_DIR),
                                               ("Bilder-Ordner", IMAGE_DIR))):
-            if col.button(f"📂 {label} öffnen", key=f"open_{folder}", width="stretch"):
+            if col.button(f"{label} öffnen", key=f"open_{folder}", icon=":material/folder_open:",
+                          width="stretch"):
                 subprocess.run(["open", str(resolve_path(folder))], check=False)
 
     specs = [s for s in get_specs(include_disabled=True) if not s.name.startswith("vorlage")]
-    st.dataframe([{"Datensatz": s.name, "aktiv": "✅" if s.enabled else "–", "Hinweis": s.notes}
+    st.dataframe([{"Datensatz": s.name, "aktiv": "ja" if s.enabled else "–", "Hinweis": s.notes}
                   for s in specs], hide_index=True, width="stretch")
 
     st.subheader("Neu trainieren")
@@ -399,7 +406,7 @@ with tab_data:
                                help="Braucht Produktfotos beider Klassen.")
     train_gbert = st.checkbox("GBERT mittrainieren (Transformer – neuronales Netz für Text, dauert lange)",
                               help="Lohnt sich ab einigen hundert Inseraten.")
-    if st.button("🧠 Jetzt neu trainieren", type="primary"):
+    if st.button("Jetzt neu trainieren", type="primary"):
         with st.status("Trainiere …", expanded=True) as status:
             try:
                 trained = retrain(transformer=train_gbert, images=train_images, include_demo=include_demo,

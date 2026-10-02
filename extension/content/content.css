@@ -1,5 +1,5 @@
 /* ScamGuard – Markierungen auf der Seite.
-   Schwere nicht nur über Farbe: durchgezogene / gestrichelte / gepunktete Linie + Warnsymbol. */
+   Schwere nicht nur über Farbe: durchgezogene / gestrichelte / gepunktete Linie + Dreieck bei „hoch“. */
 
 mark.scamguard-mark {
   color: inherit !important;
@@ -18,10 +18,13 @@ mark.scamguard-mark.scamguard-sev-high {
 }
 
 mark.scamguard-mark.scamguard-sev-high::before {
-  content: "⚠\fe0e";
-  color: #b42318;
-  font-size: 0.85em;
-  margin-right: 1px;
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  height: 0.52em;
+  margin-right: 2px;
+  background: #b42318;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
 mark.scamguard-mark.scamguard-sev-mid {

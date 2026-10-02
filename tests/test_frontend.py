@@ -33,7 +33,7 @@ def test_paste_listing_and_label_it(label_store):
     assert not at.exception
     assert any("PS5 Disc neu" in m.value for m in at.markdown)   # Zusammenfassung zeigt das Erkannte
 
-    _button(at, "⚠ Betrug").click().run()
+    _button(at, "Betrug").click().run()
     assert not at.exception
     stored = [json.loads(line) for line in label_store.read_text(encoding="utf-8").splitlines()]
     assert len(stored) == 1 and stored[0]["label"] == 1 and stored[0]["price"] == 350.0
@@ -47,7 +47,7 @@ def test_manual_tab_label_buttons_survive_the_rerun(label_store):
     _button(at, "Beispiel: seriös").click().run()
     _button(at, "Inserat scannen").click().run()
     assert not at.exception
-    buttons = [b for b in at.button if b.label == "✓ Seriös"]
+    buttons = [b for b in at.button if b.label == "Seriös"]
     buttons[-1].click().run()                                    # Button im Tab „Felder selbst eingeben“
     stored = [json.loads(line) for line in label_store.read_text(encoding="utf-8").splitlines()]
     assert len(stored) == 1 and stored[0]["label"] == 0

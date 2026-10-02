@@ -2,9 +2,9 @@ import { ext } from "../lib/ext.js";
 import { API_URL_PATTERN, getSettings, saveSettings } from "../lib/settings.js";
 
 const VERDICTS = {
-  "hohes Risiko": { cls: "high", icon: "⛔", label: "Hohes Risiko" },
-  "verdächtig": { cls: "mid", icon: "⚠️", label: "Verdächtig" },
-  "unauffällig": { cls: "ok", icon: "✅", label: "Unauffällig" },
+  "hohes Risiko": { cls: "high", icon: "danger", label: "Hohes Risiko" },
+  "verdächtig": { cls: "mid", icon: "warning", label: "Verdächtig" },
+  "unauffällig": { cls: "ok", icon: "ok", label: "Unauffällig" },
 };
 const TOGGLES = ["autoScan", "analyzeImages", "showPanel"];
 const $ = (id) => document.getElementById(id);
@@ -38,10 +38,14 @@ function renderResult(entry, tabUrl) {
     box.append(el("p", "error", entry.error.message));
     return;
   }
-  const v = VERDICTS[entry.verdict] ?? { cls: "", icon: "", label: entry.verdict };
+  const v = VERDICTS[entry.verdict] ?? { cls: "", icon: null, label: entry.verdict };
   box.className = v.cls;
   const score = el("p", "score");
-  score.append(el("span", "pct", `${Math.round(entry.score * 100)} %`), el("span", "verdict", `${v.icon} ${v.label}`));
+  const verdict = el("span", "verdict");
+  // icons.js ist ein klassisches Skript (auch für die Content Scripts) und hängt an globalThis.ScamGuard
+  if (v.icon) verdict.append(globalThis.ScamGuard.icon(v.icon, { size: 18 }));
+  verdict.append(v.label);
+  score.append(el("span", "pct", `${Math.round(entry.score * 100)} %`), verdict);
   box.append(score);
   if (!entry.signals?.length) {
     box.append(el("p", "muted", "Keine Warnsignale gefunden."));

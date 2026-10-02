@@ -10,7 +10,8 @@ const CLIENT_HEADER = "X-ScamGuard-Client";
 const VERSION = ext.runtime.getManifest().version;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const CONTENT_SCRIPTS = ["content/extract.js", "content/highlight.js", "content/panel.js", "content/content.js"];
+// Gleiche Skripte wie im Manifest (eine Quelle) – für Seiten ohne automatischen Scan per executeScript
+const CONTENT_SCRIPTS = ext.runtime.getManifest().content_scripts[0].js;
 const IMAGE_EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
 const BADGE_COLORS = { "hohes Risiko": "#b42318", "verdächtig": "#b54708", "unauffällig": "#067647" };
 

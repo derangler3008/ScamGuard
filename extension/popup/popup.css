@@ -60,7 +60,7 @@ main { padding: 12px 14px; display: grid; gap: 10px; }
 
 #result .score { display: flex; align-items: baseline; gap: 10px; margin: 0; }
 #result .pct { font-size: 30px; font-weight: 700; }
-#result .verdict { font-size: 15px; font-weight: 600; }
+#result .verdict { font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
 #result.high .pct, #result.high .verdict { color: var(--high); }
 #result.mid .pct, #result.mid .verdict { color: var(--mid); }
 #result.ok .pct, #result.ok .verdict { color: var(--ok); }
