@@ -43,7 +43,7 @@ bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstel
 
 | Detektor | Erkennt z. B. | Training nötig? | Hardware |
 |---|---|---|---|
-| **Regeln** (`features/`) | Fake-Zahlungslinks, Lookalike-Domains (`paypa1-…`), ausländische IBAN/Telefonnummern, „Freunde & Familie“, Spediteur-/Treuhand-Geschichten, Ausweis-Forderungen, Dumpingpreise, falsche Artikel („der Auto“) | nein | CPU |
+| **Regeln** (`features/`) | Fake-Zahlungslinks, Lookalike-Domains (`paypa1-…`), ausländische IBAN/Telefonnummern, „Freunde & Familie“, Spediteur-/Treuhand-Geschichten, Ausweis-Forderungen, Dumpingpreise, falsche Artikel („der Auto“); in Nachrichten/Mails/SMS: Konto-gesperrt-Phishing, Paket-/Zoll-SMS, Code-Weitergabe (Konto-Übernahme), „Zahlung reserviert“, Gewinn-/Erbschafts-Spam | nein | CPU |
 | **Text-Baseline** | Wort- und Zeichen-n-Gramme, auch Tippfehler/gebrochenes Deutsch | ja, Sekunden | CPU |
 | **Text-Transformer** | Kontext, Formulierungsmuster (deutsches BERT `deepset/gbert-base`) | ja | GPU empfohlen |
 | **Bild: pHash** | Wiederverwendete Fake-/Stockfotos | nein (Hash-Liste pflegen) | CPU |
@@ -282,7 +282,23 @@ Label an `betrug`/`label`/`fake` mit Werten wie `ja`/`nein`, `betrug`/`seriös`,
 Vorlage: `_vorlage_inserate.csv` (Dateien mit `_` am Anfang werden ignoriert).
 Hugging-Face-Datensätze: in `data/datensatz_fuellen_text/huggingface.yaml` eintragen.
 
-### 5. Nur Produktfotos: `data/datensatz_fuellen_bilder/`
+### 5. Öffentliche Warnungen automatisch sammeln: `scamguard data sammeln`
+
+Holt Betrugsnachrichten im Wortlaut (Phishing-Mails, SMS, Chat-Maschen) von Seiten, die sie
+veröffentlichen – **nicht** von Kleinanzeigen selbst (Nutzungsbedingungen, Bot-Sperre, Personendaten):
+Watchlist Internet „Phishing-Alarm“ (vollständige Nachrichten, u. a. willhaben), Phishing-Radar der
+Verbraucherzentrale (Betreffzeilen und zitierte Sätze, ohne deren Erklärtexte) und Zitate aus
+Watchlist-Artikeln zu Kleinanzeigen/Marktplätzen. Ergebnis: `data/datensatz_fuellen_text/
+gesammelt_warnungen.csv` (alles Label *Betrug*, mit Quelle je Zeile – im Bericht zitieren). robots.txt
+wird beachtet, zwischen Anfragen 1,5 s Pause, Seiten werden zwischengespeichert. Rechtsgrundlage:
+Text- und Data-Mining für nicht-kommerzielle Forschung (§ 60d UrhG); die Daten bleiben lokal.
+
+**Wichtig:** Das sind nur Betrugsbeispiele. Ohne seriöse Nachrichten als Gegenstück lernt das Modell
+„kurze Nachricht = Betrug“. Ergänzt eigene, anonymisierte Chats (Extension: Text markieren →
+Rechtsklick) oder vorübergehend die seriösen Nachrichten aus `huggingface.yaml`; `scamguard evaluate`
+zeigt die Kennzahlen je Quelle und deckt solche Verzerrungen auf.
+
+### 6. Nur Produktfotos: `data/datensatz_fuellen_bilder/`
 
 Fotos in `betrug/` oder `serioes/` legen – der Ordner ist das Label. Für das Bildmodell (CNN):
 `scamguard retrain --bilder` (sinnvoll ab einigen hundert Bildern pro Ordner). Keine Screenshots

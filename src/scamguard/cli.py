@@ -2,6 +2,7 @@
 
   scamguard data list                 Registrierte Datensätze anzeigen
   scamguard data build [--only A B]   Datensätze laden → data/processed/{train,val,test}.jsonl
+  scamguard data sammeln [--max N]    Öffentliche Betrugswarnungen (Mails, SMS, Chats) als Textdaten
   scamguard retrain [--bilder] [--ohne-demo]  Daten + eigene Labels einlesen, neu trainieren
   scamguard train text-baseline       TF-IDF + LogReg (Sekunden, CPU)
   scamguard train text-transformer    GBERT-Feintuning (GPU empfohlen)
@@ -45,6 +46,13 @@ def _print_build(reports, stats) -> None:
 def _cmd_data(args) -> int:
     from scamguard.data.registry import get_specs
 
+    if args.action == "sammeln":
+        from scamguard.data.collect_warnings import SOURCES, collect
+
+        rows = collect(sources=args.quellen or list(SOURCES), max_items=args.max)
+        if rows:
+            print("Nächster Schritt: seriöse Gegenbeispiele ergänzen, dann `scamguard retrain`.")
+        return 0
     if args.action == "list":
         for s in get_specs(include_disabled=True):
             status = "AKTIV " if s.enabled else "aus   "
@@ -306,8 +314,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("data", help="Datensätze verwalten")
-    p.add_argument("action", choices=["list", "build"])
+    p.add_argument("action", choices=["list", "build", "sammeln"],
+                   help="sammeln = öffentliche Betrugswarnungen (Nachrichten/Mails) als Textdaten holen")
     p.add_argument("--only", nargs="+", help="Nur diese Datensätze (Namen aus registry.py)")
+    p.add_argument("--max", type=int, help="sammeln: höchstens so viele Seiten je Quelle")
+    p.add_argument("--quellen", nargs="+", choices=["watchlist_alarm", "vz_radar", "watchlist_news"],
+                   help="sammeln: nur diese Quellen")
     p.set_defaults(func=_cmd_data)
 
     p = sub.add_parser("train", help="Modell trainieren")

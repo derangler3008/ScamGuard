@@ -2,6 +2,19 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.6.0] – 2026-10-02
+
+### Hinzugefügt
+- **`scamguard data sammeln`**: öffentliche Betrugswarnungen als Textdaten (Nachrichten, E-Mails, SMS –
+  keine Bilder): Watchlist Internet „Phishing-Alarm“ (vollständiger Wortlaut, ~400 Meldungen),
+  Phishing-Radar der Verbraucherzentrale (Betreffzeilen und Zitate, ohne deren Erklärtexte), Zitate
+  aus Watchlist-Artikeln zu Kleinanzeigen/Marktplätzen → `data/datensatz_fuellen_text/
+  gesammelt_warnungen.csv`, Quelle je Zeile. Kleinanzeigen selbst wird bewusst nicht gescrapt.
+  Höflich: robots.txt (401/403 = verboten), 1,5 s Pause, Cache nur für unveränderliche Einzelseiten.
+- **Neue Erkennungskriterien für Nachrichten/Mails/SMS** im Lexikon: Konto-gesperrt-Phishing,
+  Paket-/Zoll-Masche, Code-Weitergabe (Konto-Übernahme, hart), „Zahlung reserviert/wird freigegeben“,
+  Gewinn-/Erbschafts-/Rendite-Spam, Käufer ohne Besichtigung; „innerhalb von 24 Stunden“ als Zeitdruck.
+
 ## [0.5.2] – 2026-10-02
 
 ### Geändert

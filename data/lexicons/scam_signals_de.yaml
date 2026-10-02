@@ -4,7 +4,8 @@
 #   hard:   true = sehr starkes Indiz, hebt den Gesamtscore auf eine Mindesthöhe
 #
 # Quellen für Maschen: Verbraucherzentrale, Polizei-Beratung (polizei-beratung.de),
-# Kleinanzeigen-Sicherheitshinweise, eigene gesammelte Fälle.
+# Kleinanzeigen-Sicherheitshinweise, Watchlist Internet (Phishing-Alarm), eigene gesammelte Fälle.
+# Gilt für Inseratstext UND Nachrichten/E-Mails (Chatverlauf, Spam-Mails, SMS).
 
 groups:
   fake_payment_link:
@@ -79,6 +80,7 @@ groups:
       - "viele (andere )?(interessenten|anfragen)"
       - "sofort(ige)? (zahlung|überweisung)"
       - "schnell entscheiden|muss schnell weg"
+      - "innerhalb (von )?(12|24|48|72) stunden"
 
   overpayment_reverse:
     message: "Überzahlungs-/Rückerstattungsmasche (Betrug gegen Verkäufer)"
@@ -106,3 +108,57 @@ groups:
       - "(ohne|keine) (fehler|kratzer|probleme) und (ohne|keine) (fehler|kratzer|probleme)"
       - "ich (würde|möchte) gerne (ihren|deinen) artikel kaufen"
       - "bitte (kontaktieren|kontaktiere) (sie )?mich per"
+
+  # ------------------------------------------------------------ Nachrichten, E-Mails, SMS
+  account_phishing:
+    message: "Phishing-Muster: Konto angeblich gesperrt oder auffällig, Daten sollen per Link bestätigt werden"
+    weight: 0.65
+    patterns:
+      - "(ihr|dein) (konto|account|zugang|profil) (wurde|wird|ist) (vorübergehend |vorläufig |aus sicherheitsgründen )?(gesperrt|eingeschränkt|deaktiviert|gelöscht|limitiert|eingefroren)"
+      - "(verifizieren|bestätigen|aktualisieren) sie (bitte )?(jetzt |umgehend )?(ihr(e|en)?|ihre) (konto|kontozugriff|identität|daten|angaben|zugangsdaten|kontodaten)"
+      - "(ungewöhnliche|verdächtige) (aktivität|anmeldung|anmeldeversuch)|neue anmeldung erkannt|anmeldeversuch (bemerkt|erkannt|festgestellt)"
+      - "(sperrung|löschung|deaktivierung|einschränkung) (ihres|deines) (kontos|accounts|zugangs)"
+      - "konto (jetzt )?(sichern|entsperren|reaktivieren|freischalten)"
+
+  parcel_customs:
+    message: "Paket-/Zoll-Masche: angebliche Gebühr oder Bestätigung für eine Sendung"
+    weight: 0.55
+    patterns:
+      - "(paket|sendung|lieferung).{0,60}(konnte nicht zugestellt|zustellung (ist )?(fehlgeschlagen|ausstehend)|angehalten|zurückgehalten)"
+      - "(zoll|liefer|versand|zustell|nachporto)gebühr(en)?.{0,40}(zahlen|begleichen|überweisen|ausstehend|offen)"
+      - "(neuen|bestätige[n]?) (zustell|liefer)(termin|adresse)"
+
+  code_request:
+    message: "Bestätigungscode soll weitergegeben werden (Konto-Übernahme, z. B. WhatsApp oder Kleinanzeigen)"
+    weight: 0.8
+    hard: true
+    patterns:
+      - "(schick|send|nenn|gib|leite)\\w* (mir|uns) (bitte )?(kurz )?(den|deinen|ihren|diesen) (\\d-stelligen )?(code|zahlencode|bestätigungscode|sicherheitscode|pin)"
+      - "(code|zahlencode|bestätigungscode),? (den|der) (du|sie) (gerade |eben )?(per sms )?(bekommen|erhalten)"
+      - "versehentlich (einen |meinen )?code (an dich |an sie )?(geschickt|gesendet)"
+
+  payment_pending_story:
+    message: "Angeblich reservierte oder blockierte Zahlung, die erst „freigeschaltet“ werden muss"
+    weight: 0.6
+    patterns:
+      - "zahlung (ist|wurde) (bereits )?(reserviert|blockiert|eingefroren|zurückgehalten|vorgemerkt)"
+      - "(geld|betrag|zahlung) (wird|ist) (erst )?(freigegeben|gutgeschrieben|ausgezahlt),? (sobald|nachdem|wenn)"
+      - "(kaufbestätigung|zahlungsbestätigung|zahlungseingang).{0,40}(e-?mail|mail|postfach|spam)"
+
+  advance_fee_spam:
+    message: "Spam-Muster: Gewinn, Erbschaft oder hohe Rendite gegen Vorleistung"
+    weight: 0.5
+    patterns:
+      - "(sie|du) (haben|hast) (gewonnen|einen gewinn)|herzlichen glückwunsch.{0,40}(gewonnen|gewinner|ausgewählt)"
+      - "erbschaft|nachlass (eines|ihres)|verstorbene[nr]? (kunde|verwandte)"
+      - "(garantierte?|hohe) rendite|passives einkommen|krypto[- ]?(gewinn|investment)"
+      - "bearbeitungsgebühr|freischaltgebühr|aktivierungsgebühr"
+
+  buyer_no_questions:
+    message: "Käufer will ohne Besichtigung kaufen und drängt auf eigene Zahlungsabwicklung"
+    weight: 0.3
+    patterns:
+      - "(kaufe|nehme) (es|ihn|sie|den artikel) (auch )?ohne (zu )?(besichtig|anschau|ansehen)"
+      - "(gib|nenn|schick) (mir )?(deine|ihre) (paypal|e-?mail)[- ]?(adresse)? (für die zahlung|damit ich (zahlen|bezahlen|überweisen))"
+      - "zahle (den )?(vollen )?preis (plus|inklusive|inkl\\.?) versand"
+
