@@ -28,6 +28,18 @@ def train_model(model: str, train, val, cfg) -> Path:
     raise ValueError(f"Unbekanntes Modell: {model}")
 
 
+def balance_warning(stats: dict, low: float = 0.15) -> str | None:
+    """Hinweis, wenn eine Klasse kaum vorkommt (z. B. nur gesammelte Betrugsnachrichten)."""
+    scam = sum(split["scam"] for split in stats["splits"].values())
+    share = scam / max(stats["total"], 1)
+    if low <= share <= 1 - low:
+        return None
+    rare = "seriöse" if share > 0.5 else "Betrugs-"
+    return (f"Achtung: {share:.0%} der {stats['total']} Beispiele sind Betrug – stark unausgewogen. Die Klassen "
+            f"werden zwar ausgeglichen gewichtet, aber das Modell lernt so leicht die Quelle statt der Masche. "
+            f"Erst mehr {rare}Beispiele ergänzen (README: „Trainingsdaten“).")
+
+
 @dataclass
 class RetrainResult:
     reports: list          # LoadReport je Datensatz
@@ -56,6 +68,8 @@ def retrain(transformer: bool = False, images: bool = False, include_demo: bool 
                              "oder einen Datensatz-Ordner füllen.")
     reports, stats = build_dataset(names)
     log(f"{stats['total']} Beispiele eingelesen ({stats['duplicates_removed']} Duplikate entfernt)")
+    if warning := balance_warning(stats):
+        log(warning)
     cfg = load_config()
     train, val = read_split("train"), read_split("val")
     saved = {}

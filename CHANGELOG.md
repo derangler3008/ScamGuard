@@ -10,6 +10,9 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Phishing-Radar der Verbraucherzentrale (Betreffzeilen und Zitate, ohne deren Erklärtexte), Zitate
   aus Watchlist-Artikeln zu Kleinanzeigen/Marktplätzen → `data/datensatz_fuellen_text/
   gesammelt_warnungen.csv`, Quelle je Zeile. Kleinanzeigen selbst wird bewusst nicht gescrapt.
+  Erster Lauf: 619 Texte (399 Phishing-Wortlaut, 174 VZ-Zitate, 46 Artikel-Zitate), davon 610 deutsch.
+  Artikel-Zitate nur als ganze Sätze (≥ 40 Zeichen, ≥ 5 Wörter) – Domains/Namen fielen sonst mit hinein.
+- Warnung beim Neu-Trainieren, wenn eine Klasse unter 15 % liegt (z. B. nur gesammelte Betrugstexte).
   Höflich: robots.txt (401/403 = verboten), 1,5 s Pause, Cache nur für unveränderliche Einzelseiten.
 - **Neue Erkennungskriterien für Nachrichten/Mails/SMS** im Lexikon: Konto-gesperrt-Phishing,
   Paket-/Zoll-Masche, Code-Weitergabe (Konto-Übernahme, hart), „Zahlung reserviert/wird freigegeben“,

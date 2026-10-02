@@ -176,3 +176,14 @@ def test_clip_only_hints_do_not_lower_the_score(tmp_path, monkeypatch):
     result = det.predict(Listing(title="x", image_paths=[str(img)]))
     assert result.score is None and "Nur Hinweise" in result.error
     assert any(s.code == "STOCK_PHOTO" and s.target == "image:0" for s in result.signals)
+
+
+def test_retrain_warns_about_one_sided_data():
+    from scamguard.training import balance_warning
+
+    def stats(scam, total):
+        return {"total": total, "splits": {"train": {"n": total, "scam": scam}}}
+
+    assert balance_warning(stats(50, 100)) is None
+    assert "seriöse" in balance_warning(stats(610, 640))
+    assert "Betrugs-" in balance_warning(stats(3, 100))

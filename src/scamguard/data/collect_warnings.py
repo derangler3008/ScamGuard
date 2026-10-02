@@ -152,13 +152,14 @@ def _clean(text: str) -> str:
     return re.sub(r"[ \t ]+", " ", text).strip()
 
 
-def extract_quotes(text: str, min_len: int = 15) -> list[str]:
-    """Wörtliche Zitate („…“, "…", »…«) ab min_len Zeichen, ohne Doppelte."""
+def extract_quotes(text: str, min_len: int = 15, min_words: int = 2) -> list[str]:
+    """Wörtliche Zitate („…“, "…", »…«) ab min_len Zeichen und min_words Wörtern, ohne Doppelte.
+    Ein Wort = durch Leerraum getrennt und mit Buchstaben – eine URL zählt so nur als eines."""
     out: list[str] = []
     for q in QUOTE.findall(text):
         q = _clean(q)
-        words = re.findall(r"[^\W\d_]{2,}", q)
-        if len(q) >= min_len and len(words) >= 2 and not ONLY_DATE.match(q) and q not in out:
+        words = [t for t in q.split() if re.search(r"[^\W\d_]{2,}", t)]
+        if len(q) >= min_len and len(words) >= min_words and not ONLY_DATE.match(q) and q not in out:
             out.append(q)
     return out
 
@@ -221,7 +222,9 @@ def parse_news_quotes(html: str) -> tuple[str, list[str]]:
     soup = _soup(html)
     body = soup.select_one("article") or soup.select_one("main") or soup
     title = soup.find("h1")
-    return (_clean(title.get_text(" ")) if title else "", extract_quotes(body.get_text(" ")))
+    # Artikel zitieren auch Domains, Firmennamen und Fachbegriffe – nur ganze Sätze sind Betrugstext
+    return (_clean(title.get_text(" ")) if title else "",
+            extract_quotes(body.get_text(" "), min_len=40, min_words=5))
 
 
 # --------------------------------------------------------------------------- Sammeln

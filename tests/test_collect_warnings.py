@@ -140,3 +140,12 @@ def test_overview_pages_are_not_cached(tmp_path, monkeypatch):
     fetch.get("https://example.test/uebersicht", cache=False)
     fetch.get("https://example.test/meldung")
     assert len(list(tmp_path.iterdir())) == 1
+
+
+def test_article_quotes_keep_only_whole_sentences():
+    html = ("<html><body><article><h1>Kleinanzeigen-Betrug</h1><p>Die Domain „mob-willhaben.at/123456“ und der "
+            "„Verband für Hundewesen“ sind keine Nachricht, aber „Bitte senden Sie mir ein Foto von Ihrem Ausweis, "
+            "dann überweise ich sofort“ schon. Link: „https://beispiel.test/pfad/zur/seite/post“.</p></article></body></html>")
+    title, quotes = cw.parse_news_quotes(html)
+    assert title == "Kleinanzeigen-Betrug"
+    assert quotes == ["Bitte senden Sie mir ein Foto von Ihrem Ausweis, dann überweise ich sofort"]
