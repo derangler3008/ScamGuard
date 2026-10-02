@@ -125,7 +125,28 @@ def _cmd_images(args) -> int:
     return 0
 
 
+UI_URL = "http://127.0.0.1:8501"  # Streamlit-Standardport
+
+
+def _streamlit_running(url: str) -> bool:
+    from urllib.request import urlopen
+
+    try:
+        with urlopen(f"{url}/_stcore/health", timeout=2) as resp:
+            return resp.read().strip() == b"ok"
+    except OSError:
+        return False
+
+
 def _cmd_ui(args) -> int:
+    if not args.public and _streamlit_running(UI_URL):
+        # Sonst startet Streamlit still eine zweite Kopie auf dem nächsten Port (8502 …)
+        import webbrowser
+
+        print(f"Die ScamGuard-App läuft bereits: {UI_URL} – wird im Browser geöffnet.\n"
+              "Zum Neustarten erst das laufende Terminal mit Ctrl+C beenden.")
+        webbrowser.open(UI_URL)
+        return 0
     app = PROJECT_ROOT / "frontend" / "app.py"
     # Standard: nur lokal erreichbar. --public z. B. für eine Live-Demo im Kurs.
     address = "0.0.0.0" if args.public else "127.0.0.1"

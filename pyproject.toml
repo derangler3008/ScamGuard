@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scamguard"
-version = "0.5.0"
+version = "0.5.1"
 description = "Betrugserkennung für deutschsprachige Kleinanzeigen (DHBW Mannheim KI-Projekt)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,7 @@ dependencies = [
     "joblib>=1.3",
     "pillow>=10.0",
     "streamlit>=1.35",
+    "watchdog>=4,<7",  # Streamlit bemerkt Code-Änderungen effizient (sonst Hinweis beim Start)
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "python-multipart>=0.0.9",

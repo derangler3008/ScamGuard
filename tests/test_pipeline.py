@@ -215,3 +215,17 @@ def test_port_probe_with_real_socket():
         assert cli._port_busy("127.0.0.1", port)
         assert cli._port_busy("0.0.0.0", port)  # wird auf 127.0.0.1 geprüft
     assert not cli._port_busy("127.0.0.1", port)
+
+
+def test_ui_opens_running_app_instead_of_starting_a_second_copy(monkeypatch, capsys):
+    import argparse
+    import webbrowser
+
+    from scamguard import cli
+
+    opened = []
+    monkeypatch.setattr(cli, "_streamlit_running", lambda url: True)
+    monkeypatch.setattr(webbrowser, "open", opened.append)
+    monkeypatch.setattr(cli.subprocess, "call", _no_popen)
+    assert cli._cmd_ui(argparse.Namespace(public=False)) == 0
+    assert opened == [cli.UI_URL] and "läuft bereits" in capsys.readouterr().out

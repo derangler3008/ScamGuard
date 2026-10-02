@@ -2,6 +2,15 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.5.1] – 2026-10-02
+
+### Behoben
+- `scamguard ui` bei schon laufender App: öffnet sie im Browser und meldet „läuft bereits“, statt still
+  eine zweite Kopie auf Port 8502 zu starten.
+- `watchdog` als Abhängigkeit: Streamlit bemerkt Code-Änderungen effizient, der verwirrende
+  Start-Hinweis („xcode-select --install / pip install watchdog“) entfällt.
+- Extension unverändert (bleibt 0.5.0).
+
 ## [0.5.0] – 2026-10-02
 
 ### Hinzugefügt
