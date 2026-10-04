@@ -92,7 +92,8 @@ class Fetcher:
         self._wait()
         self.requests += 1
         with urlopen(Request(url, headers={"User-Agent": USER_AGENT}), timeout=30) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            # Ältere Foren liefern ISO-8859-1 – sonst würden Umlaute zu „�“
+            return resp.read().decode(resp.headers.get_content_charset() or "utf-8", errors="replace")
 
     def allowed(self, url: str) -> bool:
         host = urlparse(url)

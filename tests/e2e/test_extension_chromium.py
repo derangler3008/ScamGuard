@@ -22,6 +22,7 @@ SCAM_URL = "https://www.kleinanzeigen.de/s-anzeige/ps5-slim-neu-ovp/1000000001-2
 LEGIT_URL = "https://www.kleinanzeigen.de/s-anzeige/waschmaschine-bosch/1000000002-176-0000"
 IMAGE_URL = "https://img.kleinanzeigen.de/api/v1/prod-ads/images/te/test-1?rule=$_59.AUTO"
 MAIL_URL = "https://mail.example.test/posteingang"
+CHAT_URL = "https://www.kleinanzeigen.de/m-nachrichten.html"
 BADGE_JS = """async (pattern) => {
   const [tab] = await chrome.tabs.query({ url: pattern });
   return chrome.action.getBadgeText({ tabId: tab.id });
@@ -41,6 +42,7 @@ def chromium(api_server, test_image_bytes, tmp_path_factory):
         SCAM_URL: render("kleinanzeigen_scam.html", ACTIVE_SINCE=active_since(2), IMAGE_URL=IMAGE_URL),
         LEGIT_URL: render("kleinanzeigen_legit.html"),
         MAIL_URL: render("mail.html"),
+        CHAT_URL: render("kleinanzeigen_chat.html"),
     }
 
     def serve_page(route):
@@ -206,4 +208,36 @@ def test_label_buttons_save_and_replace_training_data(chromium, label_file):
     expect(panel.locator(".label-status")).to_contain_text("Gespeichert als seriös", timeout=10_000)
     stored = [json.loads(line) for line in label_file.read_text(encoding="utf-8").splitlines()]
     assert [r["label"] for r in stored if r["url"] == SCAM_URL] == [0]
+    page.close()
+
+
+def test_chat_is_checked_live_when_a_scam_message_arrives(chromium, label_file):
+    ctx, _ = chromium
+    page = ctx.new_page()
+    page.goto(CHAT_URL)
+    panel = page.locator("#scamguard-root")
+    # Nur der Verlauf zählt: Vorschau anderer Unterhaltungen („Western Union“) und Eingabefeld nicht
+    assert _score(page) < 40
+    expect(panel.locator(".verdict")).to_contain_text("Unauffällig")
+    expect(panel).to_contain_text("2 Chat-Nachrichten geprüft")
+
+    page.evaluate("addMessage('Geld zuerst, dann verschicke ich. Abholung ist leider nicht möglich, "
+                  "sonst ist es bald weg!')")
+    expect(panel.locator(".verdict")).not_to_contain_text("Unauffällig", timeout=15_000)
+    expect(panel).to_contain_text("3 Chat-Nachrichten geprüft")
+    marked = " ".join(page.locator("mark.scamguard-mark").all_inner_texts())
+    assert "Geld zuerst" in marked and "Abholung ist leider nicht möglich" in marked
+    assert page.locator("textarea mark, .sc-l3 mark").count() == 0
+    flagged = page.locator(".scamguard-flagged")                        # die Nachricht selbst eingerahmt
+    expect(flagged).to_have_count(1)
+    assert "Geld zuerst" in flagged.inner_text()
+    if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bild für Doku/Bericht
+        page.set_viewport_size({"width": 1280, "height": 760})
+        page.screenshot(path=f"{shots}/chromium_chat.png")
+
+    panel.locator("button.label-btn.scam").click()
+    expect(panel.locator(".label-status")).to_contain_text("Gespeichert als Betrug", timeout=10_000)
+    stored = json.loads(label_file.read_text(encoding="utf-8").splitlines()[-1])
+    assert stored["label"] == 1 and not stored.get("url")              # Postfach-URL ist kein Schlüssel
+    assert stored["messages"][-1].startswith("Geld zuerst") and len(stored["messages"]) == 3
     page.close()

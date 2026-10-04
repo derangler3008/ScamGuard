@@ -21,7 +21,7 @@ async function activeTab() {
   return tab;
 }
 
-const LISTING_PAGE = /^https:\/\/www\.kleinanzeigen\.de\/s-anzeige\//;
+const LISTING_PAGE = /^https:\/\/www\.kleinanzeigen\.de\/(s-anzeige\/|m-nachrichten)/;
 
 function renderResult(entry, tabUrl) {
   const box = $("result");
@@ -30,8 +30,8 @@ function renderResult(entry, tabUrl) {
   if (!entry) {
     box.append(el("p", "muted", LISTING_PAGE.test(tabUrl ?? "")
       ? "Dieser Tab wurde noch nicht geprüft."
-      : "Öffne eine einzelne Anzeige auf kleinanzeigen.de – dort prüft ScamGuard automatisch und " +
-        "markiert Warnsignale. Andere Seiten: „Diese Seite prüfen“."));
+      : "Öffne eine einzelne Anzeige oder dein Postfach auf kleinanzeigen.de – dort prüft ScamGuard " +
+        "automatisch und markiert Warnsignale. Andere Seiten: „Diese Seite prüfen“."));
     return;
   }
   if (entry.error) {

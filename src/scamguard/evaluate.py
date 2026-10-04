@@ -27,9 +27,9 @@ def _metrics(y_true: list[int], y_score: list[float], threshold: float) -> dict[
     return out
 
 
-def evaluate(split: str = "test", guard: ScamGuard | None = None) -> dict:
+def evaluate(split: str = "test", guard: ScamGuard | None = None, limit: int | None = None) -> dict:
     guard = guard or ScamGuard()
-    listings = read_split(split)
+    listings = read_split(split)[:limit]
     threshold = guard.cfg["thresholds"]["suspicious"]
 
     per_model: dict[str, tuple[list[int], list[float]]] = defaultdict(lambda: ([], []))

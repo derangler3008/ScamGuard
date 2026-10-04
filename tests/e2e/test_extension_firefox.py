@@ -50,6 +50,7 @@ def site():
         "/s-anzeige/ps5-slim-neu-ovp": render("kleinanzeigen_scam.html", ACTIVE_SINCE=active_since(2), IMAGE_URL=""),
         "/s-anzeige/waschmaschine-bosch": render("kleinanzeigen_legit.html"),
         "/posteingang": render("mail.html"),
+        "/m-nachrichten.html": render("kleinanzeigen_chat.html"),
     }
 
     class Handler(BaseHTTPRequestHandler):
@@ -115,7 +116,7 @@ def firefox(api_server, site, tmp_path_factory):
     ext_dir = tmp_path_factory.mktemp("firefox") / "extension"
     shutil.copytree(EXTENSION_DIR, ext_dir)
     manifest = json.loads((ext_dir / "manifest.json").read_text(encoding="utf-8"))
-    manifest["content_scripts"][0]["matches"].append("http://127.0.0.1/s-anzeige/*")
+    manifest["content_scripts"][0]["matches"] += ["http://127.0.0.1/s-anzeige/*", "http://127.0.0.1/m-nachrichten*"]
     (ext_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     extract_js = ext_dir / "content" / "extract.js"
     source = extract_js.read_text(encoding="utf-8")
@@ -222,3 +223,15 @@ def test_popup_shows_server_status(firefox):
         lambda d: (el := d.find_element(By.ID, "server-status")).text != "Server …" and el)
     assert status.text == "Server verbunden"
     assert not firefox.find_element(By.ID, "permissions").is_displayed()
+
+
+def test_chat_is_checked_live_when_a_scam_message_arrives(firefox, site):
+    firefox.get(f"{site}/m-nachrichten.html")
+    assert _score(firefox) < 40  # Vorschau anderer Unterhaltungen und Eingabefeld zählen nicht
+    firefox.execute_script("addMessage(arguments[0])", "Geld zuerst, dann verschicke ich. Abholung ist "
+                           "leider nicht möglich, sonst ist es bald weg!")
+    WebDriverWait(firefox, 15).until(
+        lambda d: "Unauffällig" not in _panel(d).find_element(By.CSS_SELECTOR, ".verdict").text)
+    assert "Geld zuerst" in _marked_text(firefox)
+    flagged = firefox.find_elements(By.CSS_SELECTOR, ".scamguard-flagged")
+    assert len(flagged) == 1 and "Geld zuerst" in flagged[0].text

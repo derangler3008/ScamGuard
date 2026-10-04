@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "ScamGuard – Kleinanzeigen-Check",
   "short_name": "ScamGuard",
-  "version": "0.5.2",
-  "description": "Markiert Betrugsindikatoren in Kleinanzeigen direkt auf der Seite und zeigt einen Risiko-Score. Analyse lokal über den ScamGuard-Server.",
+  "version": "0.7.0",
+  "description": "Markiert Betrugsindikatoren in Kleinanzeigen und im Kleinanzeigen-Chat direkt auf der Seite und zeigt einen Risiko-Score. Analyse lokal über den ScamGuard-Server.",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon16.png",
@@ -41,7 +41,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.kleinanzeigen.de/s-anzeige/*"
+        "https://www.kleinanzeigen.de/s-anzeige/*",
+        "https://www.kleinanzeigen.de/m-nachrichten*"
       ],
       "js": [
         "lib/icons.js",

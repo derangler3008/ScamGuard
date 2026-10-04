@@ -1,0 +1,59 @@
+# Foren-Threads mit Erfahrungsberichten zu Kleinanzeigen-Betrug
+# → `scamguard data sammeln --quellen foren`
+#
+# Neue Threads einfach anhängen (URL der ersten Seite). Unterstützt: XenForo (URL enthält meist
+# /threads/), WoltLab (/thread/) und das vBulletin-Archiv (/archive/index.php/t-…).
+# Ob ein Forum automatisches Lesen erlaubt, prüft der Sammler selbst über robots.txt.
+#
+# Bewusst nicht dabei:
+#   Reddit           robots.txt sperrt alle Bots; Nutzung nur über Reddits Forschungsprogramm
+#   gutefrage.net    Bot-Sperre (Cloudflare) – wird nicht umgangen
+#   eBay-Community   Nutzungsbedingungen verbieten automatisches Lesen
+#
+# Gefunden per Websuche am 2026-10-05.
+
+max_seiten: 8   # je Thread: erste Seite (Ausgangsbericht) + die neuesten Seiten
+
+threads:
+  # Sammelthreads mit vielen Einzelfällen
+  - https://www.gs-forum.eu/threads/betrug-bei-ebay-kleinanzeigen.160348/
+  - https://unknowns.de/forum/thread/22012-betrugsversuche-bei-ebay-kleinanzeigen/
+  # ComputerBase
+  - https://www.computerbase.de/forum/threads/kleinanzeigen-sicher-bezahlen.2180517/
+  - https://www.computerbase.de/forum/threads/kleinanzeigen-staendig-direkt-kaufen-doch-ich-unterstuetze-es-nicht.2195809/
+  - https://www.computerbase.de/forum/threads/betrug-bei-kleinanzeigen.2180855/
+  - https://www.computerbase.de/forum/threads/screenshot-betrug-bei-kleinanzeigen.2239798/
+  - https://www.computerbase.de/forum/threads/betrug-auf-ebay-kleinanzeigen-phishing.2085368/
+  - https://www.computerbase.de/forum/threads/ebay-kleinanzeigen-betrug-sogar-als-kaeufer-ueber-sicher-bezahlen-option.2071883/
+  - https://www.computerbase.de/forum/threads/kleinanzeigen-anfragen-mit-verkauf.2170055/
+  - https://www.computerbase.de/forum/threads/ebay-kleinanzeigen-betrug.2036415/
+  - https://www.computerbase.de/forum/threads/betrug-bei-ebay-kleinanzeigen.1724042/
+  - https://www.computerbase.de/forum/threads/kleinanzeigen-betrug-oder-warum-ist-der-artikel-wieder-im-angebot.2250805/
+  - https://www.computerbase.de/forum/threads/ebay-kleinanzeigen-betrug-weiteres-vorgehen.1604288/
+  - https://www.computerbase.de/forum/threads/kleinanzeigen-betrug-700eur.1232464/
+  - https://www.computerbase.de/forum/threads/wurde-ich-betrogen-bei-ebay-kleinanzeigen.1644031/
+  - https://www.computerbase.de/forum/threads/neue-betrugsmasche-auf-ebay-kleinanzeigen-paypal-mit-besonderer-email-adresse.2086180/
+  - https://www.computerbase.de/forum/threads/verkauf-bei-ebay-kleinanzeigen-betrugsmasche.1676275/
+  - https://www.computerbase.de/forum/threads/gier-frisst-hirn-jemandem-auf-ebay-kleinanzeigen-die-handynummer-gegeben.2034124/
+  - https://www.computerbase.de/forum/threads/ebay-kleinanzeigen-account-gehackt-hacker-betruegt-andere-nutzer-mit-fakeware.2028441/
+  - https://www.computerbase.de/forum/threads/betrugsversuch-bei-ebay-kleinanzeigen.1373203/
+  - https://www.computerbase.de/forum/threads/ebay-kleinanzeigen-betrug.1822653/
+  - https://www.computerbase.de/forum/threads/kleinanzeigen-was-da-los.2268317/
+  # Weitere Foren
+  - https://www.flippermarkt.de/forum/threads/neue-betrugsmasche-bei-kleinanzeigen-direkt-kaufen.268001/
+  - https://www.woodworker.de/forum/threads/wie-funktioniert-betrug-bei-ebay-kleinanzeigen-via-paypal.131309/
+  - https://thinkpad-forum.de/threads/erfahrungen-mit-kleinanzeigen-de-und-quoka-de.239819/
+  - https://www.hilferuf.de/thema/wohnungsbetrug.285799/
+  - https://www.mtb-news.de/forum/t/betrugsmasche-ebay-kleinanzeigen.907206/
+  - https://www.mtb-news.de/forum/t/ebay-kleinanzeigen-betrug-vermutet-was-kann-ich-machen.962116/
+  - https://www.android-hilfe.de/forum/plauderecke.13/warnung-vor-kauf-ueber-kleinanzeigen.1103283.html
+  - https://www.android-hilfe.de/forum/erfahrungen-und-tipps-zu-haendlern-und-online-shops.1251/betrug-bei-kleinanzeigen-de.1322609.html
+  # Antispam e.V. (Verbraucherschutzverein) – Forenarchiv
+  - https://www.antispam-ev.de/forum/archive/index.php/t-40874.html
+  - https://www.antispam-ev.de/forum/archive/index.php/t-37590.html
+  - https://www.antispam-ev.de/forum/archive/index.php/t-37115.html
+  - https://www.antispam-ev.de/forum/archive/index.php/t-32203.html
+  - https://www.antispam-ev.de/forum/archive/index.php/t-29740.html
+  - https://www.antispam-ev.de/forum/archive/index.php/t-29077.html
+  - https://www.antispam-ev.de/forum/archive/index.php/t-27387.html
+  - https://www.antispam-ev.de/forum/archive/index.php/t-21766.html

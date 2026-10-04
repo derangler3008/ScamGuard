@@ -1,4 +1,4 @@
-// ScamGuard – Inserat aus der Seite auslesen.
+// ScamGuard – Inserat bzw. Chatverlauf aus der Seite auslesen.
 // Adapter pro Plattform; neue Seiten (z. B. willhaben.at, markt.de) als weiteres Objekt in ADAPTERS ergänzen.
 
 (() => {
@@ -70,7 +70,86 @@
     },
   };
 
-  const ADAPTERS = [kleinanzeigen];
+  // ------------------------------------------------------------------------- Kleinanzeigen-Postfach
+
+  // Das Postfach (m-nachrichten.html) ist eine App ohne stabile IDs und nur eingeloggt sichtbar.
+  // Darum keine festen Selektoren: Verlauf = ARIA-Log bzw. Scrollbereich (chatRoot), Nachrichten =
+  // die innersten Textblöcke darin. Neue Nachrichten erkennt content.js per MutationObserver.
+  const CHAT_SKIP = "script, style, noscript, textarea, input, select, button, svg, nav, header, footer, " +
+    "form, [contenteditable], [aria-hidden='true'], #scamguard-root";
+  const CHAT_MAX_MESSAGES = 60; // die neuesten – ältere ändern das Urteil selten, kosten aber Zeit
+  const CHAT_MAX_CHARS = 4000;
+  // Reine Zeit-/Statusangaben sind keine Nachrichten: „14:32“, „Heute, 14:32“, „03.10.2026“, „Gelesen“
+  const CHAT_NOISE = /^((heute|gestern|vorgestern)[\s,]*)?(\d{1,2}[.:]\d{2}([.:]\d{2,4})?)?(\s*uhr)?$|^(gelesen|zugestellt|gesendet)$/i;
+
+  const isBlock = (el) => {
+    const display = getComputedStyle(el).display;
+    return !display.startsWith("inline") && display !== "contents";
+  };
+
+  /** Nachrichtenverlauf: ARIA-Log, sonst der größte *innerste* Scrollbereich (Verlauf und Liste der
+   *  Unterhaltungen scrollen getrennt, der Verlauf ist breiter). Zählt auch, wenn ein kurzer Chat noch
+   *  gar nicht scrollt – entscheidend ist overflow: auto/scroll. Notfalls <main>. */
+  function chatRoot() {
+    const log = document.querySelector("[role='log']");
+    if (log?.innerText.trim()) return log;
+    const scrollers = [...document.body.querySelectorAll("*")].filter((el) =>
+      el.clientHeight > 80 && !el.closest(CHAT_SKIP) && /(auto|scroll)/.test(getComputedStyle(el).overflowY)
+      && el.innerText.trim());
+    const innermost = scrollers.filter((el) => !scrollers.some((other) => other !== el && el.contains(other)));
+    const best = innermost.sort((x, y) => y.clientWidth * y.clientHeight - x.clientWidth * x.clientHeight)[0];
+    return best ?? document.querySelector("main, [role='main']") ?? document.body;
+  }
+
+  function chatMessages(root) {
+    const blocks = new Set();
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.nodeValue.trim() && !n.parentElement?.closest(CHAT_SKIP)
+        ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+    });
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      let el = n.parentElement;
+      while (el && el !== root && !isBlock(el)) el = el.parentElement;
+      if (el) blocks.add(el);
+    }
+    // Nur innerste Blöcke: Wer einen anderen Textblock enthält, ist ein Container (Verlauf, Sprechblase)
+    const containers = new Set();
+    for (const el of blocks) {
+      for (let p = el.parentElement; p && root.contains(p); p = p.parentElement) {
+        if (blocks.has(p)) containers.add(p);
+      }
+    }
+    const messages = [];
+    for (const el of blocks) {
+      if (containers.has(el)) continue;
+      const text = el.innerText.trim();
+      if (text.length < 2 || text.length > CHAT_MAX_CHARS || CHAT_NOISE.test(text)) continue;
+      if (messages.at(-1)?.text === text) continue;
+      messages.push({ el, text });
+    }
+    return messages.slice(-CHAT_MAX_MESSAGES);
+  }
+
+  const kleinanzeigenChat = {
+    name: "kleinanzeigen-chat",
+    matches: () =>
+      /(^|\.)kleinanzeigen\.de$/.test(location.hostname) && location.pathname.startsWith("/m-nachrichten"),
+
+    extract() {
+      const root = chatRoot();
+      const messages = chatMessages(root);
+      if (!messages.length) return null; // Verlauf noch nicht geladen
+      return {
+        source: "chat",
+        listing: { title: "", description: "", price: null, category: "", messages: messages.map((m) => m.text) },
+        imageUrls: [],
+        elements: { images: [], messages: messages.map((m) => m.el) },
+        roots: [root],
+      };
+    },
+  };
+
+  const ADAPTERS = [kleinanzeigen, kleinanzeigenChat];
 
   // ------------------------------------------------------------------------- generisch & Auswahl
 
@@ -111,6 +190,9 @@
   SG.extract = {
     /** Gibt es für diese Seite einen Plattform-Adapter (→ automatischer Scan)? */
     isListingPage: () => ADAPTERS.some((a) => a.matches()),
+
+    /** Kleinanzeigen-Postfach: Nachrichten kommen ohne Neuladen dazu → beobachten. */
+    isChatPage: () => kleinanzeigenChat.matches(),
 
     /** mode: "auto" | "page" → Plattform-Adapter, sonst generisch; "selection" → markierter Text. */
     forMode(mode, text) {

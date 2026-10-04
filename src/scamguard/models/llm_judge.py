@@ -26,13 +26,18 @@ from scamguard.models.base import Detector
 from scamguard.schema import Listing, ModelResult, Signal
 
 SYSTEM_PROMPT = """Du bist Experte für Betrugsmaschen auf deutschsprachigen Kleinanzeigen-Plattformen \
-(Deutschland, Österreich, Schweiz). Du bewertest, wie wahrscheinlich ein Inserat bzw. der Chat mit \
-dem Anbieter betrügerisch ist.
+(Deutschland, Österreich, Schweiz). Du bewertest, wie wahrscheinlich ein Inserat bzw. ein Chat \
+zwischen Käufer und Verkäufer betrügerisch ist – Betrug geht in beide Richtungen.
 
 Typische Maschen: gefälschte „Sicher bezahlen“-/Zahlungslinks und Phishing-Seiten, Vorkasse mit \
 Geschichte vom Ausland/Spediteur/Treuhand, PayPal „Freunde und Familie“, Gutscheinkarten oder Krypto, \
 Dreiecksbetrug, Überzahlung mit Rückerstattung, Ausweis-/Selfie-Forderungen (Identitätsdiebstahl), \
-unrealistisch niedrige Preise, Kontaktverlagerung zu WhatsApp/Telegram/E-Mail.
+unrealistisch niedrige Preise, Kontaktverlagerung zu WhatsApp/Telegram/E-Mail. Im Chat zusätzlich: \
+Zeitdruck („sofort, sonst ist es weg“), „Geld zuerst“/Anzahlung zum Reservieren, Abholung ausgeschlossen, \
+Kurier oder Spedition holt ab, angeblich schon bezahlt („Sicher bezahlen“, „Direkt kaufen“), \
+weitergeleitete Bestätigungscodes, Tier- oder Wohnungsangebote mit Vorkasse. „Sicher bezahlen“ gibt es \
+bei Kleinanzeigen wirklich – es läuft aber nur in der App/auf der Website, nie über Links per Chat, \
+Mail, SMS oder WhatsApp, und Verkäufer müssen dafür weder Karten- noch Kontodaten eingeben.
 
 Wichtig für eine faire Bewertung:
 - Die meisten Inserate sind legitim. Rechtschreibfehler oder Dialekt allein sind kein Betrugsbeweis.
@@ -94,19 +99,17 @@ class JudgeError(Exception):
 # --------------------------------------------------------------------------- gemeinsam
 
 def _format_listing(listing: Listing) -> str:
-    price = f"{listing.price:.2f} €" if listing.price is not None else "nicht angegeben"
-    lines = [
-        f"Kategorie: {listing.category}",
-        f"Preis: {price}",
-        f"Titel: {listing.title}",
-        f"Beschreibung:\n{listing.description}",
-    ]
+    lines = []
+    if listing.title or listing.description:  # reiner Chat (Extension im Postfach): keine Inseratsfelder
+        price = f"{listing.price:.2f} €" if listing.price is not None else "nicht angegeben"
+        lines += [f"Kategorie: {listing.category}", f"Preis: {price}", f"Titel: {listing.title}",
+                  f"Beschreibung:\n{listing.description}"]
     if listing.seller_account_age_days is not None:
         lines.append(f"Kontoalter des Anbieters: {listing.seller_account_age_days} Tage")
     if listing.seller_num_ratings is not None:
         lines.append(f"Bewertungen des Anbieters: {listing.seller_num_ratings}")
     if listing.messages:
-        lines.append("Nachrichten des Anbieters:\n" + "\n---\n".join(listing.messages))
+        lines.append("Chat-Nachrichten:\n" + "\n---\n".join(listing.messages))
     return "<inserat>\n" + "\n".join(lines) + "\n</inserat>"
 
 

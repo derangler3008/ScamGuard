@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Nachrichten | Kleinanzeigen (Testseite)</title>
+<!-- Nachbau des Postfachs als App mit generierten Klassennamen (keine stabilen IDs wie im Original) -->
+<style>
+  body { margin: 0; font: 15px/1.4 sans-serif; }
+  .sc-hd1 { height: 56px; background: #1d4b00; color: #fff; display: flex; align-items: center; padding: 0 16px; }
+  .sc-k2 { display: flex; height: calc(100vh - 56px); }
+  .sc-l3 { width: 280px; overflow-y: auto; border-right: 1px solid #ddd; }
+  .sc-l3 > div { padding: 12px; border-bottom: 1px solid #eee; }
+  .sc-m4 { flex: 1; display: flex; flex-direction: column; }
+  .sc-v5 { flex: 1; overflow-y: auto; padding: 16px; }
+  .sc-b6 { max-width: 70%; margin: 8px 0; padding: 8px 12px; border-radius: 12px; background: #f1f1f1; }
+  .sc-b6.me { margin-left: auto; background: #dff3d1; }
+  .sc-t7 { font-size: 12px; color: #666; }
+</style>
+</head>
+<body>
+<div class="sc-hd1"><span>Kleinanzeigen</span></div>
+<div class="sc-k2">
+  <div class="sc-l3">
+    <div><b>Tisch Eiche</b><div>Ist der Tisch noch da? Ich zahle per Western Union.</div></div>
+    <div><b>Kinderwagen</b><div>Danke, bis morgen!</div></div>
+  </div>
+  <div class="sc-m4">
+    <div class="sc-v5" id="verlauf">
+      <div class="sc-b6 me"><div>Hallo, ist das Rad noch da?</div><span class="sc-t7">14:01</span></div>
+      <div class="sc-b6"><div>Ja, ist noch da. Wann möchtest du es dir anschauen?</div><span class="sc-t7">14:03</span></div>
+    </div>
+    <textarea aria-label="Nachricht schreiben">Geld zuerst</textarea>
+  </div>
+</div>
+<script>
+  // Testhilfe: eine neue Nachricht trifft ein (wie im echten Postfach ohne Neuladen)
+  window.addMessage = (text) => {
+    const bubble = document.createElement("div");
+    bubble.className = "sc-b6";
+    bubble.innerHTML = "<div></div><span class='sc-t7'>14:05</span>";
+    bubble.firstChild.textContent = text;
+    document.getElementById("verlauf").append(bubble);
+  };
+</script>
+</body>
+</html>

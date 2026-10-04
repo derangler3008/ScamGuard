@@ -10,6 +10,7 @@ Zwei Stufen:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import joblib
@@ -32,6 +33,28 @@ def best_torch_device() -> str:
 
 
 # --------------------------------------------------------------------------- Baseline
+
+# Reine Chats sehen anders aus als Inserate (kein Titel, andere Wörter). Ein Textmodell, das kaum Chats
+# gesehen hat, rät dort – z. B. war „Hallo“ in den Demo-Daten fast nur in Betrugsfällen. Darum urteilt
+# es über reine Chats erst, wenn es mindestens so viele Chat-Beispiele JE KLASSE gelernt hat.
+MIN_CHAT_EXAMPLES = 20
+CHAT_META_FILE = "scamguard_meta.json"  # Transformer: Zusatzinfos neben den Gewichten
+
+
+def chat_counts(listings: list[Listing]) -> dict[str, int]:
+    chats = [l for l in listings if l.chat_only]
+    return {"betrug": sum(l.label == 1 for l in chats), "serioes": sum(l.label == 0 for l in chats)}
+
+
+def chat_abstention(listing: Listing, counts: dict[str, int] | None, name: str) -> ModelResult | None:
+    """Kein Urteil über reine Chats, wenn das Modell zu wenige davon kennt (sonst None)."""
+    if not listing.chat_only or min((counts or {}).values(), default=0) >= MIN_CHAT_EXAMPLES:
+        return None
+    counts = counts or {"betrug": 0, "serioes": 0}
+    return ModelResult(name, score=None, error=(
+        f"Kennt zu wenige reine Chats ({counts.get('betrug', 0)} Betrug, {counts.get('serioes', 0)} seriös; "
+        f"nötig: je {MIN_CHAT_EXAMPLES}) – urteilt hier nicht. Chats labeln, dann `scamguard retrain`."))
+
 
 def build_baseline_pipeline():
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -86,6 +109,8 @@ class TextBaselineDetector(Detector):
         text = listing.full_text
         if not text:
             return ModelResult(self.name, score=None, error="Kein Text im Inserat")
+        if abstain := chat_abstention(listing, getattr(self._pipe, "scamguard_chat_counts", None), self.name):
+            return abstain
         x = self._pipe.named_steps["features"].transform([text])  # nur einmal vektorisieren
         prob = float(self._pipe.named_steps["clf"].predict_proba(x)[0][1])
         return ModelResult(name=self.name, score=prob, signals=self._explain(x))
@@ -124,6 +149,7 @@ def train_text_baseline(train: list[Listing], cfg: dict) -> Path:
         raise ValueError("Für das Textmodell braucht es Beispiele für Betrug UND seriös")
     pipe = build_baseline_pipeline()
     pipe.fit([l.full_text for l in train], [int(l.label) for l in train])
+    pipe.scamguard_chat_counts = chat_counts(train)  # wird mitgespeichert (joblib)
     out = resolve_path(cfg["text_model"]["baseline_path"])
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")  # atomar ersetzen: der laufende Server liest nie eine halbe Datei
@@ -141,6 +167,7 @@ class TextTransformerDetector(Detector):
         self.path = resolve_path(cfg["text_model"]["path"])
         self.max_length = int(cfg["text_model"]["max_length"])
         self._model = self._tokenizer = None
+        self._chat_counts: dict[str, int] | None = None
         self._error: str | None = None
         if (self.path / "config.json").exists():
             try:
@@ -150,6 +177,8 @@ class TextTransformerDetector(Detector):
                 self._tokenizer = AutoTokenizer.from_pretrained(self.path)
                 self._model = AutoModelForSequenceClassification.from_pretrained(self.path)
                 self._model.to(self._device).eval()
+                meta = self.path / CHAT_META_FILE
+                self._chat_counts = json.loads(meta.read_text(encoding="utf-8")) if meta.exists() else None
             except ImportError:
                 self._error = 'transformers/torch fehlen → pip install -e ".[text]"'
             except Exception as exc:  # noqa: BLE001 – bewusste Robustheitsgrenze
@@ -166,6 +195,8 @@ class TextTransformerDetector(Detector):
     def predict(self, listing: Listing) -> ModelResult:
         import torch
 
+        if abstain := chat_abstention(listing, self._chat_counts, self.name):
+            return abstain
         enc = self._tokenizer(listing.full_text, truncation=True, max_length=self.max_length,
                               return_tensors="pt").to(self._device)
         with torch.no_grad():
@@ -244,4 +275,5 @@ def train_text_transformer(train: list[Listing], val: list[Listing], cfg: dict) 
     trainer.train()
     trainer.save_model(str(out))
     tokenizer.save_pretrained(str(out))
+    (out / CHAT_META_FILE).write_text(json.dumps(chat_counts(train)), encoding="utf-8")
     return out

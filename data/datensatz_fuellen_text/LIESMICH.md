@@ -25,3 +25,9 @@ Prüfen, was erkannt wurde: `scamguard data list`
 
 Datenschutz: keine Namen, Telefonnummern oder Adressen echter Personen – vorher schwärzen.
 Die Datendateien landen nicht im Git (siehe .gitignore).
+
+**Prüfliste aus Foren** (`gesammelt_foren.csv`, von `scamguard data sammeln --quellen foren`):
+Nachrichten, die Betroffene in Foren zitiert haben. Die Spalte `betrug` ist leer – in Excel/Numbers
+öffnen, pro Zeile `ja` (Betrügernachricht) oder `nein` (harmlos, z. B. Support-Antwort) eintragen, als
+CSV speichern. Leere Zeilen werden beim Training übersprungen; eure Einträge bleiben beim nächsten
+Sammeln erhalten. `vorschlag` = ja heißt nur: enthält ein bekanntes Warnsignal.

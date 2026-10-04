@@ -127,6 +127,21 @@
     return true;
   }
 
+  /** Container mit Markierungen (z. B. Chat-Nachrichten) selbst einrahmen: Welche Nachricht ist auffällig?
+   *  Rückgabe: Anzahl eingerahmter Container. */
+  function flagContainers(elements) {
+    let count = 0;
+    for (const el of elements ?? []) {
+      const ids = new Set();
+      for (const mark of el.querySelectorAll(`mark.${MARK_CLASS}`)) {
+        for (const id of (mark.dataset.scamguardIds ?? "").split(" ").filter(Boolean)) ids.add(Number(id));
+      }
+      const signals = [...ids].map((id) => signalsById.get(id)).filter(Boolean);
+      if (signals.length && markElement(el, signals)) count++;
+    }
+    return count;
+  }
+
   function clearAll() {
     const parents = new Set();
     for (const mark of document.querySelectorAll(`mark.${MARK_CLASS}`)) {
@@ -165,5 +180,5 @@
     return true;
   }
 
-  SG.highlight = { begin, markText, markElement, clearAll, focus, severity };
+  SG.highlight = { begin, markText, markElement, flagContainers, clearAll, focus, severity };
 })();

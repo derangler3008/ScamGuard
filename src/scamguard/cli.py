@@ -47,12 +47,23 @@ def _cmd_data(args) -> int:
     from scamguard.data.registry import get_specs
 
     if args.action == "sammeln":
-        from scamguard.data.collect_warnings import SOURCES, collect
+        from scamguard.data import collect_forums, collect_warnings
 
-        rows = collect(sources=args.quellen or list(SOURCES), max_items=args.max)
+        chosen = args.quellen or [*collect_warnings.SOURCES, "foren"]
+        rows = []
+        if warning_sources := [q for q in chosen if q in collect_warnings.SOURCES]:
+            rows += collect_warnings.collect(sources=warning_sources, max_items=args.max)
+        if "foren" in chosen:
+            quotes, reports = collect_forums.collect(max_pages=args.max)
+            rows += quotes
+            if top := collect_forums.summarize(reports):
+                print("Häufigste Maschen in den Erfahrungsberichten: "
+                      + ", ".join(f"{code} ({n})" for code, n in top))
         if rows:
             print("Nächster Schritt: seriöse Gegenbeispiele ergänzen, dann `scamguard retrain`.")
         return 0
+    if args.action == "phrasen":
+        return _phrasen(args)
     if args.action == "list":
         for s in get_specs(include_disabled=True):
             status = "AKTIV " if s.enabled else "aus   "
@@ -64,6 +75,70 @@ def _cmd_data(args) -> int:
     from scamguard.data.build import build_dataset
 
     _print_build(*build_dataset(args.only))
+    return 0
+
+
+def _phrasen(args) -> int:
+    """Wortfolgen, die in Betrugstexten auffällig häufig sind → Kandidaten fürs Lexikon."""
+    import csv
+
+    from scamguard.config import resolve_path
+    from scamguard.data.loaders import load_spec
+    from scamguard.data.phrases import candidates
+    from scamguard.data.registry import get_specs
+
+    specs = [s for s in get_specs(include_disabled=True)
+             if s.enabled or (args.hf and s.source == "huggingface")]
+    texts: dict[int, list[str]] = {0: [], 1: []}
+    for spec in specs:
+        for listing in load_spec(spec).listings:
+            if listing.label in texts and listing.full_text:
+                texts[listing.label].append(listing.full_text)
+    print(f"Vergleiche {len(texts[1])} Betrugs- mit {len(texts[0])} seriösen Texten …")
+    if len(texts[0]) < 100 and not args.hf:
+        print("Hinweis: wenige seriöse Texte → schwache Unterschiede. Mit --hf die deutschen "
+              "Hugging-Face-Nachrichten als Vergleich einbeziehen oder seriöse Chats labeln.")
+    try:
+        found = candidates(texts[1], texts[0], str(resolve_path(load_config()["paths"]["lexicon"])),
+                           top=args.top)
+    except ValueError as exc:
+        print(f"Abbruch: {exc}")
+        return 1
+    print(f"{'z':>6} {'Betrug':>6} {'seriös':>6}  {'schon im Lexikon':22}  Wortfolge")
+    for c in found:
+        print(f"{c.z:6.1f} {c.scam_docs:6d} {c.legit_docs:6d}  {c.covered_by or '– neu –':22}  {c.phrase}")
+    out = resolve_path("data/raw/phrasen_kandidaten.csv")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["wortfolge", "z", "betrug_texte", "serioes_texte", "lexikon_gruppe"])
+        writer.writerows((c.phrase, c.z, c.scam_docs, c.legit_docs, c.covered_by) for c in found)
+    print(f"Gespeichert: {out} – sinnvolle neue Wortfolgen als Muster in data/lexicons/scam_signals_de.yaml "
+          "übernehmen (Gegenprobe: Test mit harmlosen Sätzen).")
+    return 0
+
+
+def _cmd_llm_data(args) -> int:
+    """Feintuning-Daten für Qwen (LoRA mit mlx_lm) aus den festen Splits erzeugen."""
+    from scamguard.finetune import OUTPUT_DIR, export
+
+    try:
+        stats = export(args.ausgabe or OUTPUT_DIR)
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+    for name, counts in stats.items():
+        print(f"  {name:5s}: {sum(counts.values()):5d} Beispiele ({counts['betrug']} Betrug, {counts['seriös']} seriös)")
+    train = stats["train"]
+    if min(train["betrug"], train["seriös"]) < 0.2 * max(sum(train.values()), 1):
+        print("Achtung: sehr einseitige Labels – das Modell lernt sonst „immer Betrug“. Erst seriöse "
+              "Beispiele ergänzen (Extension, Web-App, `data sammeln` + Prüfliste).")
+    print("Nächste Schritte (Anleitung: docs/llm_feintuning.md):\n"
+          "  1. Qwen-Server beenden (16 GB reichen nicht für Server + Training)\n"
+          f"  2. mlx_lm.lora --model {load_config()['llm']['local']['model']} --train "
+          f"--data {args.ausgabe or OUTPUT_DIR} --adapter-path models/qwen_lora --mask-prompt "
+          "--batch-size 1 --num-layers 8 --iters 600 --learning-rate 1e-5 --grad-checkpoint --max-seq-length 2048\n"
+          "  3. scamguard llm-server --adapter models/qwen_lora   (oder llm.local.adapter_path in config.yaml)")
     return 0
 
 
@@ -96,7 +171,13 @@ def _cmd_retrain(args) -> int:
 def _cmd_evaluate(args) -> int:
     from scamguard.evaluate import evaluate
 
-    report = evaluate(args.split)
+    guard = None
+    if args.llm:
+        from scamguard.pipeline import ScamGuard
+
+        guard = ScamGuard(overrides={"llm": {"enabled": True}})
+        print("Mit LLM: pro Beispiel einige Sekunden – mit --max eine Stichprobe nehmen.")
+    report = evaluate(args.split, guard=guard, limit=args.max)
     print(f"Split: {report['split']}  (Schwelle {report['threshold']})\n")
     for title, block in (("Modelle", report["models"]), ("Quellen (Fusion)", report["sources"])):
         print(f"{title}:")
@@ -235,12 +316,16 @@ def _mlx_available() -> bool:
             and importlib.util.find_spec("mlx_lm") is not None)
 
 
-def _llm_server_process_args(model: str | None = None) -> tuple[list[str], dict[str, str], str]:
-    """Befehl, Umgebung und Modell für den lokalen MLX-Server (Qwen)."""
+def _llm_server_process_args(model: str | None = None,
+                             adapter: str | None = None) -> tuple[list[str], dict[str, str], str]:
+    """Befehl, Umgebung und Modell für den lokalen MLX-Server (Qwen), optional mit LoRA-Adapter."""
     import os
+
+    from scamguard.config import resolve_path
 
     local = load_config()["llm"]["local"]
     model = model or local["model"]
+    adapter = adapter or local.get("adapter_path")
     port = urlparse(local["base_url"]).port or 8080
     env = dict(os.environ)
     try:  # Modell schon heruntergeladen → ohne Netzabfrage bei Hugging Face starten
@@ -259,7 +344,15 @@ def _llm_server_process_args(model: str | None = None) -> tuple[list[str], dict[
         # Kein CORS für fremde Webseiten: nur der ScamGuard-Server (ohne Browser) nutzt das Modell
         "--allowed-origins", "http://127.0.0.1:8000",
     ]
-    return command, env, f"{model} auf http://127.0.0.1:{port}/v1"
+    where = f"{model} auf http://127.0.0.1:{port}/v1"
+    if adapter:
+        path = resolve_path(adapter)
+        if (path / "adapters.safetensors").exists():
+            command += ["--adapter-path", str(path)]
+            where += f" mit feingetuntem Adapter {adapter}"
+        else:
+            print(f"Adapter {path} nicht gefunden (adapters.safetensors fehlt) – starte das Basismodell.")
+    return command, env, where
 
 
 def _cmd_llm_server(args) -> int:
@@ -271,7 +364,7 @@ def _cmd_llm_server(args) -> int:
     if _local_llm_running(base_url):
         print(f"Das lokale LLM läuft bereits ({base_url}) – nichts zu tun.")
         return 0
-    command, env, where = _llm_server_process_args(args.model)
+    command, env, where = _llm_server_process_args(args.model, args.adapter)
     print(f"Starte {where} …")
     return subprocess.call(command, env=env)
 
@@ -314,12 +407,16 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("data", help="Datensätze verwalten")
-    p.add_argument("action", choices=["list", "build", "sammeln"],
-                   help="sammeln = öffentliche Betrugswarnungen (Nachrichten/Mails) als Textdaten holen")
+    p.add_argument("action", choices=["list", "build", "sammeln", "phrasen"],
+                   help="sammeln = Betrugswarnungen und Foren-Erfahrungen als Textdaten holen; "
+                        "phrasen = typische Betrugs-Wortfolgen finden (Kandidaten fürs Lexikon)")
     p.add_argument("--only", nargs="+", help="Nur diese Datensätze (Namen aus registry.py)")
-    p.add_argument("--max", type=int, help="sammeln: höchstens so viele Seiten je Quelle")
-    p.add_argument("--quellen", nargs="+", choices=["watchlist_alarm", "vz_radar", "watchlist_news"],
+    p.add_argument("--max", type=int, help="sammeln: höchstens so viele Seiten je Quelle bzw. Thread")
+    p.add_argument("--quellen", nargs="+", choices=["watchlist_alarm", "vz_radar", "watchlist_news", "foren"],
                    help="sammeln: nur diese Quellen")
+    p.add_argument("--top", type=int, default=60, help="phrasen: so viele Kandidaten ausgeben")
+    p.add_argument("--hf", action="store_true",
+                   help="phrasen: auch inaktive Hugging-Face-Datensätze aus huggingface.yaml einbeziehen")
     p.set_defaults(func=_cmd_data)
 
     p = sub.add_parser("train", help="Modell trainieren")
@@ -335,6 +432,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("evaluate", help="Modelle auswerten")
     p.add_argument("--split", default="test", choices=["train", "val", "test"])
+    p.add_argument("--llm", action="store_true", help="LLM-Judge mitbewerten (z. B. vor/nach Feintuning)")
+    p.add_argument("--max", type=int, help="nur die ersten N Beispiele (LLM ist langsam)")
     p.set_defaults(func=_cmd_evaluate)
 
     p = sub.add_parser("scan", help="Ein Inserat (JSON-Datei) prüfen")
@@ -354,7 +453,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("llm-server", help="Lokales LLM (MLX, Apple Silicon) starten")
     p.add_argument("--model", help="Hugging-Face-ID eines MLX-Modells (Standard: config.yaml)")
+    p.add_argument("--adapter", help="LoRA-Adapter aus dem Feintuning (Ordner, z. B. models/qwen_lora)")
     p.set_defaults(func=_cmd_llm_server)
+
+    p = sub.add_parser("llm-daten", help="Trainingsdaten fürs Feintuning des lokalen LLM (LoRA) erzeugen")
+    p.add_argument("--ausgabe", help="Zielordner (Standard: data/finetune)")
+    p.set_defaults(func=_cmd_llm_data)
 
     p = sub.add_parser("start", help="Qwen-Server und API zusammen starten (für die Extension)")
     p.add_argument("--host", default="127.0.0.1")

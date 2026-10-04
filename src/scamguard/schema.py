@@ -42,7 +42,7 @@ class Listing:
     seller_name: str | None = None
     seller_account_age_days: int | None = None
     seller_num_ratings: int | None = None
-    # Nachrichten des Anbieters (z. B. kopierter Chat) – hier stecken oft Links/Mails
+    # Chat-Nachrichten (kopierter Chat oder Kleinanzeigen-Postfach) – hier stecken oft Links/Mails
     messages: list[str] = field(default_factory=list)
     image_paths: list[str] = field(default_factory=list)
     # Nur für Trainingsdaten gesetzt
@@ -54,6 +54,11 @@ class Listing:
     def __post_init__(self) -> None:
         if self.category not in CATEGORIES:
             self.category = "sonstiges"
+
+    @property
+    def chat_only(self) -> bool:
+        """Nur Nachrichten, kein Inserat (z. B. Scan im Kleinanzeigen-Postfach)."""
+        return bool(self.messages) and not (self.title.strip() or self.description.strip())
 
     @property
     def full_text(self) -> str:

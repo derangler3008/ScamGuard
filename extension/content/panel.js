@@ -171,7 +171,7 @@
   }
 
   function renderLoading(state) {
-    const what = state.source === "selection" ? "markierten Text" : "Inserat";
+    const what = { selection: "markierten Text", chat: "Chat" }[state.source] ?? "Inserat";
     return h("p", { role: "status", "aria-live": "polite" },
       h("span", { class: "spinner", "aria-hidden": "true" }), `Prüfe ${what} …`);
   }
@@ -207,7 +207,7 @@
       status);
   }
 
-  function renderResult({ result, marked, onFocus, onRescan, onLabel, aiPending, aiError }) {
+  function renderResult({ result, marked, onFocus, onRescan, onLabel, aiPending, aiError, context }) {
     const pct = Math.round(result.score * 100);
     const v = VERDICTS[result.verdict] ?? { cls: "", icon: null, label: result.verdict };
     const summary = result.signals.find((s) => s.code === "LLM_SUMMARY");
@@ -234,6 +234,7 @@
           : "Keine Warnsignale gefunden.",
       }),
     ];
+    if (context) parts.push(h("p", { class: "sub", text: context }));
     if (summary) parts.push(h("p", { class: "summary" }, h("strong", { text: "KI-Einschätzung: " }), summary.message));
     // KI-Analyse: läuft noch / nicht verfügbar (z. B. lokales Modell nicht gestartet)
     const llm = result.model_results.find((r) => r.name === "llm");
@@ -293,6 +294,8 @@
       render({ kind: "loading", source });
     },
     showError: (error, onRetry) => render({ kind: "error", error, onRetry }),
+    /** Inhalt hat sich geändert (neue Chat-Nachricht) → „Gespeichert als …“ gilt nicht mehr. */
+    resetLabelStatus: () => { labelStatus = null; },
     showResult: (result, marked, handlers) => {
       showAll = false;
       render({ kind: "result", result, marked, ...handlers });

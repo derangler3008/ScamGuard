@@ -4,7 +4,9 @@
 #   hard:   true = sehr starkes Indiz, hebt den Gesamtscore auf eine Mindesthöhe
 #
 # Quellen für Maschen: Verbraucherzentrale, Polizei-Beratung (polizei-beratung.de),
-# Kleinanzeigen-Sicherheitshinweise, Watchlist Internet (Phishing-Alarm), eigene gesammelte Fälle.
+# Kleinanzeigen-Sicherheitshinweise, Watchlist Internet (Phishing-Alarm), eigene gesammelte Fälle,
+# Erfahrungsberichte aus Foren (`scamguard data sammeln --quellen foren`) und Phrasen-Kandidaten
+# aus deutschen Spam-/Phishing-Datensätzen (`scamguard data phrasen`, v0.7.0).
 # Gilt für Inseratstext UND Nachrichten/E-Mails (Chatverlauf, Spam-Mails, SMS).
 
 groups:
@@ -16,6 +18,7 @@ groups:
       - "zahlung (wurde )?(bereits )?(erhalten|getätigt|veranlasst).{0,60}(link|klick)"
       - "geld (abholen|empfangen|freischalten)"
       - "(klicke?n?|klicken sie) (auf|den) (den |diesen )?link"
+      - "qr[- ]?code.{0,40}(scannen|scanne|einscannen)|(scanne|scannen sie|scannen) (bitte )?(den|diesen|folgenden) qr[- ]?code"
       - "(karten|kredit ?karten|bank)daten.{0,40}(eingeben|bestätigen|verifizieren)"
       - "bestätigungs ?code|sms[- ]?code|tan[- ]?nummer"
       - "(käuferschutz|verkäuferschutz)[- ]?(gebühr|aktivier)"
@@ -80,7 +83,15 @@ groups:
       - "viele (andere )?(interessenten|anfragen)"
       - "sofort(ige)? (zahlung|überweisung)"
       - "schnell entscheiden|muss schnell weg"
-      - "innerhalb (von )?(12|24|48|72) stunden"
+      - "(innerhalb|in) (von )?(12|24|48|72) stunden|frist von \\d+ (stunden|tagen)"
+      # „Sofort, sonst ist es bald weg“ – Verknappung im Chat
+      - "sonst (ist )?(er |sie |es |das |der artikel |die ware |das angebot )?(bald |gleich |schnell |sofort |morgen )?(weg|vergeben|verkauft|nicht mehr (da|verfügbar|zu haben))"
+      - "(habe|haben) (noch |schon )?(mehrere|einige|weitere|\\d+) (andere )?(interessenten|anfragen|käufer)"
+      - "(der|die|wer) (erste|schnellste).{0,30}(zahlt|überweist|bezahlt)"
+      - "(heute|jetzt|sofort) noch (überweisen|zahlen|bezahlen|überweist|zahlst)"
+      - "letzte (chance|gelegenheit)"
+      - "(antworte|melde dich|melden sie sich|zahle|zahlen sie|überweise|überweisen sie) (bitte )?(sofort|umgehend|schnellstmöglich|asap|unverzüglich)"
+      - "(schick|überweis|send)\\w* (mir )?(bitte )?(jetzt )?(schnell|sofort|umgehend) (das )?geld"
 
   overpayment_reverse:
     message: "Überzahlungs-/Rückerstattungsmasche (Betrug gegen Verkäufer)"
@@ -108,6 +119,7 @@ groups:
       - "(ohne|keine) (fehler|kratzer|probleme) und (ohne|keine) (fehler|kratzer|probleme)"
       - "ich (würde|möchte) gerne (ihren|deinen) artikel kaufen"
       - "bitte (kontaktieren|kontaktiere) (sie )?mich per"
+      - "sehr geehrte(r)? (kunde|kundin|nutzer|nutzerin|mitglied)"
 
   # ------------------------------------------------------------ Nachrichten, E-Mails, SMS
   account_phishing:
@@ -119,6 +131,8 @@ groups:
       - "(ungewöhnliche|verdächtige) (aktivität|anmeldung|anmeldeversuch)|neue anmeldung erkannt|anmeldeversuch (bemerkt|erkannt|festgestellt)"
       - "(sperrung|löschung|deaktivierung|einschränkung) (ihres|deines) (kontos|accounts|zugangs)"
       - "konto (jetzt )?(sichern|entsperren|reaktivieren|freischalten)"
+      - "(geben|tragen) sie (hier |dort )?ihre (daten|bankdaten|zugangsdaten|kreditkarten(daten|nummer)|pin|tan|passwort) ein"
+      - "klick(e|en sie)? (bitte )?hier,? um"
 
   parcel_customs:
     message: "Paket-/Zoll-Masche: angebliche Gebühr oder Bestätigung für eine Sendung"
@@ -144,6 +158,9 @@ groups:
       - "zahlung (ist|wurde) (bereits )?(reserviert|blockiert|eingefroren|zurückgehalten|vorgemerkt)"
       - "(geld|betrag|zahlung) (wird|ist) (erst )?(freigegeben|gutgeschrieben|ausgezahlt),? (sobald|nachdem|wenn)"
       - "(kaufbestätigung|zahlungsbestätigung|zahlungseingang).{0,40}(e-?mail|mail|postfach|spam)"
+      - "(über|mit|per) (die |der )?(funktion |option )?[„\"]?(sicher bezahlen|direkt kaufen)[“\"]? (bezahlt|gekauft|überwiesen|abgeschlossen)"
+      - "um die zahlung .{0,60}zu erhalten,? (folgen|bestätigen|klicken|senden|geben)"
+      - "(artikel|anzeige).{0,30}auf reserv(e|iert) (stellen|setzen)"
 
   advance_fee_spam:
     message: "Spam-Muster: Gewinn, Erbschaft oder hohe Rendite gegen Vorleistung"
@@ -153,6 +170,8 @@ groups:
       - "erbschaft|nachlass (eines|ihres)|verstorbene[nr]? (kunde|verwandte)"
       - "(garantierte?|hohe) rendite|passives einkommen|krypto[- ]?(gewinn|investment)"
       - "bearbeitungsgebühr|freischaltgebühr|aktivierungsgebühr"
+      - "gewinnspiel.{0,60}(gewonnen|gewinner|ausgewählt)|(sie wurden|du wurdest) als gewinner"
+      - "(schnell|einfach|leicht) (reich werden|geld verdienen)|geld verdienen von zu hause"
 
   buyer_no_questions:
     message: "Käufer will ohne Besichtigung kaufen und drängt auf eigene Zahlungsabwicklung"
@@ -161,4 +180,66 @@ groups:
       - "(kaufe|nehme) (es|ihn|sie|den artikel) (auch )?ohne (zu )?(besichtig|anschau|ansehen)"
       - "(gib|nenn|schick) (mir )?(deine|ihre) (paypal|e-?mail)[- ]?(adresse)? (für die zahlung|damit ich (zahlen|bezahlen|überweisen))"
       - "zahle (den )?(vollen )?preis (plus|inklusive|inkl\\.?) versand"
+      - "(deine|ihre) (handynummer|telefonnummer|nummer) (für|damit) (die )?(zahlung|paypal|den kurier|den versand)"
 
+  # ------------------------------------------------------------ Chat: Geld, Übergabe, Spezialmaschen (v0.7.0)
+  payment_first:
+    message: "„Geld zuerst“: Zahlung oder Anzahlung soll vor Übergabe bzw. Besichtigung fließen"
+    weight: 0.45
+    patterns:
+      - "(erst|zuerst) (das )?geld,? (dann|danach|und dann) (die |der |das )?(ware|artikel|versand|schicke|verschicke|bekommst)"
+      - "(geld|zahlung|bezahlung) (zuerst|vorab|im voraus)"
+      - "(erst|zuerst) (zahlen|bezahlen|überweisen|die zahlung),? (dann|danach)"
+      - "vorab (überweisen|zahlen|bezahlen|überweisung|zahlung)"
+      - "reserv(iere|ieren|ierung).{0,30}(nur )?(gegen|mit|bei|nach) (anzahlung|vorkasse|überweisung)"
+      - "anzahlung (von|in höhe)|\\d+ ?(€|euro) anzahlung"
+
+  pickup_refused:
+    message: "Abholung oder Besichtigung wird ausgeschlossen – nur Versand oder Kurier"
+    weight: 0.35
+    patterns:
+      - "(abholung|besichtigung|persönliche übergabe|selbstabholung|anschauen) (ist )?(leider )?(nicht|nicht mehr) möglich"
+      - "keine (abholung|besichtigung|selbstabholung|persönliche übergabe)"
+      - "kann (es |ihn |sie |das )?(leider )?nicht (persönlich )?(übergeben|vorbeibringen|zeigen)"
+
+  animal_transport_fee:
+    message: "Tier-Masche: Transport-, Flug-, Impf- oder Versicherungskosten sollen vorab bezahlt werden"
+    weight: 0.55
+    patterns:
+      - "(transport|flug|impf|versicherungs|quarantäne|transportbox|tierarzt)[- ]?(kosten|gebühr|gebühren|versicherung).{0,60}(überweis|zahl|vorab|bezahl)"
+      - "(welpe|welpen|kitten|kätzchen|hund|katze|tier)\\w* (wird|werden|kommt|kommen) (per|mit) (flugzeug|flug|spedition|kurier|tiertransport)"
+
+  rental_scam:
+    message: "Wohnungs-Masche: Vermieter im Ausland, Schlüssel per Post oder Kaution vor Besichtigung"
+    weight: 0.6
+    patterns:
+      - "schlüssel(übergabe)?.{0,20}(per|mit der|über|via) (post|dhl|kurier|airbnb)"
+      - "kaution.{0,40}(vorab|im voraus|vor der besichtigung|vor (der )?(übergabe|schlüsselübergabe))"
+      - "(über|via) (airbnb|booking).{0,40}(abwickeln|buchen|bezahlen|zahlen|reservieren)"
+      - "(wohnung|haus|zimmer|apartment).{0,80}(bin|lebe|wohne|arbeite) (derzeit |zurzeit |momentan |beruflich )?(im ausland|in (england|london|spanien|frankreich|italien|schottland|irland))"
+      - "(bin|lebe|wohne|arbeite) (derzeit |zurzeit |momentan |beruflich )?(im ausland|in (england|london|spanien|frankreich|italien|schottland|irland)).{0,80}(wohnung|haus|zimmer|apartment|mieter)"
+
+  new_number_family:
+    message: "„Hallo Mama/Papa“-Masche: angeblich neue Nummer eines Familienmitglieds, das dringend Geld braucht"
+    weight: 0.6
+    patterns:
+      - "(hallo|hi|hey) (mama|papa|mami|papi|mum|mutti).{0,80}(neue nummer|neues handy|handy (ist )?kaputt|alte nummer)"
+      - "das ist meine neue (handy)?nummer"
+      - "(handy|telefon) (ist )?(kaputt|ins wasser gefallen|verloren|gestohlen).{0,80}(neue nummer|überweis|rechnung)"
+
+  safe_account_scam:
+    message: "Angebliche Behörde oder Bank verlangt Überweisung auf ein „Sicherungskonto“"
+    weight: 0.8
+    hard: true
+    patterns:
+      - "(sicherungs|schutz)(konto|depot)"
+      - "(bafin|europol|interpol|bundeskriminalamt|bka|polizei|staatsanwaltschaft).{0,80}(überweisen|überweisung|guthaben|vermögen) .{0,40}(konto|sichern)"
+
+  payment_contact_request:
+    message: "Interessent will E-Mail-Adresse oder Handynummer „für die Zahlung“ – Einstieg der „Sicher bezahlen“-Phishing-Masche"
+    weight: 0.4
+    patterns:
+      - "(benötige|brauche|bräuchte|sende|senden sie|schick|schicken sie|gib|geben sie|nenn|nennen sie|teil|teilen sie)\\w* (mir |uns )?(bitte )?(ihre|deine|eine|die) (gültige |aktuelle )?(e-?mail|mail|handy|telefon|tele)\\w*.{0,60}(zahl|kauf|paypal|überweis|sicher)"
+      - "(zahl|kauf|paypal|überweis)\\w*.{0,40}(benötige|brauche|bräuchte|schick|gib|nenn|sende|teil)\\w* (mir |uns )?(bitte )?(ihre|deine|eine|die) (gültige |aktuelle )?(e-?mail|mail|handy|telefon|tele)"
+      - "((tele|handy)\\w*nummer oder (e-?mail|mail)|(e-?mail|mail) oder (tele|handy)\\w*nummer).{0,40}(zahl|kauf)"
+      - "senden sie (ihre|deine) gültige (e-?mail|mail)"

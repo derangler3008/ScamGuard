@@ -2,6 +2,49 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.7.0] – 2026-10-05
+
+### Hinzugefügt
+- **Chat-Scan im Kleinanzeigen-Postfach** (Extension, `kleinanzeigen.de/m-nachrichten…`): prüft den
+  Verlauf automatisch und jede neu eintreffende Nachricht ohne Neuladen (MutationObserver, 1,5 s
+  gebündelt, kein erneuter Scan durch eigene Markierungen). Auffällige Nachrichten werden eingerahmt,
+  Fundstellen markiert, das Panel nennt die Zahl geprüfter Nachrichten. Ohne feste Selektoren (das
+  Postfach hat keine stabilen IDs): Verlauf = ARIA-Log bzw. innerster Scrollbereich; Vorschauen anderer
+  Unterhaltungen und das Eingabefeld zählen nicht. Einstufen speichert den Verlauf (Schlüssel = Text).
+- **Neue Chat-Kriterien** im Lexikon: „Geld zuerst“/Anzahlung zum Reservieren, Abholung ausgeschlossen,
+  Verknappung („sonst ist es bald weg“, „habe 5 Interessenten“, „wer zuerst zahlt“), „E-Mail/
+  Handynummer für die Zahlung“ (Einstieg der „Sicher bezahlen“-Masche, aus echten Foren-Zitaten),
+  Tier-Transportkosten, Wohnungs-Masche (Schlüssel per Post, Kaution vorab), „Hallo Mama, neue
+  Nummer“, „Sicherungskonto“ (hart), QR-Code scannen, „über die Funktion Sicher bezahlen bezahlt“.
+  Gemessen: Treffer auf gesammelten Warnungen 15 % → 33 %, auf normalen Nachrichten 0,5 % → 0,9 %.
+- **`scamguard data phrasen`**: Wortfolgen, die in Betrugstexten auffällig häufig sind (Log-Odds-Ratio
+  mit informativem Dirichlet-Prior), mit Hinweis, ob das Lexikon sie kennt; `--hf` vergleicht zusätzlich
+  mit den deutschen Hugging-Face-Nachrichten.
+- **`scamguard data sammeln --quellen foren`**: Erfahrungsberichte aus Foren (Liste in
+  `data/quellen/foren.yaml`; XenForo, WoltLab, vBulletin-Archiv). Erster Lauf: 37 Threads aus 9 Foren,
+  222 Berichte → `data/raw/foren_erfahrungsberichte.jsonl` mit beschriebener Masche (nur Auswertung),
+  dazu eine **Prüfliste** zitierter Nachrichten (`gesammelt_foren.csv`, Spalte `betrug` leer, bis ein
+  Mensch ja/nein einträgt; Einträge bleiben beim erneuten Sammeln erhalten). Reddit (robots.txt sperrt
+  alle Bots), gutefrage.net (Bot-Sperre) und eBay-Community (AGB) bewusst nicht.
+- `data/redact.py`: anonymisiert Mails, Telefonnummern, IBANs, Link-Pfade und @Namen, behält aber die
+  Form für die Merkmale (`anonym@gmail.com`, `+44 1111 111111`, IBAN mit gültiger Prüfziffer).
+- **Feintuning von Qwen**: `scamguard llm-daten` erzeugt `data/finetune/{train,valid,test}.jsonl` im
+  Chat-Format von mlx_lm – exakt der Prompt des Betriebs, Zielantwort aus Labels und Regel-Treffern;
+  `scamguard llm-server --adapter …` bzw. `llm.local.adapter_path`; `scamguard evaluate --llm --max N`.
+  Anleitung: `docs/llm_feintuning.md`.
+
+### Geändert
+- LLM-Prompt: Chats zwischen Käufer und Verkäufer (Betrug in beide Richtungen), Chat-Maschen ergänzt;
+  reine Chats ohne leere Inseratsfelder, Abschnitt heißt „Chat-Nachrichten“.
+- Textmodelle urteilen über reine Chats erst, wenn sie je Klasse mindestens 20 Chats gelernt haben (wird
+  beim Training mitgespeichert) – das Demo-Modell hielt „Hallo, ist das noch da?“ sonst für 72 % Betrug.
+
+### Behoben
+- IBAN-Erkennung nahm Folgewörter mit vier Zeichen („oder“, „bitte“) als Kontonummer-Block mit; die IBAN
+  war dann ungültig und wurde übersehen – samt einer zweiten IBAN direkt dahinter.
+- Seiten in ISO-8859-1 (ältere Foren) werden mit dem richtigen Zeichensatz gelesen.
+- README nannte noch die alten Button-Beschriftungen mit Symbolen.
+
 ## [0.6.1] – 2026-10-02
 
 ### Behoben

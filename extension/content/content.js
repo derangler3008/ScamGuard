@@ -1,4 +1,5 @@
 // ScamGuard – Ablaufsteuerung im Tab: auslesen → Service Worker → markieren → Panel.
+// Im Kleinanzeigen-Postfach zusätzlich: neue Chat-Nachrichten automatisch nachprüfen.
 
 (() => {
   const SG = (globalThis.ScamGuard ??= {});
@@ -7,6 +8,7 @@
   const ext = globalThis.browser ?? globalThis.chrome; // Firefox: browser.*, Chromium: chrome.*
 
   const MIN_NEEDLE_LENGTH = 3;
+  const CHAT_DEBOUNCE_MS = 1500; // Nachrichten kommen oft in Schüben (Verlauf lädt, Tippen …)
 
   /** Seitenelement zu einem Signal-Target ("price", "seller", "image:<Upload-Index>"). */
   function resolveTarget(target, extracted, uploadedImageIndices) {
@@ -46,10 +48,13 @@
       const el = resolveTarget(s.target, extracted, uploadedImageIndices);
       if (el && SG.highlight.markElement(el, [s])) marked.add(s.id);
     }
+    // Chat: ganze Nachricht einrahmen, in der eine Fundstelle liegt
+    SG.highlight.flagContainers(extracted.elements.messages);
     return marked;
   }
 
   let currentRun = 0; // ein neuer Scan (z. B. „Erneut prüfen“) verwirft ältere, noch laufende Antworten
+  let chatSignature = ""; // zuletzt geprüfter Chatverlauf – nur bei neuen Nachrichten erneut prüfen
 
   async function requestScan(extracted, llm) {
     try {
@@ -69,7 +74,8 @@
    *  Anzeige ersetzt das alte Label. Markierter Text hat keine eigene URL → dort zählt der Text. */
   async function sendLabel(extracted, label) {
     const listing = { ...extracted.listing };
-    if (extracted.source !== "selection") listing.url = location.origin + location.pathname;
+    // Postfach: alle Unterhaltungen teilen sich eine Adresse → dort zählt (wie bei Markiertem) der Text
+    if (!["selection", "chat"].includes(extracted.source)) listing.url = location.origin + location.pathname;
     try {
       return await ext.runtime.sendMessage({ type: "label", listing, imageUrls: extracted.imageUrls, label });
     } catch (err) {
@@ -84,20 +90,30 @@
     return marked;
   }
 
+  function chatContext(extracted) {
+    if (extracted.source !== "chat") return null;
+    const n = extracted.listing.messages.length;
+    return `${n} Chat-Nachricht${n === 1 ? "" : "en"} geprüft · neue Nachrichten prüft ScamGuard automatisch`;
+  }
+
   /** Zweistufig: erst die schnellen Detektoren anzeigen, dann (falls gewünscht) die KI-Analyse
    *  nachreichen – ein lokales LLM braucht auf einem Laptop schnell 10–30 Sekunden. */
-  async function runScan(mode = "auto", text = "") {
+  async function runScan(mode = "auto", text = "", { quiet = false } = {}) {
     const run = ++currentRun;
     const superseded = { ok: false, error: { kind: "superseded", message: "durch neueren Scan ersetzt" } };
     const settings = await ext.runtime.sendMessage({ type: "getSettings" });
     const extracted = SG.extract.forMode(mode, text);
+    if (extracted.source === "chat") chatSignature = extracted.listing.messages.join("\n");
     const wantsLlm = settings.llmMode !== "off";
     const handlers = {
       onFocus: (id) => SG.highlight.focus(id),
       onRescan: () => runScan(mode, text),
       onLabel: (label) => sendLabel(extracted, label),
+      context: chatContext(extracted),
     };
-    if (settings.showPanel) SG.panel.showLoading(extracted.source);
+    // quiet: Nachprüfung im Chat – altes Ergebnis stehen lassen, bis das neue da ist (kein Flackern)
+    if (settings.showPanel && !quiet) SG.panel.showLoading(extracted.source);
+    if (quiet) SG.panel.resetLabelStatus();
 
     // Stufe 1: Regeln, Textmodell, Bilder
     const fast = await requestScan(extracted, "off");
@@ -137,8 +153,30 @@
     return false;
   });
 
+  /** Postfach: Die Seite lädt nicht neu, wenn Nachrichten kommen oder die Unterhaltung wechselt. */
+  function watchChat() {
+    let timer = null;
+    const ownChange = (m) => (m.target.parentElement ?? m.target).closest?.("#scamguard-root, mark.scamguard-mark");
+    new MutationObserver((mutations) => {
+      if (mutations.every(ownChange)) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        // Eigene Markierungen ändern den Text nicht → gleiche Signatur → kein Endlos-Scan
+        const extracted = SG.extract.forMode("auto");
+        if (extracted.source !== "chat") return;
+        if (extracted.listing.messages.join("\n") !== chatSignature) runScan("auto", "", { quiet: !!chatSignature });
+      }, CHAT_DEBOUNCE_MS);
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  }
+
   // Plattform-Seiten (per Manifest geladen) automatisch prüfen
   ext.runtime.sendMessage({ type: "getSettings" }).then((settings) => {
-    if (settings?.autoScan && SG.extract.isListingPage()) runScan("auto");
+    if (!settings?.autoScan || !SG.extract.isListingPage()) return;
+    if (!SG.extract.isChatPage()) {
+      runScan("auto");
+      return;
+    }
+    watchChat(); // Verlauf lädt oft erst nach dem Seitenaufbau
+    if (SG.extract.forMode("auto").source === "chat") runScan("auto");
   });
 })();

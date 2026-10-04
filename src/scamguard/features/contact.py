@@ -145,6 +145,26 @@ def _iban_is_valid(iban: str) -> bool:
     return int(digits) % 97 == 1
 
 
+def find_ibans(text: str) -> list[tuple[int, int]]:
+    """Positionen gültiger IBANs (Prüfsumme stimmt).
+
+    IBAN_RE ignoriert Groß-/Kleinschreibung und nimmt deshalb Folgewörter mit vier Zeichen als
+    weiteren Block mit („LT12 … 1000 oder DE89 …“). Darum wird ein Treffer von hinten gekürzt,
+    bis die Prüfsumme stimmt; passt kein Präfix, wird ab dem nächsten Block weitergesucht."""
+    spans: list[tuple[int, int]] = []
+    pos = 0
+    while m := IBAN_RE.search(text, pos):
+        candidate = m.group(0)
+        while not _iban_is_valid(candidate) and " " in candidate:
+            candidate = candidate.rsplit(" ", 1)[0]
+        if _iban_is_valid(candidate):
+            spans.append((m.start(), m.start() + len(candidate)))
+            pos = m.start() + len(candidate)
+        else:
+            pos = m.start() + 4  # eine IBAN könnte erst im mitgenommenen Rest beginnen
+    return spans
+
+
 # --- Hauptfunktion ------------------------------------------------------------
 
 def analyze_contacts(text: str) -> ContactFeatures:
@@ -205,9 +225,13 @@ def analyze_contacts(text: str) -> ContactFeatures:
 
     # IBANs (nur mit gültiger Prüfsumme, um Fehltreffer zu vermeiden).
     # Vor der Telefonsuche, weil IBAN-Ziffernblöcke sonst wie Nummern aussehen.
-    iban_originals = {m.upper(): m for m in IBAN_RE.findall(text_wo_mail) if _iban_is_valid(m)}
+    spans = find_ibans(text_wo_mail)
+    iban_originals = {text_wo_mail[a:b].upper(): text_wo_mail[a:b] for a, b in spans}
     feats.ibans = sorted(iban_originals)
-    text_wo_iban = IBAN_RE.sub(" ", text_wo_mail)
+    text_wo_iban = text_wo_mail
+    for a, b in reversed(spans):
+        text_wo_iban = text_wo_iban[:a] + " " + text_wo_iban[b:]
+    text_wo_iban = IBAN_RE.sub(" ", text_wo_iban)  # ungültige Kandidaten auch nicht als Telefonnummer werten
 
     # Telefonnummern
     intl = [(m.group(0), m.group(1)) for m in INTL_PHONE_RE.finditer(text_wo_iban)]
