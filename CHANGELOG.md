@@ -2,6 +2,13 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [Unveröffentlicht]
+
+### Hinzugefügt
+- Teamarbeit: `CLAUDE.md` (Claude Code liest Projektwissen und Teamregeln automatisch),
+  `docs/mit_claude_arbeiten.md` mit fertigen Prompts für die Gruppenaufgaben, README-Abschnitt
+  „Zusammenarbeit im Team“ (Branches `Jannis`/`Gabriel`, Pull Requests, Einstufungen teilen).
+
 ## [0.7.0] – 2026-10-05
 
 ### Hinzugefügt

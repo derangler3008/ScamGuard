@@ -411,6 +411,7 @@ der Kern eures Datensatzes ist deshalb selbst gesammelt. Das ist zugleich eure E
 
 ```
 ScamGuard/
+├── CLAUDE.md                    Projektwissen und Teamregeln für Claude Code
 ├── config.yaml                  Schwellen, Fusion-Gewichte, Modellpfade, LLM-Einstellungen
 ├── data/
 │   ├── datensatz_fuellen_inserate/ ← HIER ganze Inserate (Screenshots, .html, PDF): betrug/, serioes/
@@ -471,6 +472,22 @@ Hilfsmitteln; klärt mit eurer Betreuung, wie das bewertet wird). Die eigentlich
   Fairness (gebrochenes Deutsch ≠ Betrug), Grenzen.
 - **Weiterentwicklung**: Regeln/Lexikon aus echten Fällen (`data phrasen`, Foren-Prüfliste),
   Fusion-Gewichte lernen, Prompt des LLM, Qwen mit euren Labels feintunen und mit dem Basismodell vergleichen.
+
+## Zusammenarbeit im Team
+
+**Code:** Jede Person hat einen eigenen Branch (`Jannis`, `Gabriel`; die dritte Person arbeitet auf
+`main` oder einem eigenen Branch). Änderungen kommen per Pull Request nach `main`, vorher
+`git pull origin main`. Daten landen nie im Git.
+
+**Mit Claude Code:** `claude` im Projektordner starten – Claude liest automatisch
+[`CLAUDE.md`](CLAUDE.md) (Aufbau, Befehle, Teamregeln). Fertige Prompts für Einrichtung, Gruppenaufgaben
+und Pull Requests: **[docs/mit_claude_arbeiten.md](docs/mit_claude_arbeiten.md)**.
+
+**Einstufungen teilen:** Jede Person stuft auf dem eigenen Rechner ein (Extension, Web-App) und
+legt ihre `data/raw/eigene_labels.jsonl` regelmäßig als `labels_<name>.jsonl` in einen gemeinsamen,
+privaten Ordner (z. B. DHBW-OneDrive). Alle kopieren sämtliche `labels_*.jsonl` nach
+`data/datensatz_fuellen_text/` – sie werden automatisch erkannt, doppelte Inserate entfernt.
+Bilder werden dabei nicht übertragen. Vorher prüfen: keine echten Namen, Nummern oder Adressen.
 
 ## Vorschlag: Aufgabenteilung für 3 Personen
 
