@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+from pathlib import Path
 
 import pytest
 from conftest import EXTENSION_DIR, active_since, free_port, render
@@ -23,6 +24,8 @@ LEGIT_URL = "https://www.kleinanzeigen.de/s-anzeige/waschmaschine-bosch/10000000
 IMAGE_URL = "https://img.kleinanzeigen.de/api/v1/prod-ads/images/te/test-1?rule=$_59.AUTO"
 MAIL_URL = "https://mail.example.test/posteingang"
 CHAT_URL = "https://www.kleinanzeigen.de/m-nachrichten.html"
+DEALER_URL = "https://www.kleinanzeigen.de/s-anzeige/winterraeder-17-zoll/1000000003-223-0000"
+DEALER_IMAGES = [f"https://img.kleinanzeigen.de/api/v1/prod-ads/images/hd/haendler-{i}?rule=$_59.AUTO" for i in (1, 2)]
 BADGE_JS = """async (pattern) => {
   const [tab] = await chrome.tabs.query({ url: pattern });
   return chrome.action.getBadgeText({ tabId: tab.id });
@@ -43,6 +46,8 @@ def chromium(api_server, test_image_bytes, tmp_path_factory):
         LEGIT_URL: render("kleinanzeigen_legit.html"),
         MAIL_URL: render("mail.html"),
         CHAT_URL: render("kleinanzeigen_chat.html"),
+        DEALER_URL: render("kleinanzeigen_gewerblich.html", ACTIVE_SINCE=active_since(2000),
+                           IMAGE_URL_1=DEALER_IMAGES[0], IMAGE_URL_2=DEALER_IMAGES[1]),
     }
 
     def serve_page(route):
@@ -101,7 +106,7 @@ def test_scam_listing_is_marked_and_scored(chromium):
 
     badge = worker.evaluate(BADGE_JS, "https://www.kleinanzeigen.de/*")
     assert re.fullmatch(r"\d{1,3}%", badge)
-    if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bilder für Doku/Bericht
+    if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bilder für die Doku
         page.set_viewport_size({"width": 1280, "height": 900})
         page.screenshot(path=f"{shots}/chromium_inserat.png")
     page.close()
@@ -231,7 +236,7 @@ def test_chat_is_checked_live_when_a_scam_message_arrives(chromium, label_file):
     flagged = page.locator(".scamguard-flagged")                        # die Nachricht selbst eingerahmt
     expect(flagged).to_have_count(1)
     assert "Geld zuerst" in flagged.inner_text()
-    if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bild für Doku/Bericht
+    if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bild für die Doku
         page.set_viewport_size({"width": 1280, "height": 760})
         page.screenshot(path=f"{shots}/chromium_chat.png")
 
@@ -241,3 +246,37 @@ def test_chat_is_checked_live_when_a_scam_message_arrives(chromium, label_file):
     assert stored["label"] == 1 and not stored.get("url")              # Postfach-URL ist kein Schlüssel
     assert stored["messages"][-1].startswith("Geld zuerst") and len(stored["messages"]) == 3
     page.close()
+
+
+def test_dealer_in_new_layout_is_read_marked_and_filed(chromium, label_file, tmp_path):
+    """Neues Seitenlayout: Kategorie, Fotos (ohne „ähnliche Anzeigen“), Anbieterprofil mit Rechtsform –
+    gewerblich markiert, Telefonnummer nur schwach gewertet, Einstufung landet im Datensatz-Ordner."""
+    from PIL import Image
+
+    from scamguard.data import labels
+
+    ctx, _ = chromium
+    photo = tmp_path / "foto.jpg"
+    Image.new("RGB", (64, 48), (90, 140, 60)).save(photo)  # kein registriertes Fake-Bild
+    ctx.route("https://img.kleinanzeigen.de/api/v1/prod-ads/images/hd/**",
+              lambda route: route.fulfill(status=200, content_type="image/jpeg", body=photo.read_bytes()))
+    page = ctx.new_page()
+    page.goto(DEALER_URL)
+    _score(page)
+    panel = page.locator("#scamguard-root")
+    expect(panel.locator(".info")).to_contain_text("Gewerblicher Anbieter (GmbH)")
+    expect(panel.locator(".info")).to_contain_text("TOP Zufriedenheit, Besonders zuverlässig")
+    expect(panel.locator(".sig").filter(has_text="Telefonnummer")).to_contain_text("gewerblichen Anbietern üblich")
+
+    panel.locator("button.label-btn.ok").click()
+    expect(panel.locator(".label-status")).to_contain_text("Gespeichert als seriös", timeout=10_000)
+    stored = [json.loads(line) for line in label_file.read_text(encoding="utf-8").splitlines()]
+    row = next(r for r in stored if r["url"] == DEALER_URL)
+    assert row["category"] == "auto" and row["seller_type"] == "gewerblich" and row["seller_legal_form"] == "GmbH"
+    assert row["seller_badges"] == ["zufriedenheit_top", "besonders_zuverlaessig"] and row["seller_num_ads"] == 248
+    assert len(row["image_paths"]) == 2 and not row.get("seller_name")
+    assert 1990 <= row["seller_account_age_days"] <= 2010
+    (manifest,) = Path(labels.DATASET_DIR).glob("serioes/auto-gewerblich/*/inserat.json")
+    assert sorted(p.name for p in manifest.parent.glob("bild_*")) == ["bild_1.jpg", "bild_2.jpg"]
+    page.close()
+    ctx.unroute("https://img.kleinanzeigen.de/api/v1/prod-ads/images/hd/**")

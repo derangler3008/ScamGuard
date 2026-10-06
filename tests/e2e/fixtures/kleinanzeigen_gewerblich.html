@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Nachbau einer Anzeigenseite im neuen Kleinanzeigen-Layout (seit 10/2026: Utility-Klassen, Galerie
+     ohne #viewad-product, Brotkrumen nur noch per schema.org) eines gewerblichen Anbieters.
+     Inhalte frei erfunden. {{…}} wird vom Test ersetzt. -->
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>4 Winterräder 17 Zoll | kleinanzeigen.de (Testseite)</title>
+</head>
+<body>
+  <div id="vap-brdcrmb" itemscope itemtype="https://schema.org/BreadcrumbList" class="flex flex-wrap items-center">
+    <span itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem"><a class="inline-flex text-secondary" href="/" itemprop="item"><span itemprop="name">Kleinanzeigen </span></a></span>
+    <span itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem"><a class="inline-flex text-secondary" href="/s-auto-rad-boot/c210" itemprop="item"><span itemprop="name">Auto, Rad &amp; Boot</span></a></span>
+    <span itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem"><a class="inline-flex text-secondary" href="/s-autoteile-reifen/c223" itemprop="item"><span itemprop="name">Autoteile &amp; Reifen</span></a></span>
+  </div>
+
+  <div class="w-full max-w-screen-custom">
+    <div class="flex flex-col gap-small">
+      <div class="flex-1 space-y-medium lg:max-w-[642px]">
+        <div class="print:mb-0 relative mb-medium">
+          <img id="viewad-image" class="absolute size-full object-contain" alt="" src="{{IMAGE_URL_1}}">
+          <div class="absolute left-0 top-0">
+            <img class="size-full" alt="" src="{{IMAGE_URL_1}}">
+            <img class="size-full" alt="" src="{{IMAGE_URL_2}}">
+          </div>
+        </div>
+        <div id="viewad-main-info">
+          <h1 id="viewad-title" class="text-title">4x Winterräder 17 Zoll Alufelge</h1>
+          <h2 id="viewad-price" class="text-headline">399 €</h2>
+          <span id="viewad-locality">68159 Mannheim</span>
+        </div>
+        <div id="viewad-description">
+          <p id="viewad-description-text">Komplettradsatz, sofort lieferbar.<br>Montage und Wuchten in unserer Werkstatt möglich.<br>Fragen gerne telefonisch unter 0621 1111111.</p>
+        </div>
+        <div id="viewad-imprint-section"><h2>Rechtliche Angaben</h2></div>
+      </div>
+      <aside class="lg:w-[320px]">
+        <div id="viewad-profile-box">
+          <div id="viewad-bizteaser"><a href="/pro/muster-autoteile"><span>Muster Autoteile GmbH</span></a><button>Folgen</button></div>
+          <div id="viewad-contact">
+            <div class="flex"><span>MA</span><a href="/pro/muster-autoteile">Muster Autoteile</a></div>
+            <div class="flex gap-xsmall">
+              <a href="https://themen.kleinanzeigen.de/hilfe/nutzerkonto/nutzerbewertung/">TOP Zufriedenheit</a>
+              <a href="https://themen.kleinanzeigen.de/hilfe/nutzerkonto/zuverlaessigkeits-abzeichen/">Besonders zuverlässig</a>
+            </div>
+            <span>Gewerblicher Nutzer</span>
+            <span>Aktiv seit {{ACTIVE_SINCE}}</span>
+            <button>Anrufen</button><span>0621...</span>
+          </div>
+          <div class="flex"><span>248</span><span>Anzeigen</span><span>online</span></div>
+        </div>
+      </aside>
+    </div>
+    <section class="mt-large">
+      <h2>Das könnte dich auch interessieren</h2>
+      <img alt="" src="https://img.kleinanzeigen.de/api/v1/prod-ads/images/zz/fremde-anzeige?rule=$_2.AUTO">
+    </section>
+  </div>
+</body>
+</html>

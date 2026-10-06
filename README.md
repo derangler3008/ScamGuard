@@ -1,15 +1,24 @@
-# ScamGuard – Betrugserkennung für Kleinanzeigen
+# ScamGuard
 
-KI-Projekt an der DHBW Mannheim: Erkennung von Betrugsmaschen in **deutschsprachigen**
-Kleinanzeigen (DE/AT/CH), mit Fokus auf Elektronik, Haushaltsgeräte und Autos.
-Ein Inserat (Text, Preis, Bilder, Chatverlauf) wird hochgeladen – oder direkt im Browser per
-**Extension für Chromium und Firefox** geprüft – und von mehreren unabhängigen Detektoren
-bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstellen.
+**Betrugserkennung für deutschsprachige Kleinanzeigen – im Browser, in Echtzeit, erklärbar.**
 
-> **Status:** Entwurf v0.5.0. Pipeline, Web-Frontend, Browser-Extension und lokales LLM laufen
-> Ende-zu-Ende; Inserate lassen sich per Screenshot hochladen und mit einem Klick einstufen. Die
-> trainierbaren Modelle kennen aber erst 24 synthetische Demo-Inserate – aussagekräftig wird es
-> mit euren eingestuften Inseraten (siehe [Trainingsdaten](#trainingsdaten-inserate-einstufen-und-datensätze-einfüllen)).
+ScamGuard prüft Inserate und Chatverläufe auf Plattformen wie Kleinanzeigen (DE/AT/CH) auf bekannte
+Betrugsmaschen: Fake-Zahlungslinks, Vorkasse-Geschichten, PayPal „Freunde & Familie“,
+Dreiecksbetrug, Datenabfragen und mehr. Mehrere unabhängige Detektoren bewerten Text, Preis, Bilder
+und Nachrichten; das Ergebnis ist ein Risiko-Score mit markierten Fundstellen direkt auf der Seite.
+
+Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.8.0** ([Changelog](CHANGELOG.md)).
+
+- **Browser-Extension** für Chromium und Firefox: markiert Warnsignale wie ein Adblocker, prüft auch das
+  Postfach live, jede neue Nachricht ohne Neuladen.
+- **Lokales LLM** (Qwen über MLX): KI-Analyse ohne Cloud – die Inseratsdaten bleiben auf dem Rechner.
+- **Web-App** zum Prüfen per Screenshot, gespeicherter Seite oder Text, mit Annotation-Workspace
+  fürs Team.
+- **Datenpipeline** ohne Scraping: eigene Labels, Ablageordner, Hugging Face, öffentliche Warnungen,
+  Foren-Erfahrungsberichte.
+
+> Die trainierbaren Modelle sind bisher nur auf synthetischen Demo-Daten trainiert. Aussagekräftige
+> Kennzahlen entstehen mit dem laufenden Labeling ([Daten & Labeling](#daten--labeling)).
 
 ---
 
@@ -25,7 +34,7 @@ bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstel
  ┌───────────┐   ┌────────────────┐   ┌───────────────┐   ┌────────────────────┐
  │  Regeln   │   │   Textmodell   │   │  Bildmodell   │   │ LLM-Judge (opt.)   │
  │ Lexikon,  │   │ TF-IDF-Baseline│   │ pHash, CLIP   │   │ Qwen lokal oder    │
- │ URL/Mail/ │   │ oder GBERT     │   │ Zero-Shot,    │   │ Claude, JSON       │
+ │ URL/Mail/ │   │ oder GBERT     │   │ Zero-Shot,    │   │ Claude API, JSON   │
  │ IBAN,Preis│   │ (feingetunt)   │   │ CNN (Effic.)  │   │                    │
  │ Sprache   │   │                │   │               │   │                    │
  └─────┬─────┘   └───────┬────────┘   └──────┬────────┘   └─────────┬──────────┘
@@ -41,71 +50,66 @@ bewertet. Das Ergebnis ist ein erklärbarer Risiko-Score mit markierten Fundstel
                + Liste erklärbarer Warnsignale mit Fundstelle
 ```
 
-| Detektor | Erkennt z. B. | Training nötig? | Hardware |
+| Detektor | Erkennt z. B. | Training | Hardware |
 |---|---|---|---|
-| **Regeln** (`features/`) | Fake-Zahlungslinks, Lookalike-Domains (`paypa1-…`), ausländische IBAN/Telefonnummern, „Freunde & Familie“, Spediteur-/Treuhand-Geschichten, Ausweis-Forderungen, Dumpingpreise, falsche Artikel („der Auto“); in Nachrichten/Mails/SMS: Konto-gesperrt-Phishing, Paket-/Zoll-SMS, Code-Weitergabe (Konto-Übernahme), „Zahlung reserviert“, Gewinn-/Erbschafts-Spam | nein | CPU |
-| **Text-Baseline** | Wort- und Zeichen-n-Gramme, auch Tippfehler/gebrochenes Deutsch | ja, Sekunden | CPU |
-| **Text-Transformer** | Kontext, Formulierungsmuster (deutsches BERT `deepset/gbert-base`) | ja | GPU empfohlen |
-| **Bild: pHash** | Wiederverwendete Fake-/Stockfotos | nein (Hash-Liste pflegen) | CPU |
-| **Bild: CLIP** | Stockfoto, Screenshot, Bild passt nicht zur Kategorie | nein (Zero-Shot) | CPU ok |
-| **Bild: CNN** | Muster in Betrugsbildern (EfficientNet, Transfer Learning) | ja | GPU empfohlen |
-| **LLM-Judge** | Maschen-Geschichten, maschinell übersetzte Sprache, Gesamtbild | nein | lokal: Qwen (~7 GB Speicher), alternativ Claude-API (kostet) |
+| **Regeln** (`features/`) | Fake-Zahlungslinks, Lookalike-Domains (`paypa1-…`), ausländische IBAN/Telefonnummern, „Freunde & Familie“, Spediteur-/Treuhand-Geschichten, Ausweis-Forderungen, Dumpingpreise, falsche Artikel („der Auto“); in Nachrichten/Mails/SMS: Konto-gesperrt-Phishing, Paket-/Zoll-SMS, Code-Weitergabe, „Zahlung reserviert“, Zeitdruck, „Geld zuerst“; Anbieter: junges Konto, keine Bewertungen, Firma als „Privater Nutzer“ | nein | CPU |
+| **Text-Baseline** | Wort- und Zeichen-n-Gramme, auch Tippfehler/gebrochenes Deutsch | Sekunden | CPU |
+| **Text-Transformer** | Kontext, Formulierungsmuster (`deepset/gbert-base`, feingetunt) | ja | GPU empfohlen |
+| **Bild: pHash** | wiederverwendete Fake-/Stockfotos | nein (Hash-Liste) | CPU |
+| **Bild: CLIP** | Stockfoto, Screenshot, Bild passt nicht zur Kategorie | nein (Zero-Shot) | CPU |
+| **Bild: CNN** | Muster in Betrugsbildern (EfficientNet-B0, Transfer Learning) | ja | GPU empfohlen |
+| **LLM-Judge** | Maschen-Geschichten, maschinell übersetzte Sprache, Gesamtbild | nein | lokal: Qwen (~7 GB), alternativ Claude API |
 
-**Wo sind die neuronalen Netze?** Selbst trainiert werden GBERT (Transformer für Text,
-`models/text_classifier.py` → `train_text_transformer`) und EfficientNet-B0 (CNN für Produktfotos,
-`models/image_model.py` → `train_image_model`) – beide per Transfer Learning auf euren Daten.
-Vortrainiert genutzt werden CLIP (Bildhinweise), Qwen (KI-Analyse) und Apple Vision (Texterkennung
-beim Screenshot-Upload). Die TF-IDF-Baseline ist bewusst *kein* neuronales Netz: Sie ist der
-Vergleichsmaßstab, an dem sich GBERT messen muss.
+**Modelle im Überblick:** Selbst trainiert werden GBERT (`models/text_classifier.py` →
+`train_text_transformer`) und EfficientNet-B0 (`models/image_model.py` → `train_image_model`), beide
+per Transfer Learning. Vortrainiert im Einsatz: CLIP (Bildhinweise), Qwen (KI-Analyse) und Apple Vision
+(Texterkennung beim Screenshot-Upload). Die TF-IDF-Baseline ist bewusst klassisches ML und dient als
+Messlatte für die neuronalen Modelle.
 
 ---
 
-## Schnellstart
+## Quickstart
 
-Voraussetzung: **Python ≥ 3.10**. Das vorinstallierte macOS-`python3` ist 3.9 und damit zu
-alt. Empfohlen ist 3.12, weil PyTorch und transformers dafür am stabilsten sind.
+Voraussetzung: **Python ≥ 3.10**, empfohlen 3.12 (stabilste Basis für PyTorch und transformers). Das
+vorinstallierte macOS-`python3` (3.9) ist zu alt.
 
 ```bash
 brew install python@3.12
-cd ScamGuard
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"            # Kern: Regeln, Baseline, Frontend, API, Tests
+git clone https://github.com/derangler3008/ScamGuard.git && cd ScamGuard
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"            # Kern: Regeln, Baseline, Web-App, API, Tests
 ```
 
-> **„zsh: command not found: scamguard“?** Der Befehl liegt in der virtuellen Umgebung des Projekts.
-> In jedem neuen Terminal zuerst `cd ScamGuard && source .venv/bin/activate` – oder den vollen Pfad
-> nutzen: `.venv/bin/scamguard start`.
+> **`command not found: scamguard`?** Die CLI liegt in der virtuellen Umgebung: in jedem neuen Terminal
+> `source .venv/bin/activate` – oder direkt `.venv/bin/scamguard start`.
 
-Optionale Pakete je nach Aufgabe:
+Optionale Extras:
 
 ```bash
-pip install -e ".[data]"     # Hugging-Face-Datensätze laden
-pip install -e ".[text]"     # GBERT feintunen (torch, transformers)
-pip install -e ".[vision]"   # Bildmodelle (torch, torchvision, CLIP, imagehash)
-pip install -e ".[local-llm]" # lokales LLM (Qwen via MLX, nur Apple Silicon)
-pip install -e ".[llm]"      # Claude als LLM-Judge
-pip install -e ".[all]"      # alles
-pip install -e ".[e2e]"      # Browser-Tests der Extension (danach: playwright install chromium)
+pip install -e ".[data]"       # Hugging-Face-Datensätze
+pip install -e ".[text]"       # GBERT feintunen (torch, transformers)
+pip install -e ".[vision]"     # Bildmodelle (torch, torchvision, CLIP, imagehash)
+pip install -e ".[local-llm]"  # lokales LLM (Qwen via MLX, nur Apple Silicon)
+pip install -e ".[llm]"        # Claude API als LLM-Judge
+pip install -e ".[all]"        # alles
+pip install -e ".[e2e]"        # Browser-Tests der Extension (danach: playwright install chromium)
 ```
 
-Einmal durchspielen:
+Erste Schritte:
 
 ```bash
-scamguard data list                  # welche Datensätze sind registriert?
+scamguard data list                  # registrierte Datensätze
 scamguard data build                 # → data/processed/{train,val,test}.jsonl
-scamguard train text-baseline        # Sekunden
-scamguard retrain                    # nach neuen Daten/Labels: einlesen + trainieren + auswerten
-scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell
+scamguard retrain                    # einlesen + trainieren + auswerten
+scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell und Quelle
 scamguard scan examples/inserat_beispiel.json
-scamguard ui                         # Frontend → http://127.0.0.1:8501 (Inserat hochladen & einstufen)
+scamguard ui                         # Web-App → http://127.0.0.1:8501
 scamguard api                        # REST-API → http://127.0.0.1:8000/docs
-scamguard start                      # für die Extension: Qwen (lokales LLM) + API zusammen
+scamguard start                      # für die Extension: Qwen + API zusammen
 pytest                               # Tests
 ```
 
-Frontend und API sind standardmäßig **nur auf dem eigenen Rechner** erreichbar. Für eine
-Live-Demo im Kurs: `scamguard ui --public`.
+Web-App und API lauschen standardmäßig **nur lokal**. Für Demos im Netzwerk: `scamguard ui --public`.
 
 ---
 
@@ -113,21 +117,25 @@ Live-Demo im Kurs: `scamguard ui --public`.
 
 ![ScamGuard-Extension auf einer (nachgebauten) Kleinanzeigen-Seite](docs/screenshots/chromium_inserat.png)
 
-Wie ein Adblocker markiert die Extension **Betrugsindikatoren direkt auf der Seite** und zeigt
-einen **Prozent-Score** – im Panel oben rechts und als Badge am Toolbar-Symbol.
+Die Extension markiert **Betrugsindikatoren direkt auf der Seite** und zeigt einen **Prozent-Score** –
+im Panel oben rechts und als Badge am Toolbar-Symbol.
 
-- **Automatisch** auf Kleinanzeigen-Anzeigen (`kleinanzeigen.de/s-anzeige/…`)
-- **Im Kleinanzeigen-Postfach** (`kleinanzeigen.de/m-nachrichten…`): prüft den Chatverlauf – und jede
-  neu eintreffende Nachricht automatisch (ohne Neuladen). Die auffällige Nachricht wird eingerahmt, die
-  Fundstelle markiert („Geld zuerst“, „sonst ist es bald weg“, „schick mir deine Handynummer für die
-  Zahlung“ …). Das Panel zeigt, wie viele Nachrichten geprüft wurden.
-- **Jede andere Seite:** Toolbar-Symbol → „Diese Seite prüfen“
-- **WhatsApp, E-Mails, andere Chats:** Text markieren → Rechtsklick → „Markierten Text mit ScamGuard prüfen“
+- **Automatisch** auf Kleinanzeigen-Anzeigen (`kleinanzeigen.de/s-anzeige/…`).
+- **Im Postfach** (`kleinanzeigen.de/m-nachrichten…`): prüft den Chatverlauf und jede neu eintreffende
+  Nachricht ohne Neuladen. Auffällige Nachrichten werden eingerahmt, Fundstellen markiert („Geld zuerst“,
+  „sonst ist es bald weg“, „schick mir deine Handynummer für die Zahlung“ …).
+- **Jede andere Seite:** Toolbar-Symbol → „Diese Seite prüfen“.
+- **WhatsApp, E-Mail, andere Chats:** Text markieren → Rechtsklick → „Markierten Text mit ScamGuard prüfen“.
 - **Markierungen:** rot, durchgezogen, Dreieck = hoch · orange, gestrichelt = mittel · gelb, gepunktet =
-  niedrig (nicht nur über Farbe unterscheidbar). Preis, Verkäufer, Bilder und Chat-Nachrichten werden
-  umrahmt. Klick auf ein Warnsignal im Panel springt zur Fundstelle.
-- **Selbst einstufen:** *Betrug* / *Seriös* im Panel → wird zu Trainingsdaten (siehe unten). Im
-  Postfach wird der Chatverlauf gespeichert.
+  niedrig (nicht nur über Farbe unterscheidbar). Preis, Verkäufer, Bilder und Nachrichten werden
+  umrahmt; ein Klick auf ein Warnsignal springt zur Fundstelle.
+- **Anbieter im Blick:** Das Panel zeigt Kontoalter, Bewertungs-Abzeichen („TOP Zufriedenheit“,
+  „Besonders zuverlässig“), Zahl der Anzeigen und ob privat oder gewerblich. Händler, Firmen (Rechtsform
+  wie GmbH, UG, GbR im Namen) und Dienstleistungen/Werbung ohne Festpreis werden als solche markiert –
+  ihre geschäftliche Telefonnummer, Adresse oder Website zählt dann kaum als Warnsignal.
+- **Labeln:** *Betrug* / *Seriös* im Panel speichert das Inserat bzw. den Chatverlauf als Trainingsdaten –
+  mit Fotos, Kategorie und Anbieterprofil, zusätzlich als Ordner im Datensatz (siehe
+  [Ablage beim Labeln](#ablage-beim-labeln)).
 
 ![Chat-Scan im (nachgebauten) Kleinanzeigen-Postfach: neue Nachricht eingerahmt, Fundstellen markiert](docs/screenshots/chromium_chat.png)
 
@@ -138,59 +146,54 @@ Webseite ──Content Script liest aus──► Service Worker (Chromium) / Hin
    └── Markierungen · Panel · Badge ◄── Signale mit Fundstellen ◄── scamguard api (127.0.0.1:8000)
 ```
 
-Die Extension enthält **keine eigene Erkennungslogik** – sie ist ein Client für den
-ScamGuard-Server. So nutzt sie alle Modelle (Regeln, Text, Bilder, optional Claude), und ihr
-pflegt die Logik nur an einer Stelle. Jedes Signal liefert dafür `highlights` (exakter
-Originaltext zum Markieren) bzw. `target` (`price`, `seller`, `image:<n>`).
+Die Extension enthält **keine eigene Erkennungslogik**, sie ist ein Client des ScamGuard-Servers. So
+nutzt sie alle Modelle, und die Logik wird an genau einer Stelle gepflegt. Jedes Signal liefert dafür
+`highlights` (exakter Originaltext) bzw. `target` (`price`, `seller`, `image:<n>`).
 
 ### Installation
 
 1. **Server starten** (muss laufen, solange die Extension genutzt wird):
-   `cd ScamGuard && source .venv/bin/activate && scamguard start` – startet das lokale LLM (Qwen)
-   und die API zusammen, `Ctrl+C` beendet beides. Ohne KI-Analyse: `scamguard start --ohne-llm`.
-2. **Chrome / Edge / Brave / Arc:** `chrome://extensions` → *Entwicklermodus* an →
-   *Entpackte Erweiterung laden* → Ordner `extension/` wählen.
-3. **Firefox (ab Version 140) – am einfachsten:** `python scripts/firefox_mit_extension.py`
-   startet Firefox mit eigenem Entwicklungsprofil, lädt die Extension und öffnet kleinanzeigen.de
-   (erneut aufrufen = Extension nach Code-Änderungen neu laden). Manuell geht es über
-   `about:debugging#/runtime/this-firefox` → *Temporäres Add-on laden …* → `extension/manifest.json`.
-   - Temporäre Add-ons verschwinden beim Neustart. Dauerhaft: über addons.mozilla.org als
-     „unlisted“ signieren lassen (`npx web-ext sign --channel=unlisted`, kostenloser AMO-Account).
+   `scamguard start` – startet Qwen und die API zusammen, `Ctrl+C` beendet beides.
+   Ohne KI-Analyse: `scamguard start --ohne-llm`.
+2. **Chrome / Edge / Brave / Arc:** `chrome://extensions` → *Entwicklermodus* →
+   *Entpackte Erweiterung laden* → Ordner `extension/`.
+3. **Firefox (ab 140):** `python scripts/firefox_mit_extension.py` startet Firefox mit eigenem
+   Entwicklungsprofil und geladener Extension (erneut aufrufen = nach Code-Änderungen neu laden).
+   Manuell: `about:debugging#/runtime/this-firefox` → *Temporäres Add-on laden …* → `extension/manifest.json`.
+   - Temporäre Add-ons verschwinden beim Neustart. Dauerhaft: als „unlisted“ signieren
+     (`npx web-ext sign --channel=unlisted`, kostenloser AMO-Account).
    - Fragt Firefox nach Zugriffsrechten: Toolbar-Symbol → *Zugriff erlauben*.
-4. **Paket fürs Team:** `npx web-ext build --source-dir extension --artifacts-dir dist`
+4. **Paket bauen:** `npx web-ext build --source-dir extension --artifacts-dir dist`
 
-**Einstellungen (Popup):** automatisch prüfen · Bilder mitprüfen · Panel anzeigen ·
-Claude-Analyse (kostet API-Guthaben) · Server-Adresse (nur `127.0.0.1`/`localhost`).
+**Einstellungen (Popup):** automatisch prüfen · Bilder mitprüfen · Panel anzeigen · KI-Analyse
+(automatisch/immer/nie) · Server-Adresse (nur `127.0.0.1`/`localhost`).
 
 ### Datenschutz & Sicherheit
 
 - Die Extension spricht **nur mit dem lokalen Server**. Host-Berechtigungen gibt es nur für
-  `127.0.0.1`/`localhost`, `www.kleinanzeigen.de` und dessen Bild-Server. Verkäufername und
-  Ort werden nicht übertragen.
-- Mit eingeschalteter Claude-Analyse gehen Inseratstexte (optional Bilder) vom Server an die
-  Claude API – sonst verlässt nichts den Rechner.
-- Der Server beantwortet `/scan` nur mit Header `X-ScamGuard-Client` und ohne fremden `Origin`.
-  Fremde Webseiten können ihn daher nicht heimlich nutzen (z. B. um auf eure Kosten Claude
-  aufzurufen).
-- Texte aus der Seite landen im Panel nur als Text, nie als HTML – ein präpariertes Inserat
-  kann so keinen Code ins Panel einschleusen.
-- Firefox verlangt eine Datenübertragungs-Erklärung: `websiteContent` (der lokale Server läuft
-  außerhalb des Browsers).
+  `127.0.0.1`/`localhost`, `www.kleinanzeigen.de` und dessen Bild-Server. Verkäufername und Ort werden
+  nicht übertragen; aus dem Namen wird nur eine Rechtsform (GmbH, UG …) abgeleitet.
+- Nur mit eingeschalteter Claude-Analyse gehen Inseratstexte (optional Bilder) an die Claude API – sonst
+  verlässt nichts den Rechner.
+- Der Server beantwortet `/scan` nur mit Header `X-ScamGuard-Client` und ohne fremden `Origin`. Fremde
+  Webseiten können ihn daher nicht heimlich nutzen (etwa um kostenpflichtige API-Aufrufe auszulösen).
+- Seiteninhalte landen im Panel nur als Text, nie als HTML – ein präpariertes Inserat kann keinen Code
+  einschleusen.
+- Firefox-Datenübertragungs-Erklärung: `websiteContent` (der lokale Server läuft außerhalb des Browsers).
 
-### Grenzen & Erweiterung
+### Bekannte Grenzen
 
-- Ändert Kleinanzeigen sein Seitenlayout, fällt die Extension in den generischen Modus zurück
-  (weniger Elementmarkierungen) → Selektoren in `extension/content/extract.js` anpassen
-  (zuletzt geprüft: 2026-10-01).
-- **Postfach:** Es ist nur eingeloggt sichtbar und hat keine stabilen IDs. Die Extension sucht den
-  Verlauf deshalb ohne feste Selektoren (ARIA-Log bzw. innerster Scrollbereich, Nachrichten = innerste
-  Textblöcke) – getestet an einem Nachbau, nicht am echten Postfach. Eigene und fremde Nachrichten
-  werden nicht unterschieden. Findet sie nichts: Chat markieren → Rechtsklick → prüfen.
-- **Reine Chats und das Textmodell:** Ein Textmodell, das (fast) keine reinen Chats gelernt hat, rät
-  dort nur – das Demo-Modell hielt „Hallo, ist das noch da?“ für 72 % Betrug. Es urteilt über reine
-  Chats deshalb erst ab je 20 gelernten Chat-Beispielen pro Klasse; bis dahin entscheiden Regeln und LLM.
-- Auf Seiten, die sich ständig neu aufbauen (Single-Page-Apps), können Markierungen beim
-  Neurendern verschwinden.
+- Ändert Kleinanzeigen das Seitenlayout, fällt die Extension in den generischen Modus zurück (weniger
+  Elementmarkierungen) → Selektoren in `extension/content/extract.js` anpassen. Seit 10/2026 laufen zwei
+  Layouts parallel; gelesen wird über IDs und die schema.org-Auszeichnung, die beide gemeinsam haben
+  (zuletzt geprüft: 2026-10-06).
+- **Postfach:** nur eingeloggt sichtbar, ohne stabile IDs. Der Verlauf wird ohne feste Selektoren gefunden
+  (ARIA-Log bzw. innerster Scrollbereich) – getestet an einem Nachbau. Eigene und fremde Nachrichten
+  werden nicht unterschieden. Fallback: Chat markieren → Rechtsklick → prüfen.
+- **Reine Chats im Textmodell:** Ohne gelernte Chats rät ein Textmodell dort nur (das Demo-Modell hielt
+  „Hallo, ist das noch da?“ für 72 % Betrug). Es urteilt deshalb erst ab 20 Chat-Beispielen pro Klasse;
+  bis dahin entscheiden Regeln und LLM.
+- Single-Page-Apps können Markierungen beim Neurendern entfernen.
 - Weitere Plattformen (willhaben.at, markt.de, …): neuen Adapter in `extract.js` ergänzen.
 
 ### Tests der Extension
@@ -201,38 +204,38 @@ pytest -m e2e      # echte Extension in Chromium (Playwright) und im installiert
 ```
 
 Kleinanzeigen wird dabei **nicht** aufgerufen: Die Tests liefern nachgebaute Seiten aus
-(`tests/e2e/fixtures`) und starten den Server im Testprozess. Screenshots für den Bericht:
+(`tests/e2e/fixtures`) und starten den Server im Testprozess. Screenshots aktualisieren:
 `SCAMGUARD_SCREENSHOTS=docs/screenshots pytest -m e2e -k "scam_listing or chat"`
 
 ---
 
-## KI-Analyse mit lokalem LLM (Qwen)
+## LLM: lokal mit Qwen
 
-Das LLM ist die „dritte Meinung“ neben Regeln und Textmodell: Es liest das Inserat wie ein Mensch,
-erkennt Maschen-Geschichten und maschinell übersetzte Sprache und begründet sein Urteil mit Zitaten
-(die die Extension ebenfalls markiert). Standard ist ein **lokales Open-Weight-Modell** – kostenlos,
-offline, Inseratsdaten verlassen den Rechner nicht.
+Das LLM ist die dritte Meinung neben Regeln und Textmodell: Es liest das Inserat im Zusammenhang,
+erkennt Maschen-Geschichten und maschinell übersetzte Sprache und begründet sein Urteil mit Zitaten,
+die die Extension ebenfalls markiert. Standard ist ein **lokales Open-Weight-Modell** – kostenlos,
+offline, ohne Datenabfluss.
 
-**Mac mit Apple Silicon** (z. B. MacBook M4 mit 16 GB):
+**Mac mit Apple Silicon** (z. B. MacBook M4, 16 GB):
 
 ```bash
 pip install -e ".[local-llm]"      # Apple MLX
 scamguard start                    # Qwen + API; erster Start lädt Qwen3.5-9B (~6,6 GB)
 ```
 
-In der Extension: Popup → *Einstellungen* → *KI-Analyse: Automatisch* (Standard). Die Extension zeigt
-sofort das Ergebnis der schnellen Modelle und ergänzt danach die KI-Einschätzung.
+In der Extension: Popup → *Einstellungen* → *KI-Analyse: Automatisch* (Standard). Das Ergebnis der
+schnellen Modelle erscheint sofort, die KI-Einschätzung wird nachgereicht.
 
 **Modellwahl nach Hardware** (Stand 2026-10; Qwen-Modelle unter Apache 2.0):
 
 | Rechner | Modell | Größe | Server |
 |---|---|---|---|
-| MacBook M4, 16 GB gemeinsamer Speicher | Qwen3.5-9B, MLX OptiQ 4-Bit (neuestes Qwen, das passt) – gemessen: ca. 6 s (unauffällig) bis 20 s (Betrug) | 6,6 GB | `scamguard llm-server` |
-| PC mit 16 GB Grafikspeicher (z. B. RX 7800 XT) | Qwen3.8-27B, GGUF `UD-Q3_K_XL` (alternativ `UD-IQ4_XS`, 14,3 GB) | 13,1 GB | LM Studio oder Ollama |
-| PC/Mac mit wenig Speicher | Qwen3.5-4B, 4-Bit | ~3 GB | wie oben |
+| MacBook M4, 16 GB | Qwen3.5-9B, MLX OptiQ 4-Bit – gemessen: ca. 6 s (unauffällig) bis 20 s (Betrug) | 6,6 GB | `scamguard llm-server` |
+| PC mit 16 GB VRAM (z. B. RX 7800 XT) | Qwen3.8-27B, GGUF `UD-Q3_K_XL` (alternativ `UD-IQ4_XS`, 14,3 GB) | 13,1 GB | LM Studio oder Ollama |
+| wenig Speicher | Qwen3.5-4B, 4-Bit | ~3 GB | wie oben |
 
-**Andere Rechner (Windows/Linux, AMD- oder NVIDIA-GPU):** GGUF-Modell in LM Studio oder Ollama laden,
-dessen Server starten und in `config.yaml` eintragen – am Code ändert sich nichts:
+**Windows/Linux (AMD/NVIDIA):** GGUF-Modell in LM Studio oder Ollama laden, Server starten und in
+`config.yaml` eintragen – ohne Code-Änderung:
 
 ```yaml
 llm:
@@ -242,24 +245,21 @@ llm:
     model: qwen3.8-27b                   # Modellname, wie ihn der Server anzeigt
 ```
 
-**Claude statt lokal:** `provider: anthropic` und API-Key (`ANTHROPIC_API_KEY`). In der Extension
-dann *KI-Analyse: Immer* wählen – *Automatisch* nutzt bewusst nie ein kostenpflichtiges Modell.
+**Cloud statt lokal:** `provider: anthropic` und `ANTHROPIC_API_KEY`. In der Extension dann
+*KI-Analyse: Immer* – *Automatisch* nutzt bewusst nie ein kostenpflichtiges Modell.
 
-Hinweise:
-- Qwen3.5 „denkt“ standardmäßig vor jeder Antwort. ScamGuard schaltet das ab
-  (`enable_thinking: false`): Für die Einstufung reicht die direkte Antwort, und sie kommt viel schneller.
-- Lokale Modelle erzwingen das JSON-Format nicht immer; ScamGuard prüft die Antwort, normalisiert
-  sie und fragt bei ungültigem JSON ein zweites Mal (deterministisch) nach.
-- Der MLX-Server läuft nur auf `127.0.0.1` und gibt fremden Webseiten keine CORS-Freigabe
-  (Standard von mlx_lm wäre „jede Seite“).
-- 16-GB-Mac: Solange Qwen läuft, sind rund 7 GB belegt. `Ctrl+C` beendet den Server und gibt den
-  Speicher frei.
-- Für den Projektbericht: `scamguard evaluate --llm --max 100` vergleicht das LLM auf euren
-  Testdaten mit den anderen Modellen.
+Details:
+- Qwen3.5 „denkt“ standardmäßig vor jeder Antwort; ScamGuard schaltet das ab (`enable_thinking: false`) –
+  für die Klassifikation reicht die direkte Antwort, und sie ist deutlich schneller.
+- Lokale Server erzwingen das JSON-Format nicht immer; die Antwort wird validiert, normalisiert und bei
+  ungültigem JSON einmal deterministisch neu angefragt.
+- Der MLX-Server läuft nur auf `127.0.0.1` ohne CORS-Freigabe für fremde Seiten.
+- 16-GB-Mac: Solange Qwen läuft, sind rund 7 GB belegt; `Ctrl+C` gibt den Speicher frei.
+- Vergleich mit den anderen Modellen: `scamguard evaluate --llm --max 100`.
 
-### Qwen selbst feintunen (LoRA)
+### Qwen feintunen (LoRA)
 
-Mit genug eigenen Labels lässt sich Qwen auf eure Daten anpassen – auf dem Mac mit MLX, ohne Cloud:
+Mit genug eigenen Labels lässt sich Qwen per LoRA anpassen – lokal mit MLX, ohne Cloud:
 
 ```bash
 scamguard data build && scamguard llm-daten     # → data/finetune/{train,valid,test}.jsonl
@@ -270,140 +270,136 @@ mlx_lm.lora --model mlx-community/Qwen3.5-9B-OptiQ-4bit --train --data data/fine
 scamguard llm-server --adapter models/qwen_lora  # oder dauerhaft: llm.local.adapter_path in config.yaml
 ```
 
-Die Trainingsbeispiele nutzen exakt den Prompt des Betriebs; die Zielantwort entsteht aus euren Labels
-und den Regel-Treffern. Ablauf, Speicherbedarf, sinnvolle Datenmengen, Auswertung und Alternativen
-(Colab/Unsloth, Few-Shot): **[docs/llm_feintuning.md](docs/llm_feintuning.md)**.
+Die Trainingsbeispiele nutzen exakt den Prompt des Betriebs. Die Zielantwort entsteht aus den Labels,
+den im Team markierten Sätzen und – wo keine vorliegen – den Regel-Treffern. Ablauf, Speicherbedarf,
+Datenmengen und Alternativen: **[docs/llm_feintuning.md](docs/llm_feintuning.md)**.
 
 ---
 
-## Trainingsdaten: Inserate einstufen und Datensätze einfüllen
+## Daten & Labeling
 
-Kein Weg braucht Python-Code. Danach immer neu trainieren: im Frontend Tab *Meine Daten & Training* →
-**Jetzt neu trainieren**, oder `scamguard retrain` (liest alles neu ein, trainiert das Textmodell, zeigt
-die Kennzahlen; ein laufender Server nutzt das neue Modell sofort). Für Zahlen im Projektbericht:
-`scamguard retrain --ohne-demo` bzw. das Häkchen bei den Demo-Inseraten entfernen.
+Kein Weg braucht Python-Code. Nach neuen Daten neu trainieren: Web-App, Tab *Meine Daten & Training* →
+**Jetzt neu trainieren**, oder `scamguard retrain` (ein laufender Server nutzt das neue Modell sofort).
+Für belastbare Kennzahlen ohne die Demo-Daten: `scamguard retrain --ohne-demo`.
 
-### 1. Ein Inserat hochladen und einstufen (Frontend)
+### Annotation-Workspace (Tab *Einstufen im Team*)
 
-`scamguard ui` → Tab **Inserat hochladen & einstufen**: Screenshot(s), gespeicherte Seite (`.html`),
-PDF oder Text hineinziehen → ScamGuard liest Titel, Preis, Ort, Kategorie, Kontoalter und
-Beschreibung selbst aus (Texterkennung mit Apple Vision, lokal) → **Betrug** oder **Seriös**
-klicken. Ein Chatverlauf (Screenshot oder Text) kann dazu. Bilder mit wenig Text gelten als
-Produktfotos. Die ScamGuard-Einschätzung ist beim Einstufen standardmäßig verborgen, damit sie euer
-Urteil nicht beeinflusst; nach dem Klick wird sie angezeigt. Screenshots selbst werden nicht
-gespeichert – nur der erkannte Text und Produktfotos.
+Labeling mit Qualitätssicherung für mehrere Personen. Ablauf und Methodik:
+**[docs/einstufung.md](docs/einstufung.md)**.
 
-### 2. Live-Inserate in der Browser-Extension
+- **Kategoriensystem** [`data/einstufung/kategorien.yaml`](data/einstufung/kategorien.yaml):
+  Entscheidungsregeln, Urteil, 11 Maschen, 11 Warnsignale auf Satzebene, Bildarten – jeweils mit
+  Definition, Beispiel und Abgrenzung; in der Web-App als *Leitfaden*.
+- **Drei Ebenen je Text:** Gesamturteil (Betrug/seriös/unklar, Sicherheit, Masche, wer täuscht, Sprache),
+  **jeder Satz** mit seinem Warnsignal, **jedes Bild** (Art, selbst verdächtig?).
+- **Aufgaben** aus jedem Datensatz (Foren-Prüfliste, Warnungen, Hugging Face, eigene Labels) oder als
+  eigener Text – Kontaktdaten werden anonymisiert, das Label der Quelle bleibt bis zum eigenen Urteil
+  verborgen, optional ausgewogen gezogen.
+- **Doppel-Labeling:** Ein fester Anteil (Standard 25 %) wird von zwei Personen unabhängig gelabelt →
+  **Krippendorffs α** und Cohens κ je Ebene, Konfliktliste mit Entscheidung und Begründung, Hinweise auf
+  auffällige Einstufungen.
+- **Regeln gegen Mensch:** Precision/Recall der Regel-Erkennung je Warnsignal auf Satzebene; verpasste
+  Sätze als Kandidaten fürs Lexikon; Widerspruchsquote zum Label der Quelle.
+- **Export** nach `data/raw/einstufung_*.jsonl` (Datensatz `einstufungen`): Das Konsens-Label hat beim
+  Bauen der Splits Vorrang vor dem Label der Quelle; markierte Sätze werden beim Qwen-Feintuning zu den
+  Begründungen.
 
-Im Panel unter jedem Ergebnis *Betrug* oder *Seriös* klicken. Erneutes Klicken auf derselben
-Anzeige ersetzt die alte Einstufung; das Popup zeigt, wie viele Inserate ihr schon eingestuft habt.
-Wege 1 und 2 speichern in `data/raw/eigene_labels.jsonl` (Fotos in `data/images/eigene_labels/`).
+```bash
+scamguard einstufen holen --person Jannis --datensatz datei:gesammelt_foren.csv --max 50
+scamguard einstufen bericht --regeln     # Übereinstimmung, Konflikte, Regeln gegen Mensch
+scamguard einstufen export               # danach retrain / llm-daten
+```
 
-### 3. Viele Inserate auf einmal: `data/datensatz_fuellen_inserate/`
+### Weitere Datenquellen
 
-Screenshots, gespeicherte Seiten, PDFs oder `.txt` in `betrug/` bzw. `serioes/` legen – eine Datei
-= ein Inserat; mehrere Dateien eines Inserats (z. B. drei Screenshots + Fotos) in einen
-Unterordner. Ausgelesen wird beim Training, genauso wie beim Hochladen.
+| Quelle | Weg | Ablage |
+|---|---|---|
+| Einzelnes Inserat | Web-App, Tab *Inserat hochladen & einstufen*: Screenshot(s), `.html`, PDF oder Text → Felder werden ausgelesen (Apple Vision, lokal) → *Betrug*/*Seriös* | `eigene_labels.jsonl` + Ordner-Ablage |
+| Chatverläufe als Bild | dort im Bereich *Chatverlauf mit dem Anbieter*: Chat-Screenshots (PNG/JPG) hineinziehen – der Text wird per Texterkennung gelesen; ein Chat allein (ohne Inserat) geht auch | `eigene_labels.jsonl` + Ordner-Ablage |
+| Live-Inserate und Chats | Extension-Panel → *Betrug*/*Seriös* (erneut klicken ersetzt die alte Einstufung) | `eigene_labels.jsonl` + Ordner-Ablage |
+| Viele Inserate | Dateien in `data/datensatz_fuellen_inserate/{betrug,serioes}/` – eine Datei = ein Inserat, ein Unterordner = ein Inserat aus mehreren Dateien; Chat-Screenshots darin heißen `chat…` (z. B. `chat_1.png`) | wird beim Training ausgelesen |
+| Fertige Tabellen | CSV (auch Excel-CSV mit `;`), TSV, JSONL, Parquet in `data/datensatz_fuellen_text/`; Spalten und Labels werden an üblichen Namen erkannt; Vorlage `_vorlage_inserate.csv` | automatisch erkannt |
+| Hugging Face | Eintrag in `data/datensatz_fuellen_text/huggingface.yaml` | automatisch erkannt |
+| Produktfotos | `data/datensatz_fuellen_bilder/{betrug,serioes}/`, Bildmodell mit `scamguard retrain --bilder` | automatisch erkannt |
+| Sonderfälle | `DatasetSpec` mit `transform`-Funktion in `src/scamguard/data/registry.py` | – |
 
-### 4. Fertige Tabellen: `data/datensatz_fuellen_text/`
+Bei Screenshots werden nur der erkannte Text und Produktfotos gespeichert. Anbietername, Straße und
+Hausnummer werden beim Auslesen nicht übernommen. `scamguard data list` (oder Tab *Meine Daten &
+Training*) zeigt, was erkannt wurde, inklusive Hinweisen wie „keine Label-Spalte“. `scamguard data build`
+dedupliziert über alle Quellen (auch über anonymisierte Varianten) und teilt stratifiziert auf.
 
-CSV (auch deutsche Excel-CSV mit `;`), TSV, JSONL oder Parquet hineinlegen. Spalten werden an
-üblichen Namen erkannt (`titel`, `beschreibung`/`text`, `preis`, `kategorie`, `nachrichten`) und das
-Label an `betrug`/`label`/`fake` mit Werten wie `ja`/`nein`, `betrug`/`seriös`, `fake`/`echt`, `1`/`0`.
-Vorlage: `_vorlage_inserate.csv` (Dateien mit `_` am Anfang werden ignoriert).
-Hugging-Face-Datensätze: in `data/datensatz_fuellen_text/huggingface.yaml` eintragen.
+### Ablage beim Labeln
 
-### 5. Öffentliche Warnungen automatisch sammeln: `scamguard data sammeln`
+Jede manuelle Einstufung (Extension, Upload, Formular) landet zusätzlich als Ordner im Datensatz –
+sortiert nach Label und Kategorie, gewerbliche Anbieter getrennt:
+
+```
+data/datensatz_fuellen_inserate/
+├── betrug/elektronik/iphone-15-pro-nur-versand__3f9a1c02de/   inserat.json · bild_1.jpg · bild_2.jpg
+└── serioes/immobilien-gewerblich/reihenhaus-travemuende__a81b77c410/
+```
+
+`inserat.json` enthält alle Felder samt Anbieterprofil (ohne Namen), Masche und Adresse der Anzeige.
+Stuft man dieselbe Anzeige neu ein, wandert der Ordner mit (anderes Label, andere Kategorie). Beim
+Training werden solche Ordner ohne Texterkennung gelesen und mit `eigene_labels.jsonl` dedupliziert.
+Bisherige Labels übernehmen: `scamguard data ordner`.
+
+### Öffentliche Warnungen sammeln: `scamguard data sammeln`
 
 Holt Betrugsnachrichten im Wortlaut (Phishing-Mails, SMS, Chat-Maschen) von Seiten, die sie
 veröffentlichen – **nicht** von Kleinanzeigen selbst (Nutzungsbedingungen, Bot-Sperre, Personendaten):
-Watchlist Internet „Phishing-Alarm“ (vollständige Nachrichten, u. a. willhaben), Phishing-Radar der
-Verbraucherzentrale (Betreffzeilen und zitierte Sätze, ohne deren Erklärtexte) und Zitate aus
-Watchlist-Artikeln zu Kleinanzeigen/Marktplätzen. Ergebnis: `data/datensatz_fuellen_text/
-gesammelt_warnungen.csv` (alles Label *Betrug*, mit Quelle je Zeile – im Bericht zitieren). robots.txt
-wird beachtet, zwischen Anfragen 1,5 s Pause, Seiten werden zwischengespeichert. Rechtsgrundlage:
-Text- und Data-Mining für nicht-kommerzielle Forschung (§ 60d UrhG); die Daten bleiben lokal.
+Watchlist Internet „Phishing-Alarm“, Phishing-Radar der Verbraucherzentrale und Zitate aus
+Watchlist-Artikeln zu Marktplätzen. Ergebnis: `data/datensatz_fuellen_text/gesammelt_warnungen.csv`
+(Label *Betrug*, Quelle je Zeile). robots.txt wird beachtet, 1,5 s Pause zwischen Anfragen,
+Seiten-Cache. Rechtsgrundlage: Text- und Data-Mining für nicht-kommerzielle Forschung (§ 60d UrhG);
+die Daten bleiben lokal.
 
-**Erfahrungsberichte aus Foren** (`--quellen foren`, ab v0.7.0): liest die Threads aus
-`data/quellen/foren.yaml` (ComputerBase, gs-forum, mtb-news, unknowns.de, Antispam e.V. … – Liste dort
-erweiterbar) und liefert zweierlei:
+**Foren-Erfahrungsberichte** (`--quellen foren`): liest die Threads aus `data/quellen/foren.yaml`
+(ComputerBase, gs-forum, mtb-news, unknowns.de, Antispam e.V. …) und liefert
 
-- `data/raw/foren_erfahrungsberichte.jsonl` – Beiträge, in denen jemand von eigenem Betrug erzählt,
-  mit der beschriebenen Masche (nur Auswertung, nicht im Training). Erster Lauf: 222 Berichte aus
-  9 Foren; am häufigsten beschrieben: Vorkasse/Überweisung, Käuferschutz/Rückbuchung, Fake „Sicher
-  bezahlen“/„Direkt kaufen“, gehackte Konten.
-- `data/datensatz_fuellen_text/gesammelt_foren.csv` – **Prüfliste**: Nachrichten, die Betroffene
-  zitieren („bekam folgende Nachricht: …“). In Foren wird aber auch Harmloses zitiert (Support-Antworten,
-  Gesetzestexte) – deshalb ist die Spalte `betrug` leer, bis ihr `ja` oder `nein` eintragt (`vorschlag`
-  hilft). Nur geprüfte Zeilen zählen; `nein`-Zeilen sind willkommene seriöse Beispiele. Eure Einträge
-  bleiben beim nächsten Sammeln erhalten.
+- `data/raw/foren_erfahrungsberichte.jsonl` – Berichte Betroffener mit der beschriebenen Masche (nur
+  Auswertung, nicht im Training). Erster Lauf: 222 Berichte aus 9 Foren; am häufigsten:
+  Vorkasse/Überweisung, Käuferschutz/Rückbuchung, Fake „Sicher bezahlen“, gehackte Konten.
+- `data/datensatz_fuellen_text/gesammelt_foren.csv` – **Prüfliste** zitierter Nachrichten. Foren zitieren
+  auch Harmloses (Support-Antworten, Gesetzestexte), deshalb bleibt die Spalte `betrug` leer, bis sie
+  manuell gefüllt wird (`vorschlag` hilft); manuelle Einträge überstehen das nächste Sammeln. Gründlicher:
+  im Annotation-Workspace als Aufgaben holen.
 
-Forennamen werden nicht gespeichert, Mailadressen, Telefonnummern, IBANs und Link-Pfade anonymisiert
-(die Form bleibt für die Merkmale erhalten: `anonym@gmail.com`, `+44 1111 111111`). Bewusst nicht
-gesammelt: **Reddit** (robots.txt sperrt alle Bots, Datennutzung nur über Reddits Forschungsprogramm),
-**gutefrage.net** (Bot-Sperre – wird nicht umgangen), **eBay-Community** (Nutzungsbedingungen).
+Forennamen werden nicht gespeichert; Mailadressen, Telefonnummern, IBANs und Link-Pfade werden
+anonymisiert, ihre Form bleibt für die Merkmale erhalten (`anonym@gmail.com`, `+44 1111 111111`).
+Bewusst nicht gesammelt: **Reddit** (robots.txt sperrt alle Bots, Zugang nur über das
+Forschungsprogramm), **gutefrage.net** (Bot-Sperre), **eBay-Community** (Nutzungsbedingungen).
 
-**Wichtig:** Das sind fast nur Betrugsbeispiele. Ohne seriöse Nachrichten als Gegenstück lernt das Modell
-„kurze Nachricht = Betrug“. Ergänzt eigene, anonymisierte Chats (Extension: Text markieren →
-Rechtsklick) oder vorübergehend die seriösen Nachrichten aus `huggingface.yaml`; `scamguard evaluate`
-zeigt die Kennzahlen je Quelle und deckt solche Verzerrungen auf.
+**Klassenbalance:** Diese Quellen liefern fast nur Betrug. Ohne seriöse Nachrichten als Gegenstück lernt
+ein Modell „kurze Nachricht = Betrug“. Seriöse Chats ergänzen (Extension, Annotation-Workspace);
+`scamguard evaluate` zeigt die Kennzahlen je Quelle und macht solche Verzerrungen sichtbar.
 
 ### Lexikon datengestützt erweitern: `scamguard data phrasen`
 
-Vergleicht alle Betrugs- mit allen seriösen Texten und listet Wortfolgen, die in Betrugstexten
-auffällig häufig stehen (Log-Odds-Ratio mit informativem Dirichlet-Prior, Monroe et al. 2008) –
-markiert, ob das Lexikon sie schon kennt. `--hf` nimmt die deutschen Hugging-Face-Nachrichten als
-Vergleich dazu (ohne sie ins Training zu übernehmen). Ergebnis: `data/raw/phrasen_kandidaten.csv`.
-Sinnvolle Kandidaten von Hand als Muster übernehmen und mit harmlosen Sätzen gegenprüfen (Tests in
-`tests/test_chat_and_forums.py`).
+Vergleicht Betrugs- mit seriösen Texten und listet Wortfolgen, die in Betrugstexten auffällig häufig sind
+(Log-Odds-Ratio mit informativem Dirichlet-Prior, Monroe et al. 2008), markiert, ob das Lexikon sie
+schon kennt. `--hf` zieht die deutschen Hugging-Face-Nachrichten als Vergleich hinzu (ohne sie ins
+Training zu übernehmen). Ergebnis: `data/raw/phrasen_kandidaten.csv`. Kandidaten werden manuell als
+Muster in `data/lexicons/scam_signals_de.yaml` übernommen und mit harmlosen Sätzen gegengetestet.
 
-### 6. Nur Produktfotos: `data/datensatz_fuellen_bilder/`
+### Datenstrategie
 
-Fotos in `betrug/` oder `serioes/` legen – der Ordner ist das Label. Für das Bildmodell (CNN):
-`scamguard retrain --bilder` (sinnvoll ab einigen hundert Bildern pro Ordner). Keine Screenshots
-ganzer Inserate hier ablegen – die gehören nach `datensatz_fuellen_inserate/`.
+Kleinanzeigen zu scrapen ist technisch geblockt und verstößt gegen die Nutzungsbedingungen; einen
+öffentlichen deutschen Datensatz zu Kleinanzeigen-Betrug gibt es nicht (Stand 10/2026). Der Kern des
+Datensatzes wird deshalb selbst aufgebaut:
 
-**Regeln:** Was die Regel-Erkennung als verdächtig wertet, steht in
-`data/lexicons/scam_signals_de.yaml` (Formulierungen, Gewichte) – ohne Code erweiterbar.
-
-`scamguard data list` (oder der Tab *Meine Daten & Training*) zeigt, was erkannt wurde – inkl.
-Hinweisen wie „keine Label-Spalte“. Datenschutz: Der Name des Anbieters wird beim Auslesen nicht
-übernommen, Straße und Hausnummer auch nicht; trotzdem keine Daten echter Personen weitergeben – die
-Datenordner landen bewusst nicht im Git.
-
-### Sonderfälle mit Code: `src/scamguard/data/registry.py`
-
-Wenn ein Datensatz Sonderbehandlung braucht (Texte zusammensetzen, filtern), dort einen
-`DatasetSpec` mit `transform`-Funktion anlegen – Vorlagen sind enthalten. `scamguard data build`
-dedupliziert über alle Quellen (kein Train/Test-Leck durch doppelte Inserate) und teilt
-stratifiziert auf.
-
-### Wo Daten herkommen können (ohne Scraping)
-
-Scraping von Kleinanzeigen ist technisch geblockt und verstößt gegen die Nutzungsbedingungen.
-Einen öffentlichen deutschen Datensatz mit Kleinanzeigen-Betrug gibt es nicht (Stand 10/2026) –
-der Kern eures Datensatzes ist deshalb selbst gesammelt. Das ist zugleich eure Eigenleistung.
-
-- **Seriöse Inserate** (einfach, viele): normale Anzeigen in der Extension mit *Seriös* einstufen.
-  Wichtig, sonst lernt das Modell nur „Inserat = Betrug“.
-- **Betrugsfälle mit Screenshots**: Watchlist Internet (watchlist-internet.at, zeigt Kleinanzeigen-/
-  willhaben-Maschen mit Screenshots), Phishing-Radar der Verbraucherzentrale (gefälschte
-  „Sicher bezahlen“-Mails), polizei-beratung.de, Sicherheitshinweise von Kleinanzeigen,
-  Erfahrungsberichte in Foren. Screenshots hochladen (Weg 1 oder 3), **Quelle notieren** und im
-  Bericht angeben; die Bilder selbst nicht weitergeben (Urheberrecht).
-- **Eigene Chats**: Wenn jemand aus der Gruppe ohnehin etwas verkauft, Betrugsnachrichten (Fake-
-  Zahlungslinks, „Ich bin im Ausland …“) als Screenshot sichern – nicht antworten, nichts anklicken.
-  Keine Fake-Inserate einstellen (verstößt gegen die Nutzungsbedingungen).
-- **Hugging Face** (nur Ergänzung für Chat-Nachrichten): zwei deutsche Spam-Datensätze sind in
-  `data/datensatz_fuellen_text/huggingface.yaml` vorbereitet (`aktiv: false` → `true`). Stand 10/2026
-  gibt es dort keinen deutschen Kleinanzeigen-Chat-Datensatz: `tanaos/synthetic-spam-detection-dataset-german`
-  (15 000 synthetische SMS, Spam/normal, Labels teils fehlerhaft), die SMS-Spam-Sammlung (maschinell
-  übersetzt), `shaw/scambench-training` (1 433 deutsche Zeilen, fast nur Agenten-/Prompt-Injection-
-  Dialoge; dazu 66 mit typisch deutschen Maschen: Bank, Paket, Zoll, BaFin, Enkeltrick). Daraus stammen
-  vor allem Phishing-Muster („klicken Sie hier, um …“, „geben Sie Ihre Daten ein“); Chat-Druck wie
-  „Geld zuerst“ kommt dort praktisch nicht vor.
-- **Synthetisch (mit Vorsicht)**: Varianten bekannter Maschen per LLM generieren. Immer als
-  eigene `source` markieren und **nie** im Testset verwenden.
+- **Seriöse Inserate und Chats** (viele, einfach): normale Anzeigen in der Extension als *Seriös* labeln,
+  eigene Chats im Annotation-Workspace hinzufügen.
+- **Betrugsfälle:** Watchlist Internet, Phishing-Radar der Verbraucherzentrale, polizei-beratung.de,
+  Sicherheitshinweise von Kleinanzeigen, Foren. Screenshots hochladen, **Quelle dokumentieren**, Bilder
+  nicht weitergeben (Urheberrecht).
+- **Eigene Verkäufe:** Betrugsnachrichten als Screenshot sichern – nicht antworten, nichts anklicken.
+  Keine Fake-Inserate einstellen.
+- **Hugging Face** (Ergänzung für Nachrichten): `tanaos/synthetic-spam-detection-dataset-german`
+  (15 000 synthetische SMS, Labels teils fehlerhaft), eine maschinell übersetzte SMS-Spam-Sammlung,
+  `shaw/scambench-training` (66 typisch deutsche Maschen). Einen deutschen Kleinanzeigen-Chat-Datensatz
+  gibt es dort nicht; vorbereitet in `huggingface.yaml` (`aktiv: false`).
+- **Synthetisch (mit Vorsicht):** Varianten bekannter Maschen nur als eigene `source` und **nie** im Testset.
 
 ---
 
@@ -411,113 +407,81 @@ der Kern eures Datensatzes ist deshalb selbst gesammelt. Das ist zugleich eure E
 
 ```
 ScamGuard/
-├── CLAUDE.md                    Projektwissen und Teamregeln für Claude Code
-├── config.yaml                  Schwellen, Fusion-Gewichte, Modellpfade, LLM-Einstellungen
+├── config.yaml                  Schwellen, Fusion-Gewichte, Modellpfade, LLM, Annotation
 ├── data/
-│   ├── datensatz_fuellen_inserate/ ← HIER ganze Inserate (Screenshots, .html, PDF): betrug/, serioes/
-│   ├── datensatz_fuellen_text/  ← HIER Tabellen ablegen (CSV/JSONL/Parquet, huggingface.yaml)
-│   ├── datensatz_fuellen_bilder/← HIER Produktfotos ablegen: betrug/ und serioes/
-│   ├── lexicons/                ← Betrugsphrasen, Preisreferenzen, Fake-Bild-Hashes (YAML/TXT)
-│   ├── quellen/foren.yaml       ← Foren-Threads für `data sammeln --quellen foren`
+│   ├── datensatz_fuellen_inserate/ ganze Inserate (Screenshots, .html, PDF): betrug/, serioes/
+│   ├── datensatz_fuellen_text/  Tabellen (CSV/JSONL/Parquet), huggingface.yaml
+│   ├── datensatz_fuellen_bilder/ Produktfotos: betrug/, serioes/
+│   ├── einstufung/kategorien.yaml Kategoriensystem (Arbeitsdateien daneben, nicht im Git)
+│   ├── lexicons/                Betrugsphrasen, Preisreferenzen, Fake-Bild-Hashes
+│   ├── quellen/foren.yaml       Foren-Threads für `data sammeln --quellen foren`
 │   ├── samples/                 synthetische Demo-Inserate
-│   ├── raw/  images/            eure Rohdaten (nicht im Git)
+│   ├── raw/  images/            Rohdaten (nicht im Git)
 │   ├── processed/               train/val/test nach `data build` (nicht im Git)
-│   └── finetune/                Feintuning-Daten für Qwen nach `llm-daten` (nicht im Git)
+│   └── finetune/                Feintuning-Daten für Qwen (nicht im Git)
 ├── models/                      trainierte Gewichte (nicht im Git)
 ├── examples/                    Beispiel-Inserat für `scamguard scan`
-├── frontend/app.py              Streamlit: Hochladen & Einstufen, Prüfen, Daten & Training
+├── frontend/
+│   ├── app.py                   Streamlit: prüfen, labeln, Daten & Training
+│   └── einstufen.py             Annotation-Workspace (Sätze, Bilder, Übereinstimmung, Konflikte)
 ├── extension/                   Browser-Extension (Manifest V3, Chromium + Firefox)
-│   ├── manifest.json
 │   ├── background.js            Service Worker/Hintergrundskript: Server, Badge, Kontextmenü
 │   ├── content/                 extract.js (Auslesen) · highlight.js (Markieren) · panel.js
 │   └── popup/                   Toolbar-Popup: Score, Serverstatus, Einstellungen
-├── docs/                        llm_feintuning.md · screenshots/ (aus den E2E-Tests)
-├── scripts/                     Hilfsskripte (z. B. Extension-Icons erzeugen)
+├── docs/                        einstufung.md · llm_feintuning.md · backlog.md · screenshots/
+├── scripts/                     Hilfsskripte (Firefox-Entwicklungsprofil, Icons)
 ├── src/scamguard/
-│   ├── schema.py                einheitliches Datenschema (Listing, Signal, ScanResult)
-│   ├── data/discovery.py        erkennt die Ablageordner automatisch
-│   ├── data/labels.py           eigene Einstufungen (Extension, Streamlit)
-│   ├── data/listing_import.py   Screenshot/.html/PDF/Text → Inserat (Titel, Preis, Beschreibung …)
-│   ├── data/ocr.py              Texterkennung (Apple Vision) inkl. Spalten-/Absatz-Erkennung
-│   ├── data/registry.py         Sonderfälle mit Code (transform-Funktionen)
-│   ├── data/loaders.py          HF/CSV/JSONL/Parquet → Listing
-│   ├── data/build.py            Dedup + Split
-│   ├── data/collect_warnings.py Warnungen sammeln (Watchlist, Verbraucherzentrale)
-│   ├── data/collect_forums.py   Foren-Erfahrungen + Prüfliste zitierter Nachrichten
-│   ├── data/redact.py           Kontaktdaten anonymisieren (Form bleibt, Person nicht)
-│   ├── data/phrases.py          Phrasen-Kandidaten fürs Lexikon (Log-Odds)
+│   ├── schema.py                Datenschema (Listing, Signal, ScanResult)
+│   ├── data/                    Discovery, Loader, Build/Split, Labels, Import/OCR, Collector,
+│   │                            Anonymisierung, Phrasen, Annotation, Übereinstimmung, Kategoriensystem
 │   ├── features/                URL/Mail/IBAN/Telefon, Sprache, Lexikon, Preis
 │   ├── models/                  rules, text_classifier, image_model, llm_judge, fusion
 │   ├── pipeline.py              alle Detektoren → Fusion
-│   ├── training.py              neu trainieren (CLI `retrain` und Frontend-Button)
-│   ├── evaluate.py              Kennzahlen pro Modell und Quelle
-│   ├── finetune.py              Feintuning-Daten für Qwen (LoRA, mlx_lm)
-│   ├── api.py                   FastAPI (Backend für Extension & Co.)
+│   ├── training.py · evaluate.py · finetune.py
+│   ├── api.py                   FastAPI (Backend für die Extension)
 │   └── cli.py                   `scamguard …`
-└── tests/                       Unit-Tests · e2e/ = Browser-Tests (Extension, Upload im Frontend)
+└── tests/                       Unit-/Integrationstests · e2e/ = Browser-Tests
 ```
 
 ---
 
-## Eigenleistung: Was ihr beitragt
+## Entwicklung
 
-Der Code ist ein Gerüst (mit KI-Unterstützung erstellt – das gehört in eure Erklärung zu den
-Hilfsmitteln; klärt mit eurer Betreuung, wie das bewertet wird). Die eigentliche Projektarbeit:
+Setup, Checks, Branch- und PR-Workflow sowie Konventionen: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+Offene Aufgaben mit Akzeptanzkriterien: **[docs/backlog.md](docs/backlog.md)**.
 
-- **Datensatz**: Inserate sammeln und einstufen, ein *Labeling-Leitfaden* (wann ist es Betrug, welche
-  Masche?), Quellen und Lizenzen dokumentieren, Klassenverteilung, Dubletten, Datenschutz.
-- **Training & Experimente**: Baseline vs. GBERT vs. LLM vs. Fusion auf demselben, festen Testset;
-  CNN auf Produktfotos; Hyperparameter; Ablation (was bringt welcher Baustein?).
-- **Auswertung**: Precision/Recall/F1, Fehleranalyse (warum wurden seriöse Inserate markiert?),
-  Fairness (gebrochenes Deutsch ≠ Betrug), Grenzen.
-- **Weiterentwicklung**: Regeln/Lexikon aus echten Fällen (`data phrasen`, Foren-Prüfliste),
-  Fusion-Gewichte lernen, Prompt des LLM, Qwen mit euren Labels feintunen und mit dem Basismodell vergleichen.
+**Labels im Team teilen:** Am einfachsten arbeiten alle im selben privaten Ordner (z. B. OneDrive):
+`SCAMGUARD_EINSTUFUNG_ORDNER=<Pfad> scamguard ui`. Jede Person schreibt nur eigene Dateien, gelesen
+werden alle. Ohne gemeinsamen Ordner lassen sich die Dateien im Workspace unter „Mit dem Team teilen“
+austauschen. Schnelle Labels aus Extension und Upload (`data/raw/eigene_labels.jsonl`) können dort als
+Aufgaben zur Zweitprüfung geholt oder als `labels_<name>.jsonl` nach `data/datensatz_fuellen_text/`
+kopiert werden. Bilder werden nicht übertragen; keine echten Namen, Nummern oder Adressen teilen.
 
-## Zusammenarbeit im Team
+**Arbeitsbereiche:**
 
-**Code:** Jede Person hat einen eigenen Branch (`Jannis`, `Gabriel`; die dritte Person arbeitet auf
-`main` oder einem eigenen Branch). Änderungen kommen per Pull Request nach `main`, vorher
-`git pull origin main`. Daten landen nie im Git.
+| Bereich | Umfang |
+|---|---|
+| Daten & Evaluation | Quellen und Lizenzen, Labeling und Kategoriensystem, festes Testset, Metriken, Fehleranalyse |
+| Text & NLP | Regeln und Lexikon, Textmodelle (Baseline, GBERT), LLM-Prompt und Feintuning |
+| Bild, Frontend & Extension | Bildmodelle (CLIP, CNN, Hash-Liste), Web-App, API, Extension-Adapter, Nutzertests |
 
-**Mit Claude Code:** `claude` im Projektordner starten – Claude liest automatisch
-[`CLAUDE.md`](CLAUDE.md) (Aufbau, Befehle, Teamregeln). Fertige Prompts für Einrichtung, Gruppenaufgaben
-und Pull Requests: **[docs/mit_claude_arbeiten.md](docs/mit_claude_arbeiten.md)**.
+## Roadmap
 
-**Einstufungen teilen:** Jede Person stuft auf dem eigenen Rechner ein (Extension, Web-App) und
-legt ihre `data/raw/eigene_labels.jsonl` regelmäßig als `labels_<name>.jsonl` in einen gemeinsamen,
-privaten Ordner (z. B. DHBW-OneDrive). Alle kopieren sämtliche `labels_*.jsonl` nach
-`data/datensatz_fuellen_text/` – sie werden automatisch erkannt, doppelte Inserate entfernt.
-Bilder werden dabei nicht übertragen. Vorher prüfen: keine echten Namen, Nummern oder Adressen.
-
-## Vorschlag: Aufgabenteilung für 3 Personen
-
-| Person | Schwerpunkt | Erste Aufgaben |
-|---|---|---|
-| **A – Daten & Evaluation** | Datensätze finden, Registry, Labeln, Metriken | 3–5 Quellen recherchieren und eintragen, Labeling-Leitfaden schreiben, Testset fixieren (nie zum Tuning nutzen!), `evaluate` für den Bericht |
-| **B – Text/NLP** | Regeln, Lexikon, Textmodelle, LLM | Lexikon mit echten Fällen erweitern, Baseline vs. GBERT vergleichen, Rechtschreib-Features (Hunspell/LanguageTool), LLM-Prompt evaluieren |
-| **C – Bild, Frontend & Extension** | Bildmodelle, UI, API, Browser-Extension | Bilddatensatz aufbauen, CLIP-Prompts testen, CNN trainieren, Fake-Hash-Liste pflegen, Extension-Adapter für weitere Plattformen, Nutzertests mit der Extension |
-
-Gemeinsam: Fusion-Gewichte auf dem Validierungsset lernen (Stacking), Fehleranalyse
-(falsch-positive seriöse Inserate!), Projektbericht.
-
-## Nächste Schritte (Roadmap)
-
-1. Echte Datensätze eintragen → Baseline neu trainieren → erste ehrliche Zahlen.
-2. GBERT feintunen (Google Colab / bwUniCluster, `scamguard train text-transformer`).
-3. Fusion-Gewichte lernen statt raten (logistische Regression auf Val-Scores) und Scores kalibrieren.
-4. Bild-Pipeline mit echten Inseratsfotos trainieren, CLIP-Schwellen auf Val-Daten justieren.
-5. LLM-Judge auf dem Testset gegen die anderen Modelle messen (Kosten vs. Nutzen).
+1. Echte, im Team gelabelte Daten → Baseline neu trainieren → erste belastbare Kennzahlen.
+2. GBERT feintunen (Colab / bwUniCluster, `scamguard train text-transformer`).
+3. Fusion-Gewichte lernen statt setzen (logistische Regression auf Val-Scores), Scores kalibrieren.
+4. Bildmodell mit echten Inseratsfotos und Bild-Labels aus dem Workspace trainieren, CLIP-Schwellen justieren.
+5. LLM-Judge auf dem Testset gegen die anderen Modelle messen (Kosten vs. Nutzen), Qwen feintunen.
 6. Preisreferenzen mit echten Marktdaten ersetzen (aktuell Platzhalter).
 
-## Wichtige Hinweise
+## Datenschutz, Fairness, Kosten
 
-- **Datenschutz (DSGVO)**: Keine Namen, Telefonnummern, Adressen oder IBANs echter Personen
-  in Trainingsdaten. Der LLM-Judge sendet bewusst keinen Verkäufernamen und keinen Ort und ist
-  standardmäßig aus. Bilder gehen nur mit `send_images: true` an die API.
-- **Fairness**: Fehlerhaftes Deutsch ist ein *schwaches* Signal (niedrige Gewichte). Ehrliche
-  Nicht-Muttersprachler dürfen nicht pauschal als Betrüger gelten. Falsch-Positive bitte
-  gezielt auswerten.
-- **Bewertung**: Zahlen auf den synthetischen Demo-Daten sind bedeutungslos. Auswertung pro
-  Quelle (`evaluate` zeigt das) verhindert, dass ein Modell nur die Quelle statt Betrug lernt.
-- **LLM-Kosten**: `llm.enabled` ist standardmäßig `false`. Modell und Effort stehen in
-  `config.yaml`. API-Key per `ANTHROPIC_API_KEY` oder `ant auth login`, nie im Code.
+- **Datenschutz (DSGVO):** Keine Namen, Telefonnummern, Adressen oder IBANs echter Personen in
+  Trainingsdaten. Der LLM-Judge sendet keinen Verkäufernamen und keinen Ort und ist standardmäßig aus.
+  Bilder gehen nur mit `send_images: true` an eine API.
+- **Fairness:** Fehlerhaftes Deutsch ist ein *schwaches* Signal (niedrige Gewichte) – ehrliche
+  Nicht-Muttersprachler dürfen nicht pauschal als Betrüger gelten. Falsch-Positive werden gezielt ausgewertet.
+- **Bewertung:** Kennzahlen auf den synthetischen Demo-Daten sind bedeutungslos. Die Auswertung pro
+  Quelle (`evaluate`) zeigt, ob ein Modell Betrug oder nur die Quelle gelernt hat.
+- **LLM-Kosten:** `llm.enabled` ist standardmäßig `false`; Modell und Effort in `config.yaml`.
+  API-Keys per Umgebungsvariable (`ANTHROPIC_API_KEY`), nie im Code.

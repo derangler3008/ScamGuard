@@ -86,6 +86,8 @@ def normalize_category(value: Any) -> str:
     if not value:
         return "sonstiges"
     segments = [s.strip().lower() for s in re.split(r"[>›»|]", str(value)) if s.strip()]
+    if any("dienstleistung" in s for s in segments):  # „Dienstleistungen > Auto, Rad & Boot“ ist kein Auto
+        return "dienstleistungen"
     for s in reversed(segments):
         ascii_s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
         if ascii_s.replace(" ", "") in CATEGORIES:
@@ -155,17 +157,11 @@ def _iter_rows(spec: DatasetSpec) -> Iterator[dict]:
             yield {"image_paths": [str(image)]}
         return
     if spec.source == "listingfolder":  # ganze Inserate: je Datei bzw. Unterordner eines
-        from scamguard.data.listing_import import SUPPORTED_SUFFIXES, import_paths
+        from scamguard.data.listing_import import import_paths, listing_items
 
-        def supported(p: Path) -> bool:
-            return p.is_file() and p.suffix.lower() in SUPPORTED_SUFFIXES and not p.name.startswith(("_", "."))
-
-        items = sorted(p for p in path.iterdir()
-                       if supported(p) or (p.is_dir() and not p.name.startswith(("_", "."))))
-        for item in items[:spec.max_rows] if spec.max_rows else items:
-            files = sorted(f for f in item.rglob("*") if supported(f)) if item.is_dir() else [item]
-            if files:
-                yield import_paths(files).listing.to_dict()
+        items = listing_items(path)
+        for files in items[:spec.max_rows] if spec.max_rows else items:
+            yield import_paths(files).listing.to_dict()
         return
     if spec.source == "jsonl":
         with path.open(encoding="utf-8") as f:
@@ -240,12 +236,29 @@ def row_to_listing(row: dict, spec: DatasetSpec, idx: int) -> Listing | None:
         location=_clean(data.get("location")),
         seller_account_age_days=_clean(data.get("seller_account_age_days")),
         seller_num_ratings=_clean(data.get("seller_num_ratings")),
+        seller_type=_clean(data.get("seller_type")),
+        seller_badges=_as_list(data.get("seller_badges")),
+        seller_num_ads=_clean(data.get("seller_num_ads")),
+        seller_legal_form=_clean(data.get("seller_legal_form")),
         messages=_as_list(data.get("messages")),
         image_paths=images,
         label=label,
         scam_type=_clean(data.get("scam_type")),
         source=spec.name,
+        url=_clean(data.get("url")),
+        warnsignale=[w for w in _clean(data.get("warnsignale")) or [] if isinstance(w, dict)],
     )
+
+
+def iter_listings(spec: DatasetSpec) -> Iterator[Listing]:
+    """Alle verwertbaren Einträge eines Datensatzes – auch ohne Label (z. B. für die Einstufung)."""
+    for idx, row in enumerate(_iter_rows(spec)):
+        listing = row_to_listing(row, spec, idx)
+        if listing is None or not (listing.full_text or listing.image_paths):
+            continue
+        if spec.german_only and spec.modality != "image" and not looks_german(listing.full_text):
+            continue
+        yield listing
 
 
 def load_spec(spec: DatasetSpec) -> LoadReport:

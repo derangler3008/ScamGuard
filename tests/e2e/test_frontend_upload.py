@@ -1,7 +1,7 @@
 """Upload im Streamlit-Frontend mit echtem Browser: Screenshot hineinziehen → Betrug → gespeichert.
 
-Die App läuft als eigener Streamlit-Prozess; ihre Labels landen in einem Temp-Ordner (Wrapper-Skript),
-nie in data/raw/eigene_labels.jsonl.
+Die App läuft als eigener Streamlit-Prozess; ihre Labels und die Ordner-Ablage landen in einem
+Temp-Ordner (Wrapper-Skript), nie in data/raw/ oder data/datensatz_fuellen_inserate/.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ sys.path.insert(0, {str(ROOT / "src")!r})
 from scamguard.data import labels
 labels.LABEL_FILE = os.environ["SG_LABEL_FILE"]
 labels.LABEL_IMAGE_DIR = os.environ["SG_LABEL_IMAGES"]
+labels.DATASET_DIR = os.environ["SG_DATASET_DIR"]
 runpy.run_path({str(ROOT / "frontend" / "app.py")!r}, run_name="__main__")
 """
 
@@ -39,7 +40,7 @@ def streamlit_app(tmp_path):
     wrapper = tmp_path / "app_wrapper.py"
     wrapper.write_text(WRAPPER, encoding="utf-8")
     env = {**os.environ, "SG_LABEL_FILE": str(tmp_path / "labels.jsonl"),
-           "SG_LABEL_IMAGES": str(tmp_path / "label_bilder")}
+           "SG_LABEL_IMAGES": str(tmp_path / "label_bilder"), "SG_DATASET_DIR": str(tmp_path / "datensatz")}
     proc = subprocess.Popen(
         [sys.executable, "-m", "streamlit", "run", str(wrapper), "--server.port", str(port),
          "--server.address", "127.0.0.1", "--server.headless", "true",
@@ -99,3 +100,5 @@ def test_upload_screenshot_and_label_as_scam(streamlit_app, tmp_path):
     assert len(stored) == 1
     assert stored[0]["label"] == 1 and stored[0]["title"] == "PlayStation 5 Disc Edition"
     assert stored[0]["price"] == 120.0 and "Freunde und Familie" in stored[0]["description"]
+    # Ordner-Ablage im Temp-Ordner – nie im echten data/datensatz_fuellen_inserate/
+    assert list((tmp_path / "datensatz").glob("betrug/*/*/inserat.json"))

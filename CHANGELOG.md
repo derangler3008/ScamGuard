@@ -2,12 +2,71 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
-## [Unveröffentlicht]
+## [0.8.0] – 2026-10-05
 
 ### Hinzugefügt
-- Teamarbeit: `CLAUDE.md` (Claude Code liest Projektwissen und Teamregeln automatisch),
-  `docs/mit_claude_arbeiten.md` mit fertigen Prompts für die Gruppenaufgaben, README-Abschnitt
-  „Zusammenarbeit im Team“ (Branches `Jannis`/`Gabriel`, Pull Requests, Einstufungen teilen).
+- **Annotation-Workspace** (Web-App, Tab *Einstufen im Team*; `scamguard einstufen holen|bericht|export`;
+  Ablauf und Methodik in `docs/einstufung.md`):
+  - **Kategoriensystem** `data/einstufung/kategorien.yaml` (Entwurf zum Anpassen): Entscheidungsregeln,
+    Urteil, 11 Maschen (neu u. a. Käuferbetrug per Rückbuchung, Mietbetrug, Tiertransport – je mit
+    Zuordnung zu den Qwen-Kategorien), 11 Warnsignale auf Satzebene (je mit den passenden Regel-Codes),
+    Bildarten (je mit CLIP-Klasse); Definition, Beispiel, Abgrenzung; als *Leitfaden* in der Web-App.
+  - **Drei Ebenen**: Urteil mit Sicherheit, Masche, wer täuscht, Sprache; jeder Satz mit Warnsignal;
+    jedes Bild mit Art und „selbst verdächtig?“. Deutsche Satztrennung (Abkürzungen, Ordnungszahlen).
+  - **Aufgaben** aus jedem Datensatz (auch Hugging Face, Prüfliste, eigene Labels) oder eigenem Text
+    (nur mit Zustimmung); Kontaktdaten beim Hinzufügen anonymisiert, Name/Ort/Link entfernt, stabile
+    Inhalts-ID; optional ausgewogen je Label der Quelle.
+  - **Mehrere Personen**: Jede schreibt nur eigene Dateien (gemeinsamer Ordner über
+    `SCAMGUARD_EINSTUFUNG_ORDNER` ohne Sync-Konflikte, sonst Dateien austauschen – nur ergänzen, nie
+    ersetzen). Ein fester Anteil (`einstufung.doppelt_anteil`, 25 %) wird von zwei Personen unabhängig
+    eingestuft; Auswahl folgt aus der ID, Zweitmeinungen kommen zuerst, Reihenfolge je Person eigen.
+  - **Gegen Verzerrung**: Label der Quelle erst nach dem eigenen Urteil, Regel-Hinweise standardmäßig aus.
+  - **Qualität**: Krippendorffs α (nominal, fehlende Werte erlaubt; geprüft am veröffentlichten
+    Beispiel, α = 0,743) und Cohens κ je Ebene (Urteil, Masche, Satz, Bild), Konflikte mit Entscheidung
+    und Begründung, Auffälligkeiten (sehr schnell, Betrug ohne markierten Satz …), Widerspruchsquote zum
+    Label der Quellen, **Regeln gegen Mensch** (Precision/Recall je Warnsignal, verpasste Sätze).
+  - **Konsens und Export** nach `data/raw/einstufung_{konsens,saetze,bilder}.jsonl`; Datensatz
+    `einstufungen` steht in der Registry vorn, sein Label schlägt bei Dubletten das der Quelle.
+- **Feintuning mit menschlichen Begründungen**: `scamguard llm-daten` nimmt markierte Sätze als
+  `red_flags` und bildet Maschen über das Kategoriensystem auf die Qwen-Kategorien ab; Regel-Treffer
+  nutzen dieselben Codes.
+- `Listing.warnsignale` (satzgenaue Warnsignale aus der Einstufung).
+- **Anbieter-Merkmale** (`features/seller.py`): Extension und Import gespeicherter Seiten/Screenshots lesen
+  privat/gewerblich, Bewertungs-Abzeichen („TOP Zufriedenheit“, „Sehr freundlich“, „Besonders zuverlässig“),
+  Zahl der Anzeigen und die Rechtsform aus dem Anbieternamen (GmbH, UG, AG, GbR, OHG, KG, e.K. …; der
+  Name selbst wird nicht gespeichert). Neue Felder `seller_type`, `seller_badges`, `seller_num_ads`,
+  `seller_legal_form`. Warnsignale: hochpreisig ohne Bewertungen, „NA JA“-Zufriedenheit, Firmenname bei
+  „Privater Nutzer“. Kontext (`Signal.info`, kein Warnsignal): Anbieterprofil, gewerblicher Anbieter,
+  Dienstleistung/Werbung ohne Festpreis – im Panel und in der Web-App getrennt angezeigt, auch an Qwen.
+  Bei gewerblichen Anbietern zählen Telefonnummer, Mail, Website und WhatsApp-Hinweis nur noch schwach.
+- Kategorie **Dienstleistungen** (hat Vorrang vor Unterkategorien wie „Auto, Rad & Boot“).
+- **Ablage beim Labeln:** Jede Einstufung (Extension, Upload, Formular) landet zusätzlich als Ordner in
+  `data/datensatz_fuellen_inserate/<label>/<kategorie>[-gewerblich]/<titel>__<schlüssel>/` mit
+  `inserat.json` und Fotos; Umentscheiden verschiebt den Ordner. `scamguard data ordner` übernimmt
+  bisherige Labels. Solche Ordner werden ohne Texterkennung eingelesen, Kategorie-Ordner als Ebene erkannt.
+- Chat-Screenshots in Inserats-Ordnern: Dateien `chat…` werden als Chat-Nachrichten gelesen.
+- Entwicklerdoku: `CONTRIBUTING.md` (Setup, Checks, Branch- und PR-Workflow, Konventionen),
+  `docs/backlog.md` (offene Aufgaben mit Akzeptanzkriterien), README überarbeitet (Produktüberblick,
+  Datenquellen als Tabelle, Abschnitt „Entwicklung“ mit Branches und Label-Austausch).
+
+### Behoben
+- **Neues Kleinanzeigen-Layout** (seit 10/2026, parallel zum alten): Kategorie (Brotkrumen ohne die alte
+  Klasse) und Fotos (Galerie ohne `#viewad-product`) fehlten – gelabelte Inserate landeten als
+  „sonstiges“ und ohne Bilder. Gelesen wird jetzt über IDs und die schema.org-Auszeichnung; Fotos aus dem
+  Bereich um Titel und Beschreibung (ohne „ähnliche Anzeigen“), Kontoalter aus „Aktiv seit“.
+- **GBERT-Training mit transformers 5:** `deepset/gbert-base` hat weder `model_type` noch `tokenizer.json`
+  und wurde nicht mehr erkannt (irreführende Meldung „sentencepiece or tiktoken“). Ältere BERT-Modelle
+  werden jetzt direkt mit den BERT-Klassen geladen.
+- „Jetzt neu trainieren“: Lässt sich ein Zusatzmodell (GBERT, Bildmodell) nicht trainieren, wird es mit
+  Begründung übersprungen statt das ganze Training abzubrechen; das Bildmodell meldet fehlende Fotos bzw.
+  nur eine Klasse verständlich.
+- Beim Einlesen von JSONL-Datensätzen gingen URL und Anbieter-Felder verloren.
+
+### Geändert
+- **Dubletten-Erkennung** (`listing_fingerprint`) vergleicht anonymisierte Texte: Original und
+  anonymisierte Fassung sowie Vorlagentexte, die sich nur in Nummer oder Mailadresse unterscheiden,
+  gelten als dasselbe Inserat (kein Leck zwischen Training und Test).
+- Maschen-Auswahl beim schnellen Einstufen (Upload-Tab) kommt aus dem Kategoriensystem.
 
 ## [0.7.0] – 2026-10-05
 
@@ -82,7 +141,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 ## [0.5.2] – 2026-10-02
 
 ### Geändert
-- Keine Emojis mehr (User-Wunsch: „sieht zu sehr nach KI aus“). Extension: schlichte SVG-Linien-Icons
+- Keine Emojis mehr – schlichteres, einheitliches Erscheinungsbild. Extension: schlichte SVG-Linien-Icons
   (`extension/lib/icons.js`, Schild mit Lupe wie das Toolbar-Icon), Schweregrade als CSS-Formen
   (Dreieck/Raute/Kreis – weiterhin nicht nur über Farbe unterscheidbar), Buttons nur mit Text.
   Web-App: Text-Tabs, farbige Labels („Hoch“, „aktiv“), dezente Material-Icons, App-Icon = Extension-Icon.
@@ -125,7 +184,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - Einstufen im Tab „Felder selbst eingeben“ direkt unter dem Ergebnis (ersetzt den Tab „Labeln“).
 - Trainingslogik aus der CLI nach `scamguard/training.py` (CLI und Frontend nutzen dieselbe).
 - „Über das Projekt“ und README: welche Bausteine neuronale Netze sind, was vortrainiert ist und was
-  ihr trainiert; Abschnitt „Eigenleistung“.
+  selbst trainiert wird.
 
 ## [0.4.1] – 2026-10-02
 

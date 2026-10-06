@@ -4,7 +4,7 @@ Start:  scamguard api   →  Doku unter http://127.0.0.1:8000/docs
 Bilder werden nur temporär gespeichert und nach dem Scan gelöscht.
 
 Schutz gegen Cross-Site-Anfragen: Ohne Gegenmaßnahme könnte jede geöffnete Webseite im
-Hintergrund an http://127.0.0.1:8000/scan posten (mit use_llm=true sogar auf eure API-Kosten).
+Hintergrund an http://127.0.0.1:8000/scan posten (mit use_llm=true sogar auf Kosten des API-Kontos).
 Deshalb verlangt /scan den Header `X-ScamGuard-Client`. Webseiten können eigene Header nur nach
 einem CORS-Preflight senden, den diese API nie erlaubt – die Extension (mit Host-Berechtigung),
 Skripte und Tests dagegen schon. Zusätzlich werden fremde `Origin`-Header abgewiesen.

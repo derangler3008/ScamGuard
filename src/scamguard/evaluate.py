@@ -1,6 +1,6 @@
 """Auswertung auf einem Split: Kennzahlen pro Einzelmodell und für die Fusion.
 
-Für den Projektbericht: ROC-AUC (schwellenunabhängig), Precision/Recall/F1 an der
+Kennzahlen: ROC-AUC (schwellenunabhängig), Precision/Recall/F1 an der
 „verdächtig“-Schwelle, und eine Aufschlüsselung nach Datenquelle.
 """
 

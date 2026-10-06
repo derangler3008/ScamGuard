@@ -21,7 +21,7 @@ Passt ein Datensatz nicht in das Spalten-Schema (z. B. Text muss erst zusammenge
 gebt eine `transform`-Funktion mit: bekommt eine Zeile (dict), gibt eine Zeile zurück (oder None
 zum Überspringen). Beispiel: `_beispiel_transform` unten.
 
-Lizenzen beachten! Für den Projektbericht pro Datensatz Quelle + Lizenz dokumentieren.
+Lizenzen beachten! Pro Datensatz Quelle und Lizenz dokumentieren.
 """
 
 from __future__ import annotations
@@ -67,6 +67,17 @@ def _beispiel_transform(row: dict) -> dict | None:
 
 DATASETS: list[DatasetSpec] = [
     # ------------------------------------------------------------------ eigene Daten
+    # Steht vorn: Beim Entfernen von Duplikaten gewinnt der erste Datensatz – so schlägt das
+    # Konsens-Label aus der Einstufung das Label der Quelle (z. B. eine Prüfliste oder Demo-Daten).
+    DatasetSpec(
+        name="einstufungen",
+        source="jsonl",
+        path="data/raw/einstufung_konsens.jsonl",  # Export der Annotation-Workspace (annotation.py)
+        enabled=True,
+        german_only=False,                         # von Menschen eingestuft → nie per Sprachfilter verwerfen
+        license="eigene Einstufungen; Texte gemäß ihrer jeweiligen Quelle",
+        notes="Konsens aus dem Tab „Einstufen im Team“ (mehrere Personen, satzgenaue Warnsignale).",
+    ),
     DatasetSpec(
         name="demo_synthetisch",
         source="jsonl",

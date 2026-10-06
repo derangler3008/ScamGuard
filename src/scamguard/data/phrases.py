@@ -4,7 +4,7 @@ Verfahren: Log-Odds-Ratio mit informativem Dirichlet-Prior („Fightin' Words“
 Quinn 2008). Es vergleicht, wie viele Betrugs- bzw. seriöse Texte eine Wortfolge enthalten, und
 dämpft seltene Wortfolgen über den Prior – anders als ein einfaches Verhältnis landen so keine
 Einzelfunde oben. Das Ergebnis (z-Wert) ist eine Kandidatenliste für Menschen, kein Lexikon:
-Sinnvolle Treffer prüft ihr und übernehmt sie als Muster in data/lexicons/scam_signals_de.yaml.
+Sinnvolle Treffer werden geprüft und als Muster in data/lexicons/scam_signals_de.yaml übernommen.
 """
 
 from __future__ import annotations

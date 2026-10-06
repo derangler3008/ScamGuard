@@ -32,6 +32,7 @@
     // damit kürzere darin enthaltene Stellen der längeren Markierung zugeordnet werden.
     const byNeedle = new Map();
     for (const s of signals) {
+      if (s.info) continue; // Kontext wie das Anbieterprofil wird nicht als Fundstelle markiert
       for (const needle of s.highlights ?? []) {
         const key = needle.trim().toLowerCase().replace(/\s+/g, " ");
         if (key.length < MIN_NEEDLE_LENGTH) continue;
@@ -45,6 +46,7 @@
     }
 
     for (const s of signals) {
+      if (s.info) continue;
       const el = resolveTarget(s.target, extracted, uploadedImageIndices);
       if (el && SG.highlight.markElement(el, [s])) marked.add(s.id);
     }

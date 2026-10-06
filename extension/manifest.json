@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ScamGuard – Kleinanzeigen-Check",
   "short_name": "ScamGuard",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Markiert Betrugsindikatoren in Kleinanzeigen und im Kleinanzeigen-Chat direkt auf der Seite und zeigt einen Risiko-Score. Analyse lokal über den ScamGuard-Server.",
   "minimum_chrome_version": "116",
   "icons": {

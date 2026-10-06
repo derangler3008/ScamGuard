@@ -8,15 +8,16 @@ Ablauf (Details in docs/llm_feintuning.md):
 
 Format: Chat-Format von mlx_lm (eine Zeile = {"messages": [system, user, assistant]}). System- und
 Nutzernachricht sind exakt die, die der LLM-Judge im Betrieb schickt – das Modell lernt also genau
-die Aufgabe, die es später löst. Die Zielantwort (assistant) wird aus euren Daten gebaut:
+die Aufgabe, die es später löst. Die Zielantwort (assistant) wird aus den eigenen Daten gebaut:
 
   scam_probability   aus dem Label (0.9 Betrug / 0.1 seriös)
-  scam_type          aus dem Feld scam_type des Datensatzes, sonst aus den Regel-Treffern abgeleitet
-  red_flags          die stärksten Regel-Treffer mit wörtlichem Zitat (nur bei Betrug)
-  summary            kurzer Satz aus den Treffern
+  scam_type          aus der Masche (Einstufung bzw. Feld scam_type), sonst aus den Regel-Treffern
+  red_flags          die von Menschen markierten Sätze (Tab „Einstufen“), sonst die stärksten
+                     Regel-Treffer mit wörtlichem Zitat (nur bei Betrug)
+  summary            kurzer Satz aus den Warnsignalen
 
-Damit lernt Qwen eure Labels (wann ist etwas Betrug?) und das Antwortformat. Die Begründungen sind nur
-so gut wie die Regeln (Weak Supervision) – für bessere schreibt ihr für einige Beispiele eigene.
+Damit lernt Qwen die eigenen Labels (wann ist etwas Betrug?) und das Antwortformat. Ohne satzgenaue
+Einstufung sind die Begründungen nur so gut wie die Regeln (Weak Supervision).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from pathlib import Path
 
 from scamguard.config import load_config, resolve_path
 from scamguard.data.build import read_split
+from scamguard.data.codebook import load_codebook
 from scamguard.features import extract_features
 from scamguard.models.llm_judge import (
     JSON_INSTRUCTIONS,
@@ -70,7 +72,7 @@ def _scam_type(listing: Listing, signals: list[Signal]) -> str:
     if listing.label == 0:
         return "keiner"
     given = (listing.scam_type or "").strip().lower()
-    given = SCAM_TYPE_ALIASES.get(given, given)
+    given = SCAM_TYPE_ALIASES.get(given) or load_codebook().llm_type(given) or given
     if given in SCAM_TYPES:
         return given
     for s in signals:  # stärkstes Signal zuerst
@@ -88,11 +90,19 @@ def target_answer(listing: Listing, cfg: dict) -> dict:
     language = "gebrochen" if len(codes & BROKEN_LANGUAGE) >= 2 else (
         "leichte_fehler" if codes & BROKEN_LANGUAGE else "muttersprachlich")
     flags = []
-    if listing.label == 1:
+    codebook = load_codebook()
+    if listing.label == 1 and listing.warnsignale:  # von Menschen markierte Sätze haben Vorrang
+        for w in listing.warnsignale[:MAX_RED_FLAGS]:
+            flags.append({"code": w["signal"],
+                          "explanation": _shorten(codebook.name("signale", w["signal"]), MAX_WORDS_EXPLANATION),
+                          "evidence": _shorten(w.get("text", ""), MAX_WORDS_EVIDENCE)})
+    elif listing.label == 1:
+        by_rule = codebook.signal_by_rule  # gleiche Codes wie bei menschlichen Markierungen
         for s in signals:
             if not s.evidence or len(flags) >= MAX_RED_FLAGS:
                 continue
-            flags.append({"code": s.code.lower(), "explanation": _shorten(s.message, MAX_WORDS_EXPLANATION),
+            flags.append({"code": by_rule.get(s.code, s.code.lower()),
+                          "explanation": _shorten(s.message, MAX_WORDS_EXPLANATION),
                           "evidence": _shorten(s.evidence, MAX_WORDS_EVIDENCE)})
     if listing.label == 1:
         summary = ("Betrug wahrscheinlich: " + "; ".join(f["explanation"] for f in flags[:2])

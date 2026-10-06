@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from scamguard.config import load_config
@@ -46,6 +46,7 @@ class RetrainResult:
     stats: dict            # Umfang, Splits, Quellen
     saved: dict[str, Path]
     evaluation: dict       # Kennzahlen auf dem Testset
+    skipped: dict[str, str] = field(default_factory=dict)  # Zusatzmodell → Grund, warum nicht trainiert
 
     @property
     def fusion(self) -> dict:
@@ -72,8 +73,15 @@ def retrain(transformer: bool = False, images: bool = False, include_demo: bool 
         log(warning)
     cfg = load_config()
     train, val = read_split("train"), read_split("val")
-    saved = {}
+    saved, skipped = {}, {}
     for model in ["text-baseline"] + ["text-transformer"] * transformer + ["image"] * images:
         log(f"Trainiere {model} …")
-        saved[model] = train_model(model, train, val, cfg)
-    return RetrainResult(reports, stats, saved, evaluate("test"))
+        try:
+            saved[model] = train_model(model, train, val, cfg)
+        except (ValueError, ImportError, OSError) as exc:
+            if model == "text-baseline":  # ohne Baseline gibt es nichts auszuwerten
+                raise
+            # Zusatzmodelle (GBERT, CNN) dürfen fehlen – der Rest wird trotzdem trainiert und ausgewertet
+            skipped[model] = str(exc)
+            log(f"{model} übersprungen: {exc}")
+    return RetrainResult(reports, stats, saved, evaluate("test"), skipped)

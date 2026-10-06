@@ -3,6 +3,8 @@
   scamguard data list                 Registrierte Datensätze anzeigen
   scamguard data build [--only A B]   Datensätze laden → data/processed/{train,val,test}.jsonl
   scamguard data sammeln [--max N]    Öffentliche Betrugswarnungen (Mails, SMS, Chats) als Textdaten
+  scamguard data ordner               Eigene Labels als Ordner ablegen (Label/Kategorie/Inserat)
+  scamguard einstufen holen|bericht|export   Annotation-Workspace (sonst Web-App, Tab „Einstufen im Team“)
   scamguard retrain [--bilder] [--ohne-demo]  Daten + eigene Labels einlesen, neu trainieren
   scamguard train text-baseline       TF-IDF + LogReg (Sekunden, CPU)
   scamguard train text-transformer    GBERT-Feintuning (GPU empfohlen)
@@ -64,6 +66,12 @@ def _cmd_data(args) -> int:
         return 0
     if args.action == "phrasen":
         return _phrasen(args)
+    if args.action == "ordner":
+        from scamguard.data.labels import DATASET_DIR, sync_dataset_folders
+
+        print(f"{sync_dataset_folders()} eingestufte Inserate nach {DATASET_DIR}/ übernommen "
+              "(Label/Kategorie/Inserat mit inserat.json und Fotos).")
+        return 0
     if args.action == "list":
         for s in get_specs(include_disabled=True):
             status = "AKTIV " if s.enabled else "aus   "
@@ -142,6 +150,68 @@ def _cmd_llm_data(args) -> int:
     return 0
 
 
+def _fmt(value: float | None, pct: bool = False) -> str:
+    if value is None:
+        return "–"
+    return f"{value:.0%}" if pct else f"{value:.2f}"
+
+
+def _cmd_annotate(args) -> int:
+    """Annotation-Workspace ohne Web-App: Aufgaben holen, Qualitätsbericht, Export."""
+    from scamguard.data.annotation import EXPORT_DIR, Werkstatt, person_key
+    from scamguard.data.registry import get_specs
+
+    ws = Werkstatt()
+    if args.action == "holen":
+        person = person_key(args.person or "")
+        if not person:
+            print("Bitte --person NAME angeben (z. B. --person Jannis).")
+            return 1
+        if args.datei:
+            path = Path(args.datei).expanduser()
+            print(f"{path.name}: {ws.zusammenfuehren(path.name, path.read_bytes(), person)} neue Zeilen übernommen")
+            return 0
+        if not args.datensatz:
+            print("Bitte --datensatz NAME (siehe `scamguard data list`) oder --datei angeben.")
+            return 1
+        spec = get_specs([args.datensatz])[0]
+        new, existing = ws.hinzufuegen_aus_datensatz(spec, person, args.max, not args.unausgewogen)
+        print(f"{new} neue Aufgaben aus {spec.name}" + (f" ({existing} waren schon da)" if existing else ""))
+        return 0
+
+    if args.action == "export":
+        counts = ws.export()
+        print(f"{counts['konsens']} Texte, {counts['saetze']} Sätze, {counts['bilder']} Bilder → {EXPORT_DIR}/einstufung_*.jsonl")
+        print("Weiter mit `scamguard retrain --ohne-demo` bzw. `scamguard data build` und `scamguard llm-daten`.")
+        return 0
+
+    report = ws.bericht()
+    print(f"Aufgaben {report['aufgaben']} · eingestuft {report['eingestuft']} · von zwei oder mehr "
+          f"{report['doppelt_eingestuft']} · Konflikte {len(report['konflikte'])}")
+    print("Je Person: " + (", ".join(f"{p} {n}" for p, n in sorted(report["personen"].items())) or "–"))
+    print("Status: " + (", ".join(f"{s} {n}" for s, n in sorted(report["status"].items())) or "–"))
+    print("\nÜbereinstimmung (Krippendorffs α; ≥ 0,80 verlässlich, ≥ 0,667 vorläufig):")
+    for r in report["uebereinstimmung"]:
+        print(f"  {r['ebene']:28s} n={r['einheiten']:4d}  α={_fmt(r['alpha']):>5s}  gleich={_fmt(r['prozent'], True):>4s}"
+              f"  {r['einschaetzung']}")
+    for r in report["kappa"]:
+        print(f"  Cohens κ {r['paar']}: {_fmt(r['kappa'])} (n={r['n']})")
+    for q in report["quellen"]:
+        print(f"Quelle {q['quelle']}: {q['widerspruch']} von {q['n']} widersprechen eurem Urteil")
+    for a in report["auffaelligkeiten"][:20]:
+        print(f"Hinweis {a['aufgabe'][:8]} ({a['person']}): {a['hinweis']}")
+    if args.regeln:
+        check = ws.regeln_gegen_mensch()
+        print(f"\nRegeln gegen Mensch ({check['saetze']} Sätze): Precision {_fmt(check['gesamt']['precision'], True)}, "
+              f"Recall {_fmt(check['gesamt']['recall'], True)}")
+        for r in check["je_signal"]:
+            print(f"  {r['name']:38s} richtig={r['tp']:3d} fehlalarm={r['fp']:3d} verpasst={r['fn']:3d}  "
+                  f"P={_fmt(r['precision'], True):>4s} R={_fmt(r['recall'], True):>4s}")
+        for row in check["verpasst"]:
+            print(f"  verpasst [{row['signal']}]: {row['text'][:110]}")
+    return 0
+
+
 def _cmd_train(args) -> int:
     from scamguard.data.build import read_split
     from scamguard.training import train_model
@@ -160,6 +230,8 @@ def _cmd_retrain(args) -> int:
     _print_build(result.reports, result.stats)
     for model, path in result.saved.items():
         print(f"  {model} gespeichert: {path}")
+    for model, reason in result.skipped.items():
+        print(f"  {model} nicht trainiert: {reason}")
     fusion = result.fusion
     auc = f", AUC {fusion['roc_auc']:.2f}" if "roc_auc" in fusion else ""
     print(f"Testset ({fusion['n']} Beispiele): Precision {fusion['precision']:.2f}, "
@@ -407,9 +479,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("data", help="Datensätze verwalten")
-    p.add_argument("action", choices=["list", "build", "sammeln", "phrasen"],
+    p.add_argument("action", choices=["list", "build", "sammeln", "phrasen", "ordner"],
                    help="sammeln = Betrugswarnungen und Foren-Erfahrungen als Textdaten holen; "
-                        "phrasen = typische Betrugs-Wortfolgen finden (Kandidaten fürs Lexikon)")
+                        "phrasen = typische Betrugs-Wortfolgen finden (Kandidaten fürs Lexikon); "
+                        "ordner = bisherige eigene Labels in die Datensatz-Ordner übernehmen")
     p.add_argument("--only", nargs="+", help="Nur diese Datensätze (Namen aus registry.py)")
     p.add_argument("--max", type=int, help="sammeln: höchstens so viele Seiten je Quelle bzw. Thread")
     p.add_argument("--quellen", nargs="+", choices=["watchlist_alarm", "vz_radar", "watchlist_news", "foren"],
@@ -418,6 +491,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--hf", action="store_true",
                    help="phrasen: auch inaktive Hugging-Face-Datensätze aus huggingface.yaml einbeziehen")
     p.set_defaults(func=_cmd_data)
+
+    p = sub.add_parser("einstufen", help="Annotation-Workspace: Aufgaben holen, Qualität prüfen, exportieren")
+    p.add_argument("action", choices=["holen", "bericht", "export"],
+                   help="holen = Texte als Aufgaben aufnehmen; bericht = Übereinstimmung, Konflikte, "
+                        "Auffälligkeiten; export = Konsens in die Trainingsdaten (data/raw/einstufung_*.jsonl)")
+    p.add_argument("--person", help="holen: wer die Aufgaben hinzufügt (z. B. Jannis)")
+    p.add_argument("--datensatz", help="holen: Name aus `scamguard data list`, z. B. datei:gesammelt_foren.csv")
+    p.add_argument("--datei", help="holen: Datei aus dem Team übernehmen (aufgaben_/einstufungen_<name>.jsonl)")
+    p.add_argument("--max", type=int, default=50, help="holen: höchstens so viele neue Aufgaben (Standard 50)")
+    p.add_argument("--unausgewogen", action="store_true",
+                   help="holen: zufällig ziehen statt gleich viele je Label der Quelle")
+    p.add_argument("--regeln", action="store_true", help="bericht: Regel-Erkennung satzgenau gegen die Einstufungen prüfen")
+    p.set_defaults(func=_cmd_annotate)
 
     p = sub.add_parser("train", help="Modell trainieren")
     p.add_argument("model", choices=["text-baseline", "text-transformer", "image"])

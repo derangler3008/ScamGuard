@@ -27,7 +27,7 @@ from typing import Any
 import yaml
 
 from scamguard.config import resolve_path
-from scamguard.data.listing_import import SUPPORTED_SUFFIXES
+from scamguard.data.listing_import import listing_items
 from scamguard.data.loaders import IMAGE_SUFFIXES
 from scamguard.data.registry import DatasetSpec
 
@@ -129,7 +129,7 @@ def _spec_for_file(path: Path) -> DatasetSpec:
         modality="multimodal" if "image" in column_map else "text",
         column_map=column_map, label_column=label_column, label_map=LABEL_WORDS,
         read_kwargs=read_kwargs, base_dir=str(path.parent),
-        enabled=not problems, license="eigene Daten – Quelle im Bericht angeben",
+        enabled=not problems, license="eigene Daten – Quelle dokumentieren",
         notes=("Nicht verwendbar: " + "; ".join(problems)) if problems
         else f"Automatisch erkannt: {mapped}, Label←{label_column}",
     )
@@ -180,13 +180,12 @@ def _specs_from_label_dirs(folder: Path, kind: str) -> list[DatasetSpec]:
             count = sum(1 for f in sub.rglob("*") if f.suffix.lower() in IMAGE_SUFFIXES)
             unit, source, modality = "Bilder", "imagefolder", "image"
         else:
-            count = sum(1 for f in sub.iterdir() if not f.name.startswith(("_", "."))
-                        and (f.is_dir() or f.suffix.lower() in SUPPORTED_SUFFIXES))
+            count = len(listing_items(sub))
             unit, source, modality = "Inserate", "listingfolder", "multimodal"
         specs.append(DatasetSpec(
             name=f"{kind}:{sub.name}", source=source, path=str(sub), modality=modality,
             fixed_label=label, german_only=False, enabled=label is not None and count > 0,
-            license=f"eigene {unit} – Quelle im Bericht angeben",
+            license=f"eigene {unit} – Quelle dokumentieren",
             notes=(f"{count} {unit}, Label {'Betrug' if label else 'seriös'}" if label is not None
                    else "Ordnername ist kein Label – „betrug“ oder „serioes“ verwenden"),
         ))

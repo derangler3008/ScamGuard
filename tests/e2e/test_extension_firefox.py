@@ -84,7 +84,7 @@ def _start_driver(binary: str, profile: Path):
     """Startet Firefox mit Wegwerf-Profil und verbindet Selenium.
 
     macOS: Firefox wird über LaunchServices (`open`) als eigenständige App gestartet und Selenium
-    verbindet sich per Marionette. Direkt aus einer anderen App (IDE, Claude, …) gestartet, erbt
+    verbindet sich per Marionette. Direkt aus einer anderen App (IDE, Terminal-App …) gestartet, erbt
     Firefox deren macOS-Datenschutzrechte und darf sein eigenes Datenverzeichnis nicht lesen
     („Could not find profile folder.“).
     """
@@ -184,7 +184,7 @@ def test_scam_listing_is_marked_and_scored(firefox, site):
     # Panel-Styles greifen (Fallback auf <style>, weil Firefox adoptedStyleSheets blockiert)
     card = _panel(firefox).find_element(By.CSS_SELECTOR, ".card")
     assert card.value_of_css_property("border-radius") == "12px"
-    if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bilder für Doku/Bericht
+    if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bilder für die Doku
         firefox.set_window_size(1280, 900)
         firefox.save_screenshot(f"{shots}/firefox_inserat.png")
 

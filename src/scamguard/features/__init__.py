@@ -9,6 +9,7 @@ from scamguard.features.contact import analyze_contacts
 from scamguard.features.language import analyze_language
 from scamguard.features.price import analyze_price
 from scamguard.features.scam_phrases import match_phrases
+from scamguard.features.seller import analyze_seller, business_contact_adjust
 from scamguard.schema import Listing, Signal
 
 
@@ -26,10 +27,12 @@ def extract_features(listing: Listing, cfg: dict) -> ListingFeatures:
     contact = analyze_contacts(text)
     language = analyze_language(text)
     price_vec, price_signals = analyze_price(listing, price_ref)
+    seller_vec, seller_signals = analyze_seller(listing)
     phrase_signals = match_phrases(text, lexicon)
 
-    vector = {**contact.as_vector(), **language.as_vector(), **price_vec,
+    vector = {**contact.as_vector(), **language.as_vector(), **price_vec, **seller_vec,
               "n_phrase_groups": float(len(phrase_signals)),
               "n_images": float(len(listing.image_paths))}
-    signals = [*phrase_signals, *contact.signals, *price_signals, *language.signals]
+    signals = [*phrase_signals, *contact.signals, *price_signals, *seller_signals, *language.signals]
+    business_contact_adjust(listing, signals)
     return ListingFeatures(vector=vector, signals=signals)

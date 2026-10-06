@@ -41,6 +41,8 @@
     .mid .meter span { background: #f79009; }
     .sub, .models, .foot, .hint { color: #475467; margin: 6px 0; }
     .summary { background: #f9fafb; border-radius: 8px; padding: 8px; margin: 8px 0; }
+    .info { list-style: none; margin: 8px 0 0; padding: 8px; border-radius: 8px; background: #f5f8ff;
+      display: grid; gap: 4px; color: #344054; font-size: 12px; }
     .ai { margin: 6px 0; font-size: 12px; }
     .labeling { border-top: 1px solid #eaecf0; margin-top: 10px; padding-top: 8px; }
     .label-title, .label-status { margin: 0 0 6px; color: #475467; font-size: 12px; }
@@ -80,6 +82,7 @@
       .icon:hover, .sig:hover { background: #283548; border-color: #344054; }
       .sub, .models, .foot, .hint, .sig .ev, .sig .where { color: #cbd2dc; }
       .summary, code { background: #283548; }
+      .info { background: #22314a; color: #cbd2dc; }
       .meter { background: #344054; }
       .high .pct, .high .verdict { color: #fda29b; } .mid .pct, .mid .verdict { color: #fec84b; }
       .ok .pct, .ok .verdict { color: #75e0a7; }
@@ -211,7 +214,9 @@
     const pct = Math.round(result.score * 100);
     const v = VERDICTS[result.verdict] ?? { cls: "", icon: null, label: result.verdict };
     const summary = result.signals.find((s) => s.code === "LLM_SUMMARY");
-    const signals = result.signals.filter((s) => s.code !== "LLM_SUMMARY");
+    // Kontext (Anbieterprofil, Händler, Werbung) getrennt von den Warnsignalen anzeigen
+    const info = result.signals.filter((s) => s.info);
+    const signals = result.signals.filter((s) => s.code !== "LLM_SUMMARY" && !s.info);
     const visible = showAll ? signals : signals.slice(0, MAX_VISIBLE_SIGNALS);
     const markedCount = signals.filter((s) => marked.has(s.id)).length;
 
@@ -235,6 +240,9 @@
       }),
     ];
     if (context) parts.push(h("p", { class: "sub", text: context }));
+    if (info.length) {
+      parts.push(h("ul", { class: "info", "aria-label": "Zum Anbieter" }, info.map((s) => h("li", { text: s.message }))));
+    }
     if (summary) parts.push(h("p", { class: "summary" }, h("strong", { text: "KI-Einschätzung: " }), summary.message));
     // KI-Analyse: läuft noch / nicht verfügbar (z. B. lokales Modell nicht gestartet)
     const llm = result.model_results.find((r) => r.name === "llm");

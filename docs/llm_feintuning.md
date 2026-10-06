@@ -1,8 +1,8 @@
 # Qwen selbst feintunen (LoRA mit MLX)
 
 ScamGuard nutzt Qwen3.5-9B als LLM-Judge. Ohne Training kennt das Modell nur allgemeines Wissen über
-Betrugsmaschen. Mit Feintuning lernt es **eure** Einstufungen: wann ihr etwas Betrug nennt, welche
-Masche, welche Formulierungen auf Kleinanzeigen typisch sind. Diese Anleitung ist für den Mac
+Betrugsmaschen. Mit Feintuning lernt es die Einstufungen des Projekts: was als Betrug gilt, welche
+Masche vorliegt, welche Formulierungen auf Kleinanzeigen typisch sind. Diese Anleitung ist für den Mac
 (Apple Silicon, z. B. M4 mit 16 GB); am Ende stehen Alternativen.
 
 ## 1. Lohnt es sich schon? Erst messen, dann trainieren
@@ -29,10 +29,11 @@ scamguard evaluate --llm --max 100       # Qwen ohne Feintuning; dauert pro Beis
 - Ein Trainingsbeispiel ist genau das, was ScamGuard im Betrieb schickt (gleicher System-Prompt, gleiches
   `<inserat>`-Format) plus die gewünschte Antwort als JSON. `--mask-prompt` sorgt dafür, dass nur die
   Antwort gelernt wird, nicht der Prompt.
-- Die gewünschte Antwort baut `scamguard llm-daten` aus euren Daten: Wahrscheinlichkeit aus dem Label
-  (0,9 bzw. 0,1), Masche aus der Spalte `masche` bzw. den Regel-Treffern, Warnsignale mit wörtlichem
-  Zitat aus den Regel-Treffern. Das Modell lernt also eure **Labels** und das **Format**; seine
-  Begründungen ähneln den Regeln (Weak Supervision).
+- Die gewünschte Antwort baut `scamguard llm-daten` aus den Daten: Wahrscheinlichkeit aus dem Label
+  (0,9 bzw. 0,1), Masche aus der Einstufung (über das Kategoriensystem auf die Qwen-Kategorien
+  abgebildet) bzw. den Regel-Treffern, Warnsignale aus den im Annotation-Workspace markierten Sätzen –
+  wo keine vorliegen, aus den Regel-Treffern mit wörtlichem Zitat (Weak Supervision). Das Modell lernt
+  also die **Labels**, die **Begründungen** und das **Format**.
 
 ## 3. Schritt für Schritt
 
@@ -91,13 +92,13 @@ Fehlt `models/qwen_lora/adapters.safetensors`, startet ScamGuard das Basismodell
   Inserate und Chats gehören dazu: Extension, Web-App, `nein`-Zeilen der Foren-Prüfliste.
 - **Vielfältig:** verschiedene Maschen, Kategorien, Inserate und reine Chats, Käufer- und
   Verkäuferseite.
-- **Konsistent:** ein gemeinsamer Labeling-Leitfaden; dieselben ~30 Fälle von allen einstufen lassen
-  und die Übereinstimmung messen (gehört in den Bericht).
-- **Testset nie trainieren:** `llm-daten` nutzt die festen Splits aus `data build`, damit vergleicht
-  ihr Qwen fair mit den anderen Modellen. Synthetische Beispiele, falls ihr welche erzeugt, nur ins
-  Training, nie ins Testset, und als eigene Quelle markieren.
-- **Bessere Begründungen** (optional): Für 50–100 Beispiele selbst kurze Begründungen schreiben und
-  `finetune.target_answer` so erweitern, dass sie als `summary` übernommen werden.
+- **Konsistent:** gemeinsames Kategoriensystem und Doppel-Labeling mit gemessener Übereinstimmung im
+  Annotation-Workspace ([einstufung.md](einstufung.md)).
+- **Testset nie trainieren:** `llm-daten` nutzt die festen Splits aus `data build`, damit bleibt
+  Qwen fair mit den anderen Modellen vergleichbar. Synthetische Beispiele nur ins Training, nie ins
+  Testset, und als eigene Quelle markieren.
+- **Bessere Begründungen:** Sätze im Annotation-Workspace markieren – sie werden zu den `red_flags`
+  der Zielantwort. Optional zusätzlich eigene `summary`-Texte für 50–100 Beispiele.
 - **Datenschutz:** `data/finetune/` und `models/` landen nicht im Git. Keine echten Namen,
   Telefonnummern oder Adressen in den Trainingsdaten.
 
@@ -110,9 +111,9 @@ Fehlt `models/qwen_lora/adapters.safetensors`, startet ScamGuard das Basismodell
   Hugging Face TRL/PEFT oder Unsloth. Den Adapter danach für LM Studio/Ollama konvertieren, oder
   direkt dort nutzen. Nur anonymisierte Daten hochladen.
 - **Desktop-PC mit großer GPU:** größeres Qwen (z. B. 27B in LM Studio) ohne Feintuning gegen 9B mit
-  Feintuning vergleichen – spannende Frage für den Bericht.
+  Feintuning vergleichen.
 
-## 6. Für den Projektbericht
+## 6. Experimente
 
 | Experiment | Messen |
 |---|---|

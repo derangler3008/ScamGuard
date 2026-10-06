@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+build/
 
 # Große Dateien nicht ins Repo – Datensätze und Gewichte separat teilen
 data/raw/*
@@ -29,6 +30,10 @@ data/datensatz_fuellen_bilder/*/**
 !data/datensatz_fuellen_bilder/*/.gitkeep
 data/datensatz_fuellen_inserate/*/**
 !data/datensatz_fuellen_inserate/*/.gitkeep
+
+# Einstufungs-Werkstatt: Aufgaben und Einstufungen lokal, Kategoriensystem im Git
+data/einstufung/*
+!data/einstufung/kategorien.yaml
 
 # macOS-Finder-Metadaten
 .DS_Store

@@ -16,34 +16,28 @@ import streamlit as st
 
 # Erlaubt `streamlit run frontend/app.py` auch ohne `pip install -e .`
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from einstufen import render as render_einstufen
 
 from scamguard.config import load_config, resolve_path
+from scamguard.data.codebook import load_codebook
 from scamguard.data.discovery import IMAGE_DIR, LISTING_DIR, TEXT_DIR
 from scamguard.data.labels import LABEL_FILE, count_labels, save_label, save_label_images
 from scamguard.data.listing_import import SUPPORTED_SUFFIXES, ImportResult, import_listing
 from scamguard.data.loaders import IMAGE_SUFFIXES
 from scamguard.data.registry import get_specs
+from scamguard.features.seller import profile_summary
 from scamguard.pipeline import ScamGuard
-from scamguard.schema import CATEGORIES, Listing, ScanResult
+from scamguard.schema import CATEGORIES, CATEGORY_NAMES, SELLER_TYPES, Listing, ScanResult
 from scamguard.training import DEMO_DATASET, retrain
 
 SAMPLE_FILE = "data/samples/sample_listings.jsonl"
-SCAM_TYPES = {
-    "unbekannt": "weiß nicht / egal",
-    "fake_zahlungslink": "Fake-Zahlungslink („Sicher bezahlen“, DHL …)",
-    "vorkasse": "Vorkasse – Ware kommt nie",
-    "paypal_freunde": "PayPal „Freunde & Familie“",
-    "dreiecksbetrug": "Dreiecksbetrug",
-    "phishing": "Phishing (Daten/Login abgreifen)",
-    "identitaetsdiebstahl": "Ausweis/Identität abgreifen",
-    "ueberzahlung": "Überzahlung mit Rückforderung",
-    "fake_inserat_sonstiges": "sonstiges Fake-Inserat",
-}
-CATEGORY_LABELS = {
-    "elektronik": "Elektronik", "haushaltsgeraete": "Haushaltsgeräte", "auto": "Auto & Fahrzeuge",
-    "moebel": "Möbel", "mode": "Mode", "tiere": "Tiere", "immobilien": "Immobilien",
-    "tickets": "Tickets", "sonstiges": "Sonstiges",
-}
+# Maschen aus dem gemeinsamen Kategoriensystem (data/einstufung/kategorien.yaml)
+SCAM_TYPES = {"unbekannt": "weiß nicht / egal",
+              **{key: entry["name"] for key, entry in load_codebook().maschen.items()}}
+CATEGORY_LABELS = CATEGORY_NAMES
+SELLER_TYPE_LABELS = {None: "unbekannt", "privat": "Privater Nutzer", "gewerblich": "Gewerblich (Händler/Firma)"}
 UPLOAD_TYPES = sorted(s.lstrip(".") for s in SUPPORTED_SUFFIXES)
 CHAT_TYPES = sorted(s.lstrip(".") for s in IMAGE_SUFFIXES | {".txt"})
 
@@ -52,7 +46,7 @@ st.set_page_config(page_title="ScamGuard – Kleinanzeigen-Check", page_icon=str
 
 # Startwerte des Formulars „Felder selbst eingeben“ (Widgets lesen sie über ihren key)
 for _key, _default in {"title": "", "description": "", "messages": "", "price": None,
-                       "category": "sonstiges", "age": None, "ratings": None}.items():
+                       "category": "sonstiges", "age": None, "ratings": None, "seller_type": None}.items():
     st.session_state.setdefault(_key, _default)
 
 
@@ -94,6 +88,7 @@ def build_listing() -> Listing:
         category=st.session_state.get("category") or "sonstiges",
         seller_account_age_days=st.session_state.get("age"),
         seller_num_ratings=st.session_state.get("ratings"),
+        seller_type=st.session_state.get("seller_type"),
         messages=split_messages(st.session_state.get("messages")),
     )
 
@@ -165,18 +160,23 @@ def render_result(result: ScanResult, compact: bool = False) -> None:
     if not compact:
         st.progress(result.score, text=f"Betrugswahrscheinlichkeit (Modell-Schätzung): {pct} %")
 
-    shown = result.signals[:3] if compact else result.signals
+    # Kontext (Anbieterprofil, Händler, Werbung) ist kein Warnsignal → eigener Kasten
+    info = [s for s in result.signals if s.info]
+    warnings = [s for s in result.signals if not s.info]
+    if info:
+        st.info("  \n".join(s.message for s in info), icon=":material/storefront:")
+    shown = warnings[:3] if compact else warnings
     if not compact:
         st.subheader("Warnsignale")
-    if not result.signals:
+    if not warnings:
         st.write("Keine Warnsignale gefunden.")
     for s in shown:
         marker = (":red-badge[Hoch]" if s.hard or s.weight >= 0.6
                   else ":orange-badge[Mittel]" if s.weight >= 0.3 else ":gray-badge[Niedrig]")
         evidence = f"  \n<small>Fundstelle: `{s.evidence}`</small>" if s.evidence else ""
         st.markdown(f"{marker} **{s.message}** · _{s.source}_{evidence}", unsafe_allow_html=True)
-    if compact and len(result.signals) > 3:
-        st.caption(f"… und {len(result.signals) - 3} weitere Warnsignale")
+    if compact and len(warnings) > 3:
+        st.caption(f"… und {len(warnings) - 3} weitere Warnsignale")
 
     with st.expander("Einzelmodelle"):
         st.dataframe([
@@ -213,18 +213,21 @@ def review_fields(result: ImportResult, key: str) -> Listing:
                                 format_func=lambda c: CATEGORY_LABELS.get(c, c), key=f"{key}_cat")
         age = c4.number_input("Kontoalter des Anbieters (Tage)", value=found.seller_account_age_days,
                               min_value=0, step=1, key=f"{key}_age")
+        seller_type = st.selectbox("Anbieter", [None, *SELLER_TYPES],
+                                   index=[None, *SELLER_TYPES].index(found.seller_type),
+                                   format_func=lambda t: SELLER_TYPE_LABELS[t], key=f"{key}_seller")
         messages = st.text_area("Chat (mehrere Nachrichten mit „---“ trennen)",
                                 "\n\n---\n\n".join(found.messages), height=100, key=f"{key}_chat")
     listing = Listing.from_dict({**found.to_dict(), "title": title, "description": description,
                                  "price": price, "category": category, "seller_account_age_days": age,
-                                 "messages": split_messages(messages)})
+                                 "seller_type": seller_type, "messages": split_messages(messages)})
 
     facts = [f"{listing.price:,.0f} €".replace(",", ".") if listing.price is not None else "Preis ?",
              CATEGORY_LABELS.get(listing.category, listing.category)]
     if listing.location:
         facts.append(listing.location)
-    if listing.seller_account_age_days is not None:
-        facts.append(f"Konto {listing.seller_account_age_days} Tage alt")
+    if seller := profile_summary(listing):
+        facts.append(seller)
     if listing.messages:
         facts.append(f"{len(listing.messages)} Chat-Nachricht(en)")
     summary.markdown(f"**{listing.title or '(kein Titel erkannt)'}**  \n{' · '.join(facts)}")
@@ -265,8 +268,8 @@ st.title("ScamGuard")
 st.caption("Betrugserkennung für deutschsprachige Kleinanzeigen · DHBW Mannheim KI-Projekt · "
            "Ergebnis ist eine Einschätzung, kein Beweis.")
 
-tab_upload, tab_manual, tab_data, tab_about = st.tabs(
-    ["Inserat hochladen & einstufen", "Felder selbst eingeben", "Meine Daten & Training",
+tab_upload, tab_manual, tab_team, tab_data, tab_about = st.tabs(
+    ["Inserat hochladen & einstufen", "Felder selbst eingeben", "Einstufen im Team", "Meine Daten & Training",
      "Über das Projekt"])
 
 # --------------------------------------------------------------------------- Hochladen & einstufen
@@ -343,6 +346,8 @@ with tab_manual:
                          format_func=lambda c: CATEGORY_LABELS.get(c, c))
             st.number_input("Kontoalter des Anbieters (Tage)", key="age", min_value=0, step=1)
             st.number_input("Anzahl Bewertungen", key="ratings", min_value=0, step=1)
+            st.selectbox("Anbieter", [None, *SELLER_TYPES], key="seller_type",
+                         format_func=lambda t: SELLER_TYPE_LABELS[t])
             uploads = st.file_uploader("Bilder des Inserats", type=sorted(s.lstrip(".") for s in IMAGE_SUFFIXES),
                                        accept_multiple_files=True)
         submitted = st.form_submit_button("Inserat scannen", type="primary", width="stretch")
@@ -367,6 +372,11 @@ with tab_manual:
             total = save_labeled(listing, images, choice, st.session_state["manual_type"])
             st.success(f"Gespeichert als {'Betrug' if choice else 'seriös'} – {counted(total)}.")
             del st.session_state["manual_scan"]
+
+# --------------------------------------------------------------------------- Einstufen im Team
+
+with tab_team:
+    render_einstufen()
 
 # --------------------------------------------------------------------------- Meine Daten & Training
 
@@ -400,8 +410,8 @@ with tab_data:
 
     st.subheader("Neu trainieren")
     include_demo = st.checkbox("Die 24 künstlichen Demo-Inserate mitverwenden", value=counts["gesamt"] < 20,
-                               help="Nur zum Ausprobieren. Für Ergebnisse im Projektbericht weglassen – "
-                                    f"sonst misst ihr Erfundenes mit (Datensatz „{DEMO_DATASET}“).")
+                               help="Nur zum Ausprobieren. Für belastbare Kennzahlen weglassen – "
+                                    f"sonst fließen erfundene Beispiele mit ein (Datensatz „{DEMO_DATASET}“).")
     train_images = st.checkbox("Bildmodell mittrainieren (CNN EfficientNet – neuronales Netz)",
                                help="Braucht Produktfotos beider Klassen.")
     train_gbert = st.checkbox("GBERT mittrainieren (Transformer – neuronales Netz für Text, dauert lange)",
@@ -415,7 +425,10 @@ with tab_data:
                 status.update(label="Training nicht möglich", state="error")
                 st.error(str(exc))
             else:
-                status.update(label="Fertig – die Modelle sind ab sofort aktiv", state="complete")
+                status.update(label="Fertig – die Modelle sind ab sofort aktiv"
+                              + (" (mit Hinweisen)" if trained.skipped else ""), state="complete")
+                for name, reason in trained.skipped.items():
+                    st.warning(f"**{name}** wurde nicht trainiert: {reason}")
                 fusion = trained.fusion
                 st.markdown(f"**{trained.stats['total']} Beispiele** (Test: {fusion['n']}) · "
                             f"Precision {fusion['precision']:.2f} · Recall {fusion['recall']:.2f} · "
@@ -438,14 +451,14 @@ PayPal-Seite) hebt den Gesamtscore immer auf mindestens „hohes Risiko“.
 
 | Baustein | Methode | Neuronales Netz? | Training |
 |---|---|---|---|
-| Regeln | Betrugsmaschen-Lexikon, Link-/Mail-/IBAN-Prüfung, Preis, Sprache | nein | – (Lexikon pflegt ihr) |
-| Textmodell (Baseline) | TF-IDF + logistische Regression | nein, klassisches ML | mit euren Daten |
-| Textmodell (GBERT) | deutsches BERT, feinjustiert | **ja** (Transformer) | mit euren Daten |
-| Bildmodell | EfficientNet-B0, feinjustiert | **ja** (CNN) | mit euren Fotos |
+| Regeln | Betrugsmaschen-Lexikon, Link-/Mail-/IBAN-Prüfung, Preis, Sprache | nein | – (Lexikon in `data/lexicons/`) |
+| Textmodell (Baseline) | TF-IDF + logistische Regression | nein, klassisches ML | mit eigenen Daten |
+| Textmodell (GBERT) | deutsches BERT, feinjustiert | **ja** (Transformer) | mit eigenen Daten |
+| Bildmodell | EfficientNet-B0, feinjustiert | **ja** (CNN) | mit eigenen Fotos |
 | Bildhinweise (CLIP) | Stockfoto? Screenshot? passt das Bild zur Kategorie? | **ja**, vortrainiert | – |
 | KI-Analyse (Qwen, lokal) | Sprachmodell bewertet das Inserat und erklärt warum | **ja**, vortrainiert | – |
 | Texterkennung (Apple Vision) | liest Screenshots für den Upload | **ja**, vortrainiert | – |
 
-**Eure Daten machen den Unterschied:** Die trainierbaren Bausteine sind nur so gut wie die
+**Daten machen den Unterschied:** Die trainierbaren Bausteine sind nur so gut wie die
 eingestuften Inserate. Tab „Meine Daten & Training“ zeigt, was schon da ist.
 """)

@@ -29,5 +29,7 @@ Die Datendateien landen nicht im Git (siehe .gitignore).
 **Prüfliste aus Foren** (`gesammelt_foren.csv`, von `scamguard data sammeln --quellen foren`):
 Nachrichten, die Betroffene in Foren zitiert haben. Die Spalte `betrug` ist leer – in Excel/Numbers
 öffnen, pro Zeile `ja` (Betrügernachricht) oder `nein` (harmlos, z. B. Support-Antwort) eintragen, als
-CSV speichern. Leere Zeilen werden beim Training übersprungen; eure Einträge bleiben beim nächsten
+CSV speichern. Leere Zeilen werden beim Training übersprungen; Einträge bleiben beim nächsten
 Sammeln erhalten. `vorschlag` = ja heißt nur: enthält ein bekanntes Warnsignal.
+Gründlicher (Sätze markieren, zu zweit einstufen, Übereinstimmung messen): Web-App, Tab *Einstufen im
+Team* → *Aufgaben holen* → Datensatz `datei:gesammelt_foren.csv` (siehe `docs/einstufung.md`).

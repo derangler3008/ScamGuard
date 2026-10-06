@@ -10,10 +10,10 @@ Seiten, die Betrugsnachrichten im Wortlaut veröffentlichen (robots.txt erlaubt 
                    sonst lernt das Modell deren Schreibstil statt der Betrugsmuster)
   watchlist_news   Watchlist-Artikel zu Kleinanzeigen/Marktplätzen/Paketen: wörtliche Zitate
 
-Alle Texte sind Betrug (Label 1). Seriöse Gegenbeispiele müsst ihr ergänzen (eigene Chats, Extension).
+Alle Texte sind Betrug (Label 1). Seriöse Gegenbeispiele müssen ergänzt werden (eigene Chats, Extension).
 
 Rechtliches: Text- und Data-Mining für nicht-kommerzielle wissenschaftliche Forschung (§ 60d UrhG). Die
-Daten bleiben lokal (data/ ist nicht im Git), jede Zeile nennt ihre Quelle → im Bericht zitieren.
+Daten bleiben lokal (data/ ist nicht im Git), jede Zeile nennt ihre Quelle (Herkunft nachvollziehbar).
 Höflich: eigener User-Agent, robots.txt wird geprüft, Pause zwischen Anfragen, Seiten-Cache.
 """
 

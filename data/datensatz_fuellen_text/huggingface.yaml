@@ -18,7 +18,7 @@
 
 # Hinweis: Einen deutschen Datensatz mit Kleinanzeigen-Betrug gibt es öffentlich nicht (Stand 10/2026).
 # Die zwei Einträge unten sind SMS-/Spam-Texte – nützlich nur als Ergänzung für Chat-Nachrichten.
-# Auf aktiv: true setzen. max_zeilen klein halten, sonst überstimmen sie eure echten Inserate.
+# Auf aktiv: true setzen. max_zeilen klein halten, sonst überstimmen sie die echten Inserate.
 # Nie zum Auswerten nutzen (Testset), nur zum Trainieren.
 # Nur seriöse Gegenbeispiele (z. B. zu `scamguard data sammeln`): unter labels nur die seriöse Klasse
 # eintragen (z. B. nur `not_spam: seriös`) – Zeilen ohne passendes Label werden übersprungen.

@@ -5,7 +5,7 @@
     python scripts/firefox_mit_extension.py URL …   # stattdessen bestimmte Seiten öffnen
     python scripts/firefox_mit_extension.py --reload # nur Extension neu laden (nach Code-Änderungen)
 
-- Eigenes Entwicklungsprofil (.firefox-dev-profil/, nicht im Git): eure normalen Firefox-Profile
+- Eigenes Entwicklungsprofil (.firefox-dev-profil/, nicht im Git): die normalen Firefox-Profile
   mit Lesezeichen und Logins bleiben unberührt.
 - Die Extension wird – wie über about:debugging – als *temporäres* Add-on geladen, genau so wie es
   Mozillas `web-ext run` macht (Remote-Debugging-Protokoll, nur auf localhost). Nach dem Beenden

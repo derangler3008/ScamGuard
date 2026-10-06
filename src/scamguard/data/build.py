@@ -10,6 +10,7 @@ from pathlib import Path
 
 from scamguard.config import resolve_path
 from scamguard.data.loaders import LoadReport, load_spec
+from scamguard.data.redact import redact
 from scamguard.data.registry import get_specs
 from scamguard.schema import Listing
 
@@ -37,8 +38,12 @@ def read_split(split: str) -> list[Listing]:
 
 
 def listing_fingerprint(listing: Listing) -> str:
-    """Gleiche Inserate (auch aus verschiedenen Quellen) nur einmal behalten → kein Train/Test-Leak."""
-    norm = re.sub(r"\W+", " ", listing.full_text.lower()).strip()
+    """Gleiche Inserate (auch aus verschiedenen Quellen) nur einmal behalten → kein Train/Test-Leak.
+
+    Kontaktdaten werden vorher anonymisiert: Die anonymisierte Fassung aus der Einstufung und das
+    Original aus der Quelle gelten so als dasselbe Inserat, ebenso Vorlagentexte, die sich nur in
+    Nummer oder Mailadresse unterscheiden."""
+    norm = re.sub(r"\W+", " ", redact(listing.full_text).lower()).strip()
     key = norm or "|".join(sorted(listing.image_paths))
     return hashlib.sha1(key.encode("utf-8")).hexdigest()
 

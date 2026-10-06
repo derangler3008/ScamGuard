@@ -1,0 +1,203 @@
+# Kategoriensystem (Codebuch) für die Einstufung in der Web-App (Tab „Einstufen“).
+#
+# ENTWURF – im Team besprechen und anpassen. Danach `version` erhöhen und die Änderung im
+# CHANGELOG festhalten: Einstufungen nach verschiedenen Fassungen sind nicht direkt vergleichbar
+# (jede Einstufung speichert die Fassung, nach der sie entstand).
+#
+# Aufbau:
+#   regeln     Entscheidungsregeln, gelten vor den Einzeldefinitionen
+#   urteil     Gesamturteil über den ganzen Text (Inserat, Chat, Nachricht)
+#   maschen    Betrugsmasche, nur bei Urteil „betrug“; llm = Kategorie im Antwortformat von Qwen
+#   signale    Warnsignale auf Satzebene; regeln = Codes der Regel-Erkennung, die dazu passen
+#              (für den Vergleich „Regeln gegen Mensch“ und für die Hinweise in der Web-App)
+#   bilder     Bildart (clip = passende Klasse des CLIP-Bildmodells) und ob das Bild verdächtig ist
+#
+# Beispiele sind erfunden – keine echten Namen, Nummern oder Adressen eintragen.
+version: 1
+
+regeln:
+  - "Eingestuft wird die Absicht des Absenders: Will er durch Täuschung Geld, Ware oder Daten erlangen? Ob es geklappt hat, spielt keine Rolle."
+  - "Nur nach dem urteilen, was im Text und auf den Bildern steht – nicht nach der Quelle, aus der der Text stammt."
+  - "Ein einzelnes Warnsignal macht noch keinen Betrug (z. B. „nur Versand“). Entscheidend ist das Gesamtbild."
+  - "Rechtschreibfehler oder gebrochenes Deutsch allein sind kein Betrug."
+  - "„Unklar“ wählen, wenn auch der Leitfaden nicht weiterhilft. Unklar ist besser als geraten – solche Fälle gehen nicht ins Training."
+  - "Warnsignale auf Satzebene auch in seriösen Texten markieren (z. B. ein echtes Inserat, das Vorkasse verlangt)."
+  - "Passen zwei Maschen, die wählen, über die das Geld oder die Daten tatsächlich abfließen sollen."
+  - "Spam und Werbung ohne Täuschung (z. B. ein Händler, der für seinen Shop wirbt) sind seriös."
+
+urteil:
+  betrug:
+    name: Betrug
+    definition: "Der Absender versucht erkennbar, durch Täuschung Geld, Ware oder Daten zu erlangen – oder der Text ist ein bekannter Betrugsvorlagentext."
+  serioes:
+    name: Seriös
+    definition: "Gewöhnliches Angebot, gewöhnliche Anfrage oder Antwort ohne Täuschungsabsicht, auch wenn sie unbeholfen formuliert ist."
+  unklar:
+    name: Unklar
+    definition: "Nicht entscheidbar (zu kurz, Kontext fehlt, widersprüchlich). Wird nicht trainiert."
+
+sicherheit:
+  sicher: "Eindeutig nach Leitfaden."
+  eher_sicher: "Starke Indizien, aber eine andere Deutung ist möglich."
+  unsicher: "Eher eine Vermutung."
+
+maschen:
+  fake_zahlungslink:
+    name: Fake-Zahlungslink
+    llm: fake_zahlungslink
+    definition: "Link, QR-Code oder Mail zu einer angeblichen Bezahl-, Empfangs- oder Versandseite („Sicher bezahlen“, „Geld empfangen“, Paketdienst), auf der Karten-, Bank- oder Zugangsdaten eingegeben werden sollen."
+    beispiel: "Ich habe schon über Sicher bezahlen bezahlt. Klicken Sie auf den Link, um das Geld zu empfangen."
+    abgrenzung: "Ohne Link oder QR-Code, nur Datenabfrage im Chat → Phishing."
+  vorkasse:
+    name: Vorkasse – Ware kommt nie
+    llm: vorkasse
+    definition: "Anbieter lässt sich vorab außerhalb geschützter Wege bezahlen (Überweisung, Gutscheine, Krypto); die Ware gibt es nicht. Oft ist Abholung angeblich unmöglich."
+    beispiel: "Abholung geht leider nicht, ich bin beruflich im Ausland. Überweisen Sie bitte vorab, dann schickt die Spedition das Gerät."
+    abgrenzung: "Ausdrücklich PayPal „Freunde & Familie“ → eigene Masche. Wohnung oder Tier → Mietbetrug bzw. Tiertransport."
+  paypal_freunde:
+    name: PayPal „Freunde & Familie“
+    llm: paypal_freunde
+    definition: "Zahlung soll ausdrücklich über PayPal „Freunde & Familie“ laufen – ohne Käuferschutz."
+    beispiel: "Bitte nur PayPal Freunde und Familie, sonst muss ich Gebühren zahlen."
+    abgrenzung: "Die Zahlungsart entscheidet: auch wenn zusätzlich eine Versandgeschichte vorkommt."
+  dreiecksbetrug:
+    name: Dreiecksbetrug
+    llm: dreiecksbetrug
+    definition: "Betrüger schaltet sich zwischen echten Verkäufer und echten Käufer: Der Käufer bezahlt den Verkäufer, die Ware geht an den Betrüger – oder Geld eines Dritten soll weitergeleitet werden."
+    beispiel: "Meine Tante überweist Ihnen das Geld, schicken Sie das Handy bitte an meinen Kurier."
+    abgrenzung: "Zahlt der Käufer bewusst zu viel und will Geld zurück → Überzahlung."
+  phishing:
+    name: Phishing
+    llm: phishing
+    definition: "Ziel sind Zugangsdaten, Bank- oder Kartendaten oder Bestätigungscodes, ohne gefälschte Bezahlseite: z. B. „schick mir den Code aus der SMS“, gefälschte Mail der Plattform oder Bank."
+    beispiel: "Sie haben gleich eine SMS mit einem Code bekommen, schicken Sie ihn mir bitte zur Bestätigung."
+    abgrenzung: "Mit Link zu Bezahl- oder Empfangsseite → Fake-Zahlungslink."
+  identitaetsdiebstahl:
+    name: Ausweis/Identität abgreifen
+    llm: identitaetsdiebstahl
+    definition: "Ausweisfoto, Selfie mit Ausweis oder Video-Ident wird verlangt, angeblich zur Verifizierung – damit werden Konten auf fremden Namen eröffnet."
+    beispiel: "Zur Sicherheit brauche ich ein Foto Ihres Personalausweises von vorne und hinten."
+    abgrenzung: "Nur Login- oder Bankdaten → Phishing."
+  ueberzahlung:
+    name: Überzahlung mit Rückforderung
+    llm: ueberzahlung
+    definition: "Käufer zahlt angeblich zu viel und bittet, die Differenz zurückzuüberweisen; die ursprüngliche Zahlung platzt oder war nie echt."
+    beispiel: "Ich habe aus Versehen 500 statt 150 Euro überwiesen, bitte schicken Sie mir den Rest zurück."
+  rueckbuchung:
+    name: Käuferbetrug per Rückbuchung
+    llm: fake_inserat_sonstiges
+    definition: "Käufer zahlt mit Käuferschutz und holt das Geld danach zurück: angeblich nicht angekommen, defekt oder Ziegelstein im Paket."
+    beispiel: "Im Paket war nur ein Stein, ich habe bei PayPal einen Fall eröffnet."
+    abgrenzung: "Für echte Reklamationen ohne Täuschung: seriös."
+  mietbetrug:
+    name: Mietbetrug
+    llm: vorkasse
+    definition: "Wohnung oder Ferienwohnung gegen Kaution oder Miete vorab, Vermieter angeblich im Ausland, Besichtigung unmöglich, Schlüssel per Post."
+    beispiel: "Ich lebe in Spanien. Nach Überweisung der Kaution schicke ich Ihnen die Schlüssel per Post."
+  tier_transport:
+    name: Tiertransport
+    llm: vorkasse
+    definition: "Tier (meist Welpen) wird gegen Transport-, Impf- oder Versicherungsgebühren „verschickt“; das Tier gibt es nicht."
+    beispiel: "Der Welpe kommt mit der Tierspedition, Sie zahlen nur die Transportversicherung im Voraus."
+  sonstiges:
+    name: Sonstige Masche
+    llm: fake_inserat_sonstiges
+    definition: "Betrug, der zu keiner Masche oben passt – bitte in der Notiz kurz beschreiben."
+
+rolle:
+  verkaeufer: "Der Anbieter des Inserats täuscht."
+  kaeufer: "Ein (angeblicher) Interessent täuscht."
+  unklar: "Nicht erkennbar (z. B. einzelne Nachricht ohne Kontext)."
+
+# gleiche Stufen wie language_quality im Antwortformat von Qwen
+sprache:
+  muttersprachlich: "Natürliches Deutsch, Umgangssprache und Tippfehler eingeschlossen."
+  leichte_fehler: "Einzelne Grammatik- oder Wortfehler, insgesamt flüssig."
+  gebrochen: "Viele Fehler, ungewöhnlicher Satzbau."
+  maschinell_uebersetzt: "Wirkt wie aus einer anderen Sprache übersetzt („Ich bin interessiert an Ihrem Artikel“)."
+
+signale:
+  zahlung_ausserhalb:
+    name: Zahlung außerhalb / vorab
+    definition: "Verlangt Zahlung vorab oder außerhalb geschützter Wege: Überweisung, Freunde & Familie, Gutscheinkarten, Krypto, Bargeldtransfer, IBAN im Chat."
+    beispiel: "Überweisen Sie mir zuerst das Geld, dann verschicke ich."
+    regeln: [OFFPLATFORM_PAYMENT, PAYMENT_FIRST, IBAN_IN_TEXT, FOREIGN_IBAN]
+  zahlungslink:
+    name: Zahlungs- oder Empfangslink
+    definition: "Link oder QR-Code zu einer Bezahl-, Empfangs- oder Versandseite; Behauptung, das Geld liege schon bereit."
+    beispiel: "Das Geld ist reserviert, bestätigen Sie den Empfang über diesen Link."
+    regeln: [FAKE_PAYMENT_LINK, PAYMENT_PENDING_STORY, LOOKALIKE_DOMAIN, URL_SHORTENER, SUSPICIOUS_TLD, PUNYCODE_URL, IP_URL, EXTERNAL_LINK]
+  datenabfrage:
+    name: Datenabfrage
+    definition: "Fragt nach Login, Bank- oder Kartendaten, Codes, Ausweis, Selfie oder der Mailadresse „für die Zahlung“."
+    beispiel: "Schicken Sie mir Ihre E-Mail, damit ich über Sicher bezahlen zahlen kann."
+    regeln: [ACCOUNT_PHISHING, IDENTITY_PHISHING, CODE_REQUEST, PAYMENT_CONTACT_REQUEST]
+  kontaktwechsel:
+    name: Kontaktwechsel
+    definition: "Will die Plattform verlassen: WhatsApp, Telefonnummer, private Mailadresse."
+    beispiel: "Schreib mir lieber auf WhatsApp, hier antworte ich selten."
+    regeln: [OFFPLATFORM_CONTACT, EMAIL_IN_TEXT, PHONE_IN_TEXT, FOREIGN_PHONE]
+  zeitdruck:
+    name: Zeitdruck
+    definition: "Drängt zur Eile: andere Interessenten, Frist, „sofort, sonst ist es weg“."
+    beispiel: "Es gibt noch drei Interessenten, wer zuerst zahlt, bekommt es."
+    regeln: [PRESSURE_URGENCY]
+  versandgeschichte:
+    name: Versand- oder Abwesenheitsgeschichte
+    definition: "Erklärt, warum keine Abholung möglich ist: Ausland, Montage, Spedition, Treuhand, Tiertransport, Zoll."
+    beispiel: "Ich bin gerade auf Montage, ein Kurier holt die Ware ab."
+    regeln: [SHIPPING_OR_ESCROW_STORY, SELLER_ABROAD, PICKUP_REFUSED, ANIMAL_TRANSPORT_FEE, PARCEL_CUSTOMS]
+  geldumweg:
+    name: Ungewöhnlicher Geldfluss
+    definition: "Überzahlung mit Rückforderung, Zahlung durch Dritte, Geld soll weitergeleitet werden."
+    beispiel: "Überweisen Sie die Differenz bitte an meinen Spediteur."
+    regeln: [OVERPAYMENT_REVERSE, TRIANGLE_FRAUD]
+  desinteresse:
+    name: Kauf ohne Fragen
+    definition: "Interessent will sofort kaufen, ohne etwas zum Artikel zu fragen, oder will nur Kontaktdaten."
+    beispiel: "Ist es noch verfügbar? Ich nehme es, geben Sie mir Ihre Nummer."
+    regeln: [BUYER_NO_QUESTIONS]
+  andere_masche:
+    name: Andere bekannte Masche
+    definition: "Masche außerhalb des Kaufs: Mietwohnung gegen Kaution, „Hallo Mama, neue Nummer“, falscher Bankmitarbeiter, Gewinnversprechen, gefälschter Absender (Bank, Plattform)."
+    beispiel: "Hallo Mama, das ist meine neue Nummer, kannst du heute noch eine Rechnung für mich bezahlen?"
+    regeln: [RENTAL_SCAM, NEW_NUMBER_FAMILY, SAFE_ACCOUNT_SCAM, ADVANCE_FEE_SPAM, IMPERSONATION_EMAIL]
+  vorlagen_sprache:
+    name: Vorlagen-Formulierung
+    definition: "Formulierung typisch für Betrugsvorlagen oder Maschinenübersetzung („Sehr geehrter Kunde“, „Ich bin interessiert an Ihrem Artikel“). Nicht für gewöhnliche Rechtschreibfehler."
+    beispiel: "Sehr geehrter Verkäufer, ich bin interessiert an Ihrem Artikel und möchte ihn kaufen."
+    regeln: [TRANSLATED_PHRASING]
+  sonstiges:
+    name: Sonstiges Warnsignal
+    definition: "Anderer Satz, der misstrauisch macht – bitte in der Notiz kurz begründen."
+    regeln: []
+
+bilder:
+  art:
+    echtes_foto:
+      name: Eigenes Foto
+      definition: "Selbst aufgenommenes Foto des Artikels (Wohnung, Hand oder Alltag im Hintergrund)."
+      clip: real
+    stockfoto:
+      name: Stock- oder Katalogfoto
+      definition: "Hersteller-, Katalog- oder Werbebild, oft freigestellt auf weißem Grund."
+      clip: stock
+    screenshot:
+      name: Screenshot
+      definition: "Bildschirmfoto einer Website, App oder eines Chats, auch Zahlungs- oder Versandbestätigungen."
+      clip: screenshot
+    dokument:
+      name: Dokument
+      definition: "Ausweis, Rechnung, Kaufbeleg oder Paketschein (auch abfotografiert)."
+      clip: text
+    textbild:
+      name: Textbild
+      definition: "Bild besteht hauptsächlich aus Text (Grafik, Hinweistafel)."
+      clip: text
+    sonstiges:
+      name: Sonstiges
+      definition: "Passt nicht oben hinein."
+  verdaechtig:
+    ja: "Das Bild selbst ist ein Warnsignal: gefälschte Zahlungsbestätigung, fremder Ausweis, Stockfoto für angeblich gebrauchte Ware, Bild passt nicht zum Text."
+    nein: "Unauffällig."
+    unklar: "Nicht beurteilbar."

@@ -3,7 +3,7 @@
 Zwei Stufen:
 1. `TextBaselineDetector`   – TF-IDF (Wort- + Zeichen-n-Gramme) + logistische Regression.
    Trainiert in Sekunden auf der CPU. Zeichen-n-Gramme fangen auch Tippfehler und
-   „gebrochenes Deutsch“ ein. Gut als erste Messlatte für den Projektbericht.
+   „gebrochenes Deutsch“ ein. Messlatte für alle weiteren Modelle.
 2. `TextTransformerDetector` – Feintuning eines deutschen BERT (Standard: deepset/gbert-base).
    Braucht `pip install -e ".[text]"`, idealerweise GPU (Colab/bwUniCluster) oder Apple MPS.
 """
@@ -205,23 +205,42 @@ class TextTransformerDetector(Detector):
         return ModelResult(name=self.name, score=prob)
 
 
+def load_pretrained(name: str, **model_kwargs):
+    """Tokenizer und Klassifikationsmodell laden.
+
+    transformers 5 erkennt ältere Hub-Modelle nicht mehr automatisch, wenn ihrer config.json das Feld
+    `model_type` und dem Repo eine tokenizer.json fehlt – so bei deepset/gbert-base (Fehlermeldung
+    „Unrecognized model“ bzw. irreführend „sentencepiece or tiktoken“). Für BERT-Modelle werden dann
+    die BERT-Klassen direkt genutzt; das trainierte Modell wird vollständig gespeichert und lädt danach
+    wieder über die Auto-Klassen."""
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+    try:
+        return (AutoTokenizer.from_pretrained(name),
+                AutoModelForSequenceClassification.from_pretrained(name, **model_kwargs))
+    except ValueError:
+        from transformers import BertForSequenceClassification, BertTokenizer, PretrainedConfig
+
+        config, _ = PretrainedConfig.get_config_dict(name)
+        is_old_bert = not config.get("model_type") and any(
+            a.startswith("Bert") for a in config.get("architectures") or [])
+        if not is_old_bert:
+            raise
+
+        return (BertTokenizer.from_pretrained(name),
+                BertForSequenceClassification.from_pretrained(name, **model_kwargs))
+
+
 def train_text_transformer(train: list[Listing], val: list[Listing], cfg: dict) -> Path:
     import torch
     from datasets import Dataset
     from sklearn.metrics import f1_score, precision_score, recall_score
-    from transformers import (
-        AutoModelForSequenceClassification,
-        AutoTokenizer,
-        DataCollatorWithPadding,
-        Trainer,
-        TrainingArguments,
-    )
+    from transformers import DataCollatorWithPadding, Trainer, TrainingArguments
 
     train, val = with_text(train), with_text(val)
     tc = cfg["text_model"]
     out = resolve_path(tc["path"])
-    tokenizer = AutoTokenizer.from_pretrained(tc["base_model"])
-    model = AutoModelForSequenceClassification.from_pretrained(
+    tokenizer, model = load_pretrained(
         tc["base_model"], num_labels=2, id2label={0: "legit", 1: "scam"}, label2id={"legit": 0, "scam": 1},
     )
 

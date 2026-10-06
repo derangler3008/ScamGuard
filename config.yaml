@@ -12,6 +12,16 @@ thresholds:
   suspicious: 0.40
   high_risk: 0.70
 
+# Annotation-Workspace (Web-App, Tab „Einstufen im Team“; Kategorien: data/einstufung/kategorien.yaml)
+einstufung:
+  # Arbeitsordner. Geht auch als gemeinsamer Ordner fürs Team (z. B. DHBW-OneDrive): Jede Person
+  # schreibt nur ihre eigenen Dateien, gelesen werden die aller Personen. Den persönlichen Pfad
+  # nicht hier eintragen (Datei liegt im Git), sondern per Umgebungsvariable:
+  #   SCAMGUARD_EINSTUFUNG_ORDNER=~/OneDrive/ScamGuard-Einstufung scamguard ui
+  ordner: data/einstufung
+  # Anteil der Texte, den zwei Personen unabhängig einstufen (für die Übereinstimmung, Krippendorffs α)
+  doppelt_anteil: 0.25
+
 # Late Fusion: gewichteter Mittelwert der Einzelmodelle.
 # Nicht verfügbare Modelle (nicht trainiert / deaktiviert) werden ignoriert,
 # die übrigen Gewichte automatisch renormalisiert.

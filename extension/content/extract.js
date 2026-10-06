@@ -15,6 +15,19 @@
       .replace(/\s+/g, " ")
       .trim();
 
+  // Inseratsfotos liegen auf dem Bild-Server unter /prod-ads/images/ (Avatare, Banner nicht)
+  const AD_IMAGE = /^https:\/\/img\.kleinanzeigen\.de\/api\/v1\/prod-ads\/images\//;
+
+  // Rechtsform am Ende eines Anbieter-/Firmennamens (gleiche Liste wie schema.LEGAL_FORM im Server)
+  const LEGAL_FORM =
+    /(?<![\w.])(GmbH\s*&\s*Co\.?\s*KG|gGmbH|GmbH|UG(?:\s*\(haftungsbeschränkt\))?|AG|SE|KGaA|KG|OHG|GbR|PartG(?:mbB)?|eG|e\.\s?K\.|e\.\s?Kfm\.|e\.\s?V\.|Ltd\.?|Inc\.?|LLC|S\.?à\s?r\.?l\.?)\s*$/;
+
+  function commonAncestor(a, b) {
+    let node = a;
+    while (node && !node.contains(b)) node = node.parentElement;
+    return node;
+  }
+
   function daysSince(text) {
     const m = /(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(text ?? "");
     if (!m) return null;
@@ -35,21 +48,56 @@
       const descEl = $("#viewad-description-text");
       if (!titleEl && !descEl) return null; // Layout geändert → generischer Modus
       const priceEl = $("#viewad-price");
+      // Seit 10/2026 gibt es zwei Layouts: das alte mit sprechenden Klassen und ein neues mit
+      // Utility-Klassen (Tailwind). Stabil in beiden: IDs und die schema.org-Auszeichnung.
       const sellerEl =
-        [...document.querySelectorAll("#viewad-contact .userprofile-vip-details-text")].find((e) =>
-          /aktiv seit/i.test(e.textContent)) ?? $("#viewad-contact");
-      const crumbs = [...document.querySelectorAll("#vap-brdcrmb .breadcrump-link")]
-        .map((a) => a.textContent.trim())
+        [...document.querySelectorAll("#viewad-contact *")].find(
+          (e) => !e.children.length && /aktiv seit/i.test(e.textContent)) ?? $("#viewad-contact");
+      const crumbEls = document.querySelectorAll("#vap-brdcrmb [itemprop='itemListElement'] [itemprop='name']");
+      const crumbs = [...(crumbEls.length ? crumbEls : document.querySelectorAll("#vap-brdcrmb .breadcrump-link"))]
+        .map((e) => e.textContent.trim())
         .filter(Boolean);
+      // Anbieterbox: privat/gewerblich, Bewertungs-Abzeichen, Zahl der Anzeigen – keine Namen
+      const profile = $("#viewad-profile-box") ?? $("#viewad-contact");
+      const sellerTexts = profile
+        ? [...profile.querySelectorAll("*")]
+            .filter((e) => !e.children.length)
+            .map((e) => e.textContent.replace(/\s+/g, " ").trim())
+            .filter(Boolean)
+        : [];
+      const commercial =
+        sellerTexts.some((t) => /^gewerblicher (nutzer|anbieter)$/i.test(t)) ||
+        Boolean($("#viewad-imprint-section") || $("#viewad-bizteaser"));
+      const sellerType = commercial
+        ? "gewerblich"
+        : sellerTexts.some((t) => /^privater (nutzer|anbieter)$/i.test(t)) ? "privat" : null;
+      const badges = sellerTexts.filter((t) =>
+        /zufriedenheit$|^(sehr )?freundlich$|^(besonders )?zuverlässig$/i.test(t));
+      // „7 Anzeigen online“ oder „248“ + „Anzeigen“ als getrennte Elemente
+      const adIndex = sellerTexts.findIndex((t, i) =>
+        /^\d+ Anzeigen\b/i.test(t) || (/^\d+$/.test(t) && /^Anzeigen\b/i.test(sellerTexts[i + 1] ?? "")));
+      const adCount = adIndex >= 0 ? Number(sellerTexts[adIndex].match(/^\d+/)[0]) : null;
+      // Name nur für die Rechtsform (GmbH, UG, GbR …) – übertragen wird die Rechtsform, nie der Name
+      const teaser = [...($("#viewad-bizteaser")?.querySelectorAll("*") ?? [])]
+        .filter((e) => !e.children.length)
+        .map((e) => e.textContent.trim());
+      const legalForm =
+        [...sellerTexts, ...teaser].map((t) => LEGAL_FORM.exec(t.slice(0, 80))?.[1]).find(Boolean) ?? null;
+      // Bereich mit Titel, Galerie und Beschreibung – ohne Seitenleiste und „ähnliche Anzeigen“
+      const root = $("#viewad-main") ?? commonAncestor(titleEl ?? descEl, descEl ?? titleEl) ?? document.body;
 
       // Galerie: gleiche URL nur einmal; ".AUTO" liefert evtl. AVIF → JPEG anfordern
+      const gallery = document.querySelectorAll("#viewad-product .galleryimage-element img");
+      const candidates = gallery.length ? gallery : root.querySelectorAll("img");
       const seen = new Set();
       const images = [];
-      for (const img of document.querySelectorAll("#viewad-product .galleryimage-element img")) {
+      for (const img of candidates) {
         const raw = img.getAttribute("data-imgsrc") || img.currentSrc || img.src || "";
+        if (!gallery.length && !AD_IMAGE.test(raw)) continue; // neues Layout: nur Inseratsfotos
         const url = raw.replace(/(rule=\$_\d+)\.AUTO\b/, "$1.JPG");
-        if (!url.startsWith("https://") || seen.has(url)) continue;
-        seen.add(url);
+        const key = url.split("?")[0];
+        if (!url.startsWith("https://") || seen.has(key)) continue;
+        seen.add(key);
         images.push({ el: img, url });
       }
 
@@ -61,11 +109,15 @@
           price: priceEl ? priceEl.textContent.trim() : null, // Rohtext, Server normalisiert
           category: crumbs.join(" > "),
           seller_account_age_days: sellerEl ? daysSince(sellerEl.textContent) : null,
+          seller_type: sellerType,
+          seller_badges: badges,
+          seller_num_ads: adCount,
+          seller_legal_form: legalForm,
           messages: [],
         },
         imageUrls: images.map((i) => i.url),
         elements: { price: priceEl, seller: sellerEl, images: images.map((i) => i.el) },
-        roots: [$("#viewad-main") ?? document.body],
+        roots: [root],
       };
     },
   };

@@ -6,7 +6,7 @@ Drei Bausteine (jeder optional, die Pipeline nutzt, was installiert/trainiert is
    skaliert oder leicht verändert wurden. Betrüger verwenden Bilder oft mehrfach.
 2. CLIP Zero-Shot – ohne Training: Ist das Bild ein Stockfoto, ein Screenshot, ein Textbild?
    Passt das Bild zur angegebenen Kategorie (Auto-Inserat mit Handy-Foto)?
-3. CNN-Klassifikator (z. B. EfficientNet-B0, Transfer Learning) – lernt aus euren
+3. CNN-Klassifikator (z. B. EfficientNet-B0, Transfer Learning) – lernt aus eigenen
    gelabelten Inseratsbildern. Achtung „schwache Labels“: Jedes Bild erbt das Label seines
    Inserats, obwohl auch Betrugsinserate echt aussehende Fotos haben können.
 """
@@ -289,7 +289,11 @@ def train_image_model(train: list[Listing], val: list[Listing], cfg: dict) -> Pa
 
     train_items, val_items = pairs(train), pairs(val)
     if not train_items or not val_items:
-        raise ValueError("Keine Bilder in Train/Val gefunden – image_paths in den Datensätzen prüfen")
+        raise ValueError(f"zu wenige Fotos ({len(train_items)} im Training, {len(val_items)} in der Validierung) – "
+                         "Inserate mit Fotos einstufen oder data/datensatz_fuellen_bilder/ füllen")
+    if len({y for _, y in train_items}) < 2:
+        raise ValueError("Fotos nur von einer Klasse – das Bildmodell braucht Fotos von Betrugs- UND seriösen "
+                         "Inseraten")
 
     device = best_torch_device()
     model = _replace_head(torchvision.models.get_model(ic["backbone"], weights=weights), 2).to(device)

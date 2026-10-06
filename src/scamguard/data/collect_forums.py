@@ -11,7 +11,7 @@ Liefert zwei Dinge:
    Zeilen fließen ins Training – „nein“-Zeilen sind willkommene seriöse Gegenbeispiele. Eure
    Einträge bleiben beim nächsten `scamguard data sammeln` erhalten.
 2. Erfahrungsberichte (→ data/raw/foren_erfahrungsberichte.jsonl, NICHT im Training): Beiträge, in
-   denen jemand von eigenem (versuchtem) Betrug erzählt – für den Projektbericht (welche Maschen
+   denen jemand von eigenem (versuchtem) Betrug erzählt – für die Auswertung (welche Maschen
    wie oft, `summarize`) und als Quelle für neue Lexikon-Muster.
 
 Welche Threads gelesen werden, steht in data/quellen/foren.yaml (dort ergänzen). Unterstützt werden
@@ -394,5 +394,5 @@ def collect(urls: list[str] | None = None, max_pages: int | None = None, fetch: 
 
 
 def summarize(reports: list[Report], top: int = 12) -> list[tuple[str, int]]:
-    """Welche Maschen beschreiben Betroffene am häufigsten? (für den Projektbericht)"""
+    """Welche Maschen beschreiben Betroffene am häufigsten? (für die Auswertung)"""
     return Counter(code for r in reports for code in set(r.maschen)).most_common(top)

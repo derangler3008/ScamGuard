@@ -1,4 +1,4 @@
-"""Preis- und Verkäuferplausibilität."""
+"""Preisplausibilität (Anbieter-Merkmale: features/seller.py)."""
 
 from __future__ import annotations
 
@@ -49,19 +49,4 @@ def analyze_price(listing: Listing, reference_path: str) -> tuple[dict[str, floa
                                   f"Preis deutlich unter dem üblichen Gebrauchtpreis (ab ca. {lo:.0f} €)",
                                   0.25, evidence=f"{listing.price:.0f} €", target="price"))
 
-    # Seller-Merkmale: neue Accounts ohne Bewertungen sind überdurchschnittlich oft Fake-Accounts
-    age, ratings = listing.seller_account_age_days, listing.seller_num_ratings
-    if age is not None:
-        features["seller_account_age_days"] = float(age)
-        if age < 7:
-            signals.append(Signal(src, "NEW_ACCOUNT", "Verkäuferkonto ist jünger als eine Woche", 0.3,
-                                  evidence=f"{age} Tage", target="seller"))
-        elif age < 30:
-            signals.append(Signal(src, "YOUNG_ACCOUNT", "Verkäuferkonto ist jünger als ein Monat", 0.1,
-                                  evidence=f"{age} Tage", target="seller"))
-    if ratings is not None:
-        features["seller_num_ratings"] = float(ratings)
-        if ratings == 0 and ref and listing.price and listing.price >= 200:
-            signals.append(Signal(src, "NO_RATINGS_HIGH_VALUE",
-                                  "Hochpreisiger Artikel von Konto ohne Bewertungen", 0.15, target="seller"))
     return features, signals
