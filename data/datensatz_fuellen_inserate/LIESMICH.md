@@ -16,8 +16,10 @@ unter …“), PDFs („Drucken → Als PDF speichern“) und `.txt`.
 
 **Automatisch beim Labeln:** Jede Einstufung aus Extension oder Web-App wird hier abgelegt, sortiert
 nach Kategorie (gewerbliche Anbieter getrennt), z. B. `serioes/auto-gewerblich/<titel>__<schlüssel>/`
-mit `inserat.json` (alle Felder, ohne Anbietername) und den Fotos. Stuft man dieselbe Anzeige neu ein,
-wird der Ordner aktualisiert bzw. verschoben. Bisherige Labels übernehmen: `scamguard data ordner`.
+mit `inserat.json` (alle Felder, ohne Anbietername; Telefonnummern und Mailadressen anonymisiert) und
+allen Fotos des Inserats (bis 20). Stuft man dieselbe Anzeige neu ein, wird der Ordner aktualisiert bzw.
+verschoben – so lassen sich auch fehlende Fotos nachholen. Bisherige Labels übernehmen:
+`scamguard data ordner`.
 
 ScamGuard liest Titel, Preis, Ort, Kategorie, Kontoalter, Anbieterprofil und Beschreibung beim
 Training selbst aus (Texterkennung lokal mit Apple Vision, nur auf dem Mac; Ordner mit `inserat.json`

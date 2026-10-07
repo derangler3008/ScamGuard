@@ -12,9 +12,11 @@ Kategorie (gewerbliche Anbieter getrennt):
       inserat.json   alle Felder (ohne Anbietername), Masche, Adresse der Anzeige
       bild_1.jpg …   die Fotos des Inserats
 
-Der Ordner lässt sich durchsehen, teilen und beim Training einlesen; er wird bei jeder neuen
-Einstufung derselben Anzeige aktualisiert bzw. verschoben. Beim Bauen der Splits werden die
-Einträge mit eigene_labels.jsonl dedupliziert – nichts zählt doppelt.
+Der Ordner lässt sich durchsehen, über Git teilen und beim Training einlesen; Telefonnummern,
+Mailadressen u. Ä. in Titel, Text und Chat sind darin anonymisiert (data/redact.py, die Form bleibt
+für die Merkmale erhalten). Er wird bei jeder neuen Einstufung derselben Anzeige aktualisiert bzw.
+verschoben. Beim Bauen der Splits werden die Einträge mit eigene_labels.jsonl dedupliziert – nichts
+zählt doppelt.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from scamguard.config import resolve_path
 from scamguard.data.build import listing_fingerprint, read_jsonl, write_jsonl
 from scamguard.data.discovery import LISTING_DIR
 from scamguard.data.listing_import import LISTING_JSON
+from scamguard.data.redact import redact
 from scamguard.features.seller import is_commercial
 from scamguard.schema import Listing
 
@@ -86,7 +89,7 @@ def folder_key(listing: Listing) -> str:
 
 def dataset_folder(listing: Listing) -> Path:
     category = listing.category + ("-gewerblich" if is_commercial(listing) else "")
-    name = f"{_slug(listing.title or listing.full_text)}__{folder_key(listing)}"
+    name = f"{_slug(redact(listing.title or listing.full_text))}__{folder_key(listing)}"
     return resolve_path(DATASET_DIR) / LABEL_FOLDERS[listing.label] / category / name
 
 
@@ -119,6 +122,8 @@ def save_to_dataset_folder(listing: Listing) -> Path | None:
             stale.unlink()
 
     data = {k: v for k, v in listing.to_dict().items() if k not in ("image_paths", "label", "source", "seller_name")}
+    data.update(title=redact(listing.title), description=redact(listing.description),
+                messages=[redact(m) for m in listing.messages])
     manifest = {"label": LABEL_FOLDERS[listing.label], **data, "bilder": pictures}
     tmp = target / f"{LISTING_JSON}.tmp"
     tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -2,6 +2,34 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.8.1] – 2026-10-06
+
+### Behoben
+- **Server-Absturz bei mehreren Tabs** („segmentation fault“): PyTorch auf der Apple-GPU (MPS) verträgt
+  keine gleichzeitigen Berechnungen; mit trainiertem GBERT stürzte der Server ab, sobald mehrere Inserate
+  zugleich geprüft wurden. Torch-Modelle laden und rechnen jetzt nacheinander (`models/base.TORCH_LOCK`),
+  Regeln und LLM-Anfragen bleiben parallel.
+- **Fotos beim Einstufen:** Die Extension legt jetzt alle Fotos eines Inserats ab (bis 20, vorher die
+  ersten 4) – auch wenn „Inseratsbilder mitprüfen“ ausgeschaltet ist. Das Panel meldet, wie viele Fotos
+  abgelegt wurden. Geprüft werden weiterhin die ersten 4.
+- **Teilenummern** wie `8U0807233A` oder `5Q0907530` galten als Telefonnummer (Warnsignal und
+  Anonymisierung); Nummern direkt hinter Buchstaben zählen nicht mehr.
+
+### Geändert
+- Inserats-Ordner (`data/datensatz_fuellen_inserate/`): Telefonnummern und Mailadressen in Titel,
+  Beschreibung und Chat werden anonymisiert, die Form bleibt für die Merkmale erhalten. Die Originale
+  in `data/raw/eigene_labels.jsonl` bleiben unverändert.
+
+### Nach dem Update (alle)
+1. `git pull origin main` auf dem eigenen Branch. Keine neuen Abhängigkeiten, `pip install` ist nicht nötig.
+2. Laufende Dienste neu starten (`scamguard start`, `scamguard ui`) – sonst läuft der alte Code weiter,
+   inklusive Absturzgefahr mit GBERT.
+3. Extension neu laden: Firefox `python scripts/firefox_mit_extension.py --reload`, Chromium
+   `chrome://extensions` → ScamGuard → *Neu laden*. Danach offene Kleinanzeigen-Tabs neu laden.
+4. Vor 0.8.1 eingestufte Inserate haben höchstens 4 Fotos: Anzeige öffnen, Label erneut klicken – der
+   Ordner wird ergänzt, nicht doppelt angelegt.
+5. Bestehende Inserats-Ordner anonymisieren: `scamguard data ordner`.
+
 ## [0.8.0] – 2026-10-05
 
 ### Hinzugefügt

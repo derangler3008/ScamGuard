@@ -8,7 +8,8 @@ import { getSettings } from "./lib/settings.js";
 
 const CLIENT_HEADER = "X-ScamGuard-Client";
 const VERSION = ext.runtime.getManifest().version;
-const MAX_IMAGES = 4;
+const MAX_SCAN_IMAGES = 4;   // Prüfen: die ersten Fotos reichen, hält den Scan schnell
+const MAX_LABEL_IMAGES = 20; // Einstufen: alle Fotos des Inserats in den Datensatz
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 // Gleiche Skripte wie im Manifest (eine Quelle) – für Seiten ohne automatischen Scan per executeScript
 const CONTENT_SCRIPTS = ext.runtime.getManifest().content_scripts[0].js;
@@ -50,7 +51,7 @@ async function fetchImage(url) {
 const USE_LLM = { off: "false", auto: "auto", on: "true" };
 
 // Bilder einer Seite werden für Stufe 1, Stufe 2 und das Labeln gebraucht → nur einmal laden.
-const IMAGE_CACHE_SIZE = 16;
+const IMAGE_CACHE_SIZE = 24;
 const imageCache = new Map(); // URL → Blob (älteste zuerst)
 
 async function cachedImage(url) {
@@ -61,14 +62,14 @@ async function cachedImage(url) {
   return imageCache.get(url);
 }
 
-async function listingForm(listing, imageUrls, withImages) {
+async function listingForm(listing, imageUrls, maxImages) {
   const form = new FormData();
   form.append("listing", JSON.stringify(listing));
   // Index (auf der Seite) der Bilder, die tatsächlich hochgeladen wurden – der Server meldet
   // Bildsignale als "image:<Upload-Index>", das Content Script übersetzt zurück.
   const uploadedImageIndices = [];
-  if (withImages && imageUrls?.length) {
-    const results = await Promise.allSettled(imageUrls.slice(0, MAX_IMAGES).map(cachedImage));
+  if (maxImages > 0 && imageUrls?.length) {
+    const results = await Promise.allSettled(imageUrls.slice(0, maxImages).map(cachedImage));
     results.forEach((r, pageIndex) => {
       if (r.status !== "fulfilled") return;
       form.append("images", r.value, `bild_${pageIndex}.${IMAGE_EXT[r.value.type]}`);
@@ -93,7 +94,8 @@ async function postToServer(path, form, settings, timeoutMs) {
 }
 
 async function scanListing(listing, imageUrls, settings, llmMode) {
-  const { form, uploadedImageIndices } = await listingForm(listing, imageUrls, settings.analyzeImages);
+  const { form, uploadedImageIndices } = await listingForm(listing, imageUrls,
+    settings.analyzeImages ? MAX_SCAN_IMAGES : 0);
   form.append("use_llm", USE_LLM[llmMode] ?? "false");
   // lokales LLM: der erste Aufruf lädt das Modell → großzügiges Zeitlimit
   const result = await postToServer("/scan", form, settings, llmMode === "off" ? 30_000 : 150_000);
@@ -101,7 +103,8 @@ async function scanListing(listing, imageUrls, settings, llmMode) {
 }
 
 async function labelListing(listing, imageUrls, label, settings) {
-  const { form } = await listingForm(listing, imageUrls, settings.analyzeImages);
+  // Fotos gehören zum Datensatz – unabhängig davon, ob sie beim Prüfen mitgeschickt werden
+  const { form } = await listingForm(listing, imageUrls, MAX_LABEL_IMAGES);
   form.append("label", label);
   return postToServer("/label", form, settings, 30_000);
 }

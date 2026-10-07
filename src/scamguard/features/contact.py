@@ -59,7 +59,8 @@ URL_RE = re.compile(
     re.IGNORECASE,
 )
 INTL_PHONE_RE = re.compile(r"(?:\+|\b00)(\d{1,3})[\s\-/.]?\(?\d{1,5}\)?(?:[\s\-/.]?\d{2,}){1,4}")
-DE_PHONE_RE = re.compile(r"(?<![\d+])0\d{2,5}[\s\-/.]?\d{3,}(?:[\s\-/.]?\d{2,}){0,3}")
+# Nicht direkt hinter Buchstaben: Teilenummern wie „8U0807233A“ sind keine Telefonnummern
+DE_PHONE_RE = re.compile(r"(?<![\w+])0\d{2,5}[\s\-/.]?\d{3,}(?:[\s\-/.]?\d{2,}){0,3}")
 IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,4})?\b", re.IGNORECASE)
 
 

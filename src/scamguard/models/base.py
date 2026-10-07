@@ -6,9 +6,15 @@ und in `pipeline.build_detectors` registrieren.
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 
 from scamguard.schema import Listing, ModelResult
+
+# PyTorch auf der Apple-GPU (MPS) ist nicht threadsicher: Der Server bearbeitet Anfragen parallel, und
+# gleichzeitige Modellaufrufe brachten den Prozess zum Absturz (Segmentation fault). Alles, was Torch-
+# Modelle lädt oder rechnet, läuft deshalb nacheinander; Regeln und LLM-Anfragen bleiben parallel.
+TORCH_LOCK = threading.RLock()
 
 
 class Detector(ABC):

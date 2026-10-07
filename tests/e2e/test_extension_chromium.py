@@ -25,7 +25,7 @@ IMAGE_URL = "https://img.kleinanzeigen.de/api/v1/prod-ads/images/te/test-1?rule=
 MAIL_URL = "https://mail.example.test/posteingang"
 CHAT_URL = "https://www.kleinanzeigen.de/m-nachrichten.html"
 DEALER_URL = "https://www.kleinanzeigen.de/s-anzeige/winterraeder-17-zoll/1000000003-223-0000"
-DEALER_IMAGES = [f"https://img.kleinanzeigen.de/api/v1/prod-ads/images/hd/haendler-{i}?rule=$_59.AUTO" for i in (1, 2)]
+DEALER_IMAGES = [f"https://img.kleinanzeigen.de/api/v1/prod-ads/images/hd/haendler-{i}?rule=$_59.AUTO" for i in range(1, 7)]
 BADGE_JS = """async (pattern) => {
   const [tab] = await chrome.tabs.query({ url: pattern });
   return chrome.action.getBadgeText({ tabId: tab.id });
@@ -47,7 +47,7 @@ def chromium(api_server, test_image_bytes, tmp_path_factory):
         MAIL_URL: render("mail.html"),
         CHAT_URL: render("kleinanzeigen_chat.html"),
         DEALER_URL: render("kleinanzeigen_gewerblich.html", ACTIVE_SINCE=active_since(2000),
-                           IMAGE_URL_1=DEALER_IMAGES[0], IMAGE_URL_2=DEALER_IMAGES[1]),
+                           **{f"IMAGE_URL_{i}": url for i, url in enumerate(DEALER_IMAGES, 1)}),
     }
 
     def serve_page(route):
@@ -269,14 +269,16 @@ def test_dealer_in_new_layout_is_read_marked_and_filed(chromium, label_file, tmp
     expect(panel.locator(".sig").filter(has_text="Telefonnummer")).to_contain_text("gewerblichen Anbietern üblich")
 
     panel.locator("button.label-btn.ok").click()
+    # Prüfen nutzt die ersten 4 Fotos, Einstufen legt alle ab
     expect(panel.locator(".label-status")).to_contain_text("Gespeichert als seriös", timeout=10_000)
+    expect(panel.locator(".label-status")).to_contain_text("6 Fotos abgelegt")
     stored = [json.loads(line) for line in label_file.read_text(encoding="utf-8").splitlines()]
     row = next(r for r in stored if r["url"] == DEALER_URL)
     assert row["category"] == "auto" and row["seller_type"] == "gewerblich" and row["seller_legal_form"] == "GmbH"
     assert row["seller_badges"] == ["zufriedenheit_top", "besonders_zuverlaessig"] and row["seller_num_ads"] == 248
-    assert len(row["image_paths"]) == 2 and not row.get("seller_name")
+    assert len(row["image_paths"]) == 6 and not row.get("seller_name")
     assert 1990 <= row["seller_account_age_days"] <= 2010
     (manifest,) = Path(labels.DATASET_DIR).glob("serioes/auto-gewerblich/*/inserat.json")
-    assert sorted(p.name for p in manifest.parent.glob("bild_*")) == ["bild_1.jpg", "bild_2.jpg"]
+    assert sorted(p.name for p in manifest.parent.glob("bild_*")) == [f"bild_{i}.jpg" for i in range(1, 7)]
     page.close()
     ctx.unroute("https://img.kleinanzeigen.de/api/v1/prod-ads/images/hd/**")

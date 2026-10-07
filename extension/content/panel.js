@@ -194,7 +194,8 @@
       status.textContent = "Speichere …";
       const r = await onLabel(label);
       labelStatus = r?.ok
-        ? `Gespeichert als ${r.label === "betrug" ? "Betrug" : "seriös"} · ${r.count} eigene Labels. ` +
+        ? `Gespeichert als ${r.label === "betrug" ? "Betrug" : "seriös"} · ${r.count} eigene Labels` +
+          (r.bilder == null ? ". " : ` · ${r.bilder} ${r.bilder === 1 ? "Foto" : "Fotos"} abgelegt. `) +
           "Neu trainieren: Web-App → „Meine Daten & Training“."
         : `Speichern fehlgeschlagen: ${r?.error?.message ?? "unbekannter Fehler"}`;
       status.textContent = labelStatus;

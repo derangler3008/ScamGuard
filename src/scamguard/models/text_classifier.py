@@ -18,7 +18,7 @@ import numpy as np
 
 from scamguard.config import resolve_path
 from scamguard.features.language import GERMAN_STOPWORDS
-from scamguard.models.base import Detector
+from scamguard.models.base import TORCH_LOCK, Detector
 from scamguard.schema import Listing, ModelResult, Signal
 
 
@@ -176,7 +176,8 @@ class TextTransformerDetector(Detector):
                 self._device = best_torch_device()
                 self._tokenizer = AutoTokenizer.from_pretrained(self.path)
                 self._model = AutoModelForSequenceClassification.from_pretrained(self.path)
-                self._model.to(self._device).eval()
+                with TORCH_LOCK:
+                    self._model.to(self._device).eval()
                 meta = self.path / CHAT_META_FILE
                 self._chat_counts = json.loads(meta.read_text(encoding="utf-8")) if meta.exists() else None
             except ImportError:
@@ -197,11 +198,11 @@ class TextTransformerDetector(Detector):
 
         if abstain := chat_abstention(listing, self._chat_counts, self.name):
             return abstain
-        enc = self._tokenizer(listing.full_text, truncation=True, max_length=self.max_length,
-                              return_tensors="pt").to(self._device)
-        with torch.no_grad():
+        with TORCH_LOCK, torch.no_grad():
+            enc = self._tokenizer(listing.full_text, truncation=True, max_length=self.max_length,
+                                  return_tensors="pt").to(self._device)
             logits = self._model(**enc).logits
-        prob = float(torch.softmax(logits, dim=-1)[0, 1].item())
+            prob = float(torch.softmax(logits, dim=-1)[0, 1].item())
         return ModelResult(name=self.name, score=prob)
 
 

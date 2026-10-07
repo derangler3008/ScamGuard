@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from scamguard.config import resolve_path
-from scamguard.models.base import Detector, noisy_or
+from scamguard.models.base import TORCH_LOCK, Detector, noisy_or
 from scamguard.schema import Listing, ModelResult, Signal
 
 PHASH_MAX_DISTANCE = 6  # Hamming-Distanz (von 64 Bit), ab der zwei Bilder als „gleich“ gelten
@@ -120,6 +120,10 @@ class ImageDetector(Detector):
             return True
         if self._clip_failed or not self.cfg.get("use_clip_consistency"):
             return False
+        with TORCH_LOCK:  # parallele erste Anfragen: nur einmal laden
+            return self._clip is not None or self._load_clip()
+
+    def _load_clip(self) -> bool:
         try:
             from transformers import CLIPModel, CLIPProcessor
 
@@ -168,7 +172,7 @@ class ImageDetector(Detector):
         import torch
 
         inputs = self._clip_processor(images=img, return_tensors="pt")
-        with torch.no_grad():
+        with TORCH_LOCK, torch.no_grad():
             image = self._normalized(self._clip.get_image_features(**inputs.to(self._clip_device)))
             scale = self._clip.logit_scale.exp()
             return {name: dict(zip(keys, (scale * image @ texts.T).softmax(dim=-1)[0].tolist()))
@@ -178,7 +182,7 @@ class ImageDetector(Detector):
         import torch
 
         x = self._cnn_transform(img).unsqueeze(0)
-        with torch.no_grad():
+        with TORCH_LOCK, torch.no_grad():
             return float(torch.softmax(self._cnn(x), dim=-1)[0, 1].item())
 
     def predict(self, listing: Listing) -> ModelResult:

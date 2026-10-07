@@ -117,12 +117,20 @@ def test_api_label_endpoint(label_store):
             "label": "betrug"}
     resp = client.post("/label", data=data, headers={"X-ScamGuard-Client": "pytest"},
                        files=[("images", ("bild_0.jpg", b"jpegdaten", "image/jpeg"))])
-    assert resp.json() == {"ok": True, "label": "betrug", "count": 1}
+    assert resp.json() == {"ok": True, "label": "betrug", "count": 1, "bilder": 1}
     stored = json.loads((label_store / "eigene_labels.jsonl").read_text(encoding="utf-8"))
     assert stored["label"] == 1 and stored["price"] == 120.0 and len(stored["image_paths"]) == 1
     assert client.post("/label", data={**data, "label": "vielleicht"},
                        headers={"X-ScamGuard-Client": "pytest"}).status_code == 422
     assert client.post("/label", data=data).status_code == 403  # Cross-Site-Schutz auch hier
+
+    # Einstufen legt alle Fotos ab (mehr als beim Prüfen), aber nicht unbegrenzt viele
+    many = [("images", (f"bild_{i}.jpg", f"jpeg{i}".encode(), "image/jpeg")) for i in range(12)]
+    resp = client.post("/label", data=data, headers={"X-ScamGuard-Client": "pytest"}, files=many)
+    assert resp.json()["bilder"] == 12
+    too_many = [("images", (f"bild_{i}.jpg", b"x", "image/jpeg")) for i in range(21)]
+    assert client.post("/label", data=data, headers={"X-ScamGuard-Client": "pytest"},
+                       files=too_many).status_code == 413
 
 
 # --------------------------------------------------------------------------- Optimierungen

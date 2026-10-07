@@ -34,6 +34,7 @@ from scamguard.schema import Listing, ModelResult
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_IMAGES = 10
+MAX_LABEL_IMAGES = 20  # beim Einstufen alle Fotos des Inserats ablegen
 CLIENT_HEADER = "X-ScamGuard-Client"
 EXTENSION_SCHEMES = ("chrome-extension", "moz-extension")
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
@@ -101,11 +102,11 @@ def _parse_listing(listing: str) -> dict:
     return data
 
 
-def _read_images(images: list[UploadFile] | None) -> list[tuple[str, bytes]]:
+def _read_images(images: list[UploadFile] | None, limit: int = MAX_IMAGES) -> list[tuple[str, bytes]]:
     """Hochgeladene Bilder prüfen → [(Dateiendung, Inhalt)]."""
     images = images or []
-    if len(images) > MAX_IMAGES:
-        raise HTTPException(413, f"Maximal {MAX_IMAGES} Bilder")
+    if len(images) > limit:
+        raise HTTPException(413, f"Maximal {limit} Bilder")
     result = []
     for upload in images:
         content = upload.file.read(MAX_IMAGE_BYTES + 1)
@@ -172,6 +173,6 @@ def label(
         raise HTTPException(422, "label muss betrug oder serioes sein")
     data = _parse_listing(listing)
     data.update(label=value, source="eigene_labels",
-                image_paths=save_label_images(_read_images(images)))
+                image_paths=save_label_images(_read_images(images, MAX_LABEL_IMAGES)))
     count = save_label(Listing.from_dict(data))
-    return {"ok": True, "label": "betrug" if value else "serioes", "count": count}
+    return {"ok": True, "label": "betrug" if value else "serioes", "count": count, "bilder": len(data["image_paths"])}

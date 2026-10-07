@@ -179,6 +179,20 @@ def test_labeling_files_listing_into_dataset_folder(tmp_path, monkeypatch):
     assert len(loaded.image_paths) == 1 and loaded.url == url
 
 
+def test_dataset_folder_is_anonymized_for_sharing(tmp_path, monkeypatch):
+    monkeypatch.setattr(labels, "LABEL_FILE", str(tmp_path / "eigene_labels.jsonl"))
+    listing = Listing(title="Stuhl, Tel. +44 7700 900456", label=0, category="moebel",
+                      description="Bei Fragen: +44 7700 900456 oder jemand@example.org",
+                      messages=["Schreib mir an jemand@example.org"])
+    labels.save_label(listing)
+    (manifest,) = (tmp_path / "datensatz_fuellen_inserate").glob("serioes/moebel/*/inserat.json")
+    shared = manifest.parent.name + manifest.read_text(encoding="utf-8")
+    assert "900456" not in shared and "jemand@example.org" not in shared
+    assert "jemand@example.org" in (tmp_path / "eigene_labels.jsonl").read_text(encoding="utf-8")  # lokal unverändert
+    loaded = Listing.from_dict(json.loads(manifest.read_text(encoding="utf-8")))
+    assert {s.code for s in extract_features(loaded, CFG).signals} >= {"PHONE_IN_TEXT", "EMAIL_IN_TEXT"}
+
+
 def test_sync_command_files_existing_labels(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(labels, "LABEL_FILE", str(tmp_path / "eigene_labels.jsonl"))
     labels.save_label(Listing(title="Stuhl", description="Schaukelstuhl, Abholung", label=0, category="moebel"))

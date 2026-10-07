@@ -1,7 +1,10 @@
 import json
 
+import pytest
+
 from scamguard.config import load_config, resolve_path
 from scamguard.data.loaders import normalize_category, parse_price
+from scamguard.data.redact import redact
 from scamguard.features.contact import analyze_contacts
 from scamguard.features.language import analyze_language, looks_german
 from scamguard.features.price import analyze_price
@@ -51,6 +54,13 @@ def test_foreign_iban_is_not_mistaken_for_phone_number():
     f = analyze_contacts("Konto: GB82 WEST 1234 5698 7654 32")
     assert "FOREIGN_IBAN" in codes(f.signals)
     assert "FOREIGN_PHONE" not in codes(f.signals)
+
+
+@pytest.mark.parametrize("text", ["Bordnetzsteuergerät 8X0907063S", "Halter Schließteil 8U0807233A",
+                                  "Steuergerät 5Q0907530 passt für Golf 7"])
+def test_part_numbers_are_not_phone_numbers(text):
+    assert "PHONE_IN_TEXT" not in codes(analyze_contacts(text).signals)
+    assert redact(text) == text
 
 
 def test_german_iban_digits_are_not_a_foreign_phone():

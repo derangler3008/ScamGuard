@@ -229,3 +229,71 @@ def test_ui_opens_running_app_instead_of_starting_a_second_copy(monkeypatch, cap
     monkeypatch.setattr(cli.subprocess, "call", _no_popen)
     assert cli._cmd_ui(argparse.Namespace(public=False)) == 0
     assert opened == [cli.UI_URL] and "läuft bereits" in capsys.readouterr().out
+
+
+class _ParallelProbe:
+    """Zählt, wie viele Threads gleichzeitig im Modell rechnen."""
+
+    def __init__(self):
+        self.active = self.max = 0
+        self._lock = __import__("threading").Lock()
+
+    def __enter__(self):
+        with self._lock:
+            self.active += 1
+            self.max = max(self.max, self.active)
+        __import__("time").sleep(0.02)
+
+    def __exit__(self, *_):
+        with self._lock:
+            self.active -= 1
+
+
+class _Encoding(dict):
+    def to(self, _device):
+        return self
+
+
+def _run_in_threads(fn, n=6):
+    import threading
+
+    threads = [threading.Thread(target=fn) for _ in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+
+def test_torch_models_never_compute_in_parallel():
+    """Der Server prüft mehrere Tabs gleichzeitig – Torch auf der Apple-GPU stürzt dabei ab, wenn zwei
+    Threads zugleich rechnen (Segmentation fault). Text- und Bildmodell müssen nacheinander laufen."""
+    torch = pytest.importorskip("torch")
+    from scamguard.models.image_model import ImageDetector
+    from scamguard.models.text_classifier import TextTransformerDetector
+
+    probe = _ParallelProbe()
+
+    class TextModel:
+        def __call__(self, **_):
+            with probe:
+                return type("Out", (), {"logits": torch.tensor([[0.2, 0.8]])})()
+
+    text = TextTransformerDetector.__new__(TextTransformerDetector)
+    text._model, text._device, text._chat_counts, text.max_length = TextModel(), "cpu", None, 32
+    text._tokenizer = lambda *_, **__: _Encoding(input_ids=torch.tensor([[1, 2]]))
+
+    class Clip:
+        logit_scale = torch.tensor(1.0)
+
+        def get_image_features(self, **_):
+            with probe:
+                return torch.tensor([[1.0, 0.0]])
+
+    image = ImageDetector.__new__(ImageDetector)
+    image._clip, image._clip_device = Clip(), "cpu"
+    image._clip_processor = lambda **_: _Encoding()
+    image._prompt_features = {"style": (["foto", "stock"], torch.eye(2))}
+
+    listing = Listing(title="PS5", description="Neu und originalverpackt")
+    _run_in_threads(lambda: (text.predict(listing), image._clip_probs(None)))
+    assert probe.max == 1
