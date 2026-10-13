@@ -172,6 +172,16 @@ def test_text_model_reloads_after_retraining(tmp_path):
     assert det.predict(Listing()).score is None  # kein Text → kein Text-Urteil
 
 
+def test_clip_style_classes_sum_their_prompts():
+    from scamguard.models.image_model import STYLE_PROMPTS, sum_by_key
+
+    # Mehrere „echtes Foto“-Prompts zusammen schlagen ein einzelnes „Textbild“
+    probs = sum_by_key(["real", "real", "real", "text"], [0.3, 0.2, 0.1, 0.4])
+    assert probs == pytest.approx({"real": 0.6, "text": 0.4})
+    assert list(probs) == ["real", "text"]
+    assert len(STYLE_PROMPTS["real"]) > 1 and isinstance(STYLE_PROMPTS["stock"], str)
+
+
 def test_clip_only_hints_do_not_lower_the_score(tmp_path, monkeypatch):
     from scamguard.models.image_model import ImageDetector
 

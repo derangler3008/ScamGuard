@@ -1,0 +1,24 @@
+{
+  // „Ausführen und Debuggen“: Haltepunkte in API und Tests. Interpreter: .venv (VS Code erkennt sie selbst).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ScamGuard: API debuggen",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "scamguard.cli",
+      "args": ["api"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "ScamGuard: aktuelle Testdatei debuggen",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-q"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
+    }
+  ]
+}

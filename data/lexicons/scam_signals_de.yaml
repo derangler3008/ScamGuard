@@ -78,7 +78,10 @@ groups:
     message: "Zeitdruck / künstliche Verknappung"
     weight: 0.2
     patterns:
-      - "(nur|bis) (noch )?heute"
+      # „bis heute“ allein ist meist Rückblick („läuft bis heute problemlos“) → nur mit Frist zählen
+      - "nur (noch )?(bis )?heute"
+      - "bis heute (abend|mittag|nachmittag|nacht|\\d{1,2}([:.]\\d\\d)? ?uhr)"
+      - "(angebot|preis|reservierung) gilt (nur )?(noch )?bis heute"
       - "wer zuerst (zahlt|überweist)"
       - "viele (andere )?(interessenten|anfragen)"
       - "sofort(ige)? (zahlung|überweisung)"

@@ -252,15 +252,17 @@ def test_optional_models_are_skipped_instead_of_aborting(monkeypatch):
     monkeypatch.setattr("scamguard.data.build.read_split", lambda split: [])
     monkeypatch.setattr("scamguard.evaluate.evaluate", lambda split: {"models": {"FUSION": {"n": 0}}})
 
-    def fake_train(model, train, val, cfg):
+    def fake_train(model, train, val, cfg, log=print):
         if model == "image":
             raise ValueError("Fotos nur von einer Klasse")
+        if model == "automl":
+            raise ImportError("Paket flaml fehlt")
         return f"models/{model}"
 
     monkeypatch.setattr(training, "train_model", fake_train)
-    result = training.retrain(images=True, log=lambda message: None)
+    result = training.retrain(images=True, automl=True, log=lambda message: None)
     assert result.saved == {"text-baseline": "models/text-baseline"}
-    assert result.skipped == {"image": "Fotos nur von einer Klasse"}
+    assert result.skipped == {"image": "Fotos nur von einer Klasse", "automl": "Paket flaml fehlt"}
 
 
 def test_image_model_needs_both_classes(tmp_path):

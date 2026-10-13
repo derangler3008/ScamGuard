@@ -89,6 +89,12 @@ def api():
     return TestClient(app)
 
 
+def test_api_start_page_points_to_web_app(api):
+    resp = api.get("/")  # im Browser geöffnet: statt „Not Found“ ein Hinweis, wo die Oberfläche ist
+    assert resp.status_code == 200 and "text/html" in resp.headers["content-type"]
+    assert "ScamGuard-API läuft" in resp.text and "127.0.0.1:8501" in resp.text and "/health" in resp.text
+
+
 def test_api_health_and_scan(api):
     assert api.get("/health").json()["status"] == "ok"
     payload = {"title": "PS5", "description": "Zahlung nur Freunde und Familie", "price": 50,

@@ -11,8 +11,9 @@ from scamguard.config import load_config
 DEMO_DATASET = "demo_synthetisch"
 
 
-def train_model(model: str, train, val, cfg) -> Path:
-    """model: "text-baseline" (TF-IDF + LogReg), "text-transformer" (GBERT), "image" (CNN)."""
+def train_model(model: str, train, val, cfg, log: Callable[[str], None] = print) -> Path:
+    """model: "text-baseline" (TF-IDF + LogReg), "text-transformer" (GBERT), "image" (CNN),
+    "automl" (Welle 2: LightGBM, XGBoost, CatBoost, Random Forest … auf der Merkmalstabelle)."""
     if model == "text-baseline":
         from scamguard.models.text_classifier import train_text_baseline
 
@@ -25,6 +26,10 @@ def train_model(model: str, train, val, cfg) -> Path:
         from scamguard.models.image_model import train_image_model
 
         return train_image_model(train, val, cfg)
+    if model == "automl":
+        from scamguard.models.automl import train_automl
+
+        return train_automl(train, cfg, log=log)
     raise ValueError(f"Unbekanntes Modell: {model}")
 
 
@@ -34,7 +39,7 @@ def balance_warning(stats: dict, low: float = 0.15) -> str | None:
     share = scam / max(stats["total"], 1)
     if low <= share <= 1 - low:
         return None
-    rare = "seriöse" if share > 0.5 else "Betrugs-"
+    rare = "seriöse " if share > 0.5 else "Betrugs-"
     return (f"Achtung: {share:.0%} der {stats['total']} Beispiele sind Betrug – stark unausgewogen. Die Klassen "
             f"werden zwar ausgeglichen gewichtet, aber das Modell lernt so leicht die Quelle statt der Masche. "
             f"Erst mehr {rare}Beispiele ergänzen (README: „Trainingsdaten“).")
@@ -54,7 +59,7 @@ class RetrainResult:
 
 
 def retrain(transformer: bool = False, images: bool = False, include_demo: bool = True,
-            log: Callable[[str], None] = print) -> RetrainResult:
+            log: Callable[[str], None] = print, automl: bool = False) -> RetrainResult:
     """Alle aktiven Datensätze + eigene Labels einlesen, Modelle trainieren, auf dem Testset auswerten.
     Ein laufender Server lädt das neue Textmodell beim nächsten Scan von selbst."""
     from scamguard.data.build import build_dataset, read_split
@@ -74,14 +79,15 @@ def retrain(transformer: bool = False, images: bool = False, include_demo: bool 
     cfg = load_config()
     train, val = read_split("train"), read_split("val")
     saved, skipped = {}, {}
-    for model in ["text-baseline"] + ["text-transformer"] * transformer + ["image"] * images:
+    models = ["text-baseline"] + ["text-transformer"] * transformer + ["image"] * images + ["automl"] * automl
+    for model in models:
         log(f"Trainiere {model} …")
         try:
-            saved[model] = train_model(model, train, val, cfg)
+            saved[model] = train_model(model, train, val, cfg, log=log)
         except (ValueError, ImportError, OSError) as exc:
             if model == "text-baseline":  # ohne Baseline gibt es nichts auszuwerten
                 raise
-            # Zusatzmodelle (GBERT, CNN) dürfen fehlen – der Rest wird trotzdem trainiert und ausgewertet
+            # Zusatzmodelle (GBERT, CNN, AutoML) dürfen fehlen – der Rest wird trotzdem trainiert und ausgewertet
             skipped[model] = str(exc)
             log(f"{model} übersprungen: {exc}")
     return RetrainResult(reports, stats, saved, evaluate("test"), skipped)

@@ -6,6 +6,7 @@
   scamguard data ordner               Eigene Labels als Ordner ablegen (Label/Kategorie/Inserat)
   scamguard einstufen holen|bericht|export   Annotation-Workspace (sonst Web-App, Tab „Einstufen im Team“)
   scamguard retrain [--bilder] [--ohne-demo]  Daten + eigene Labels einlesen, neu trainieren
+  scamguard automl [--zeit 300]       Welle 2: AutoML (LightGBM, XGBoost, CatBoost, Deep Forest …)
   scamguard train text-baseline       TF-IDF + LogReg (Sekunden, CPU)
   scamguard train text-transformer    GBERT-Feintuning (GPU empfohlen)
   scamguard train image               CNN-Feintuning auf Inseratsbildern
@@ -226,7 +227,8 @@ def _cmd_retrain(args) -> int:
     """Nach neuen Daten/Labels: alles neu einlesen, Modelle neu trainieren, kurz auswerten."""
     from scamguard.training import retrain
 
-    result = retrain(transformer=args.transformer, images=args.bilder, include_demo=not args.ohne_demo)
+    result = retrain(transformer=args.transformer, images=args.bilder, include_demo=not args.ohne_demo,
+                     automl=args.automl)
     _print_build(result.reports, result.stats)
     for model, path in result.saved.items():
         print(f"  {model} gespeichert: {path}")
@@ -237,6 +239,45 @@ def _cmd_retrain(args) -> int:
     print(f"Testset ({fusion['n']} Beispiele): Precision {fusion['precision']:.2f}, "
           f"Recall {fusion['recall']:.2f}, F1 {fusion['f1']:.2f}{auc}")
     print("Ein laufender Server (`scamguard start`) nutzt das neue Textmodell ab dem nächsten Scan.")
+    return 0
+
+
+def _cmd_automl(args) -> int:
+    """Welle 2: Daten neu einlesen, AutoML-Suche, Bestenliste und Auswertung auf dem Testset."""
+    from scamguard.data.build import build_dataset, read_split
+    from scamguard.data.registry import get_specs
+    from scamguard.evaluate import evaluate
+    from scamguard.models.automl import leaderboard_lines, read_meta, train_automl
+    from scamguard.training import DEMO_DATASET, balance_warning
+
+    names = [s.name for s in get_specs() if s.name != DEMO_DATASET] if args.ohne_demo else None
+    _, stats = build_dataset(names)
+    print(f"{stats['total']} Beispiele eingelesen ({stats['duplicates_removed']} Duplikate entfernt)")
+    if warning := balance_warning(stats):
+        print(warning)
+    cfg = load_config()
+    try:
+        path = train_automl(read_split("train"), cfg, time_budget=args.zeit)
+    except ImportError as exc:
+        print(f"Pakete fehlen ({exc.name}) → pip install -e \".[automl]\" (Mac zusätzlich: brew install libomp)")
+        return 1
+    except ValueError as exc:
+        print(exc)
+        return 1
+    meta = read_meta(cfg)
+    print(f"\nBestenliste ({meta['cv_folds']}-fache Kreuzvalidierung auf dem Trainingssplit, "
+          f"{meta['n_features']} Merkmale, gespeichert: {path}):")
+    print("\n".join(leaderboard_lines(meta)))
+    m = evaluate("test")["models"].get("automl")
+    if m:
+        auc = f", AUC {m['roc_auc']:.2f}" if "roc_auc" in m else ""
+        print(f"\nTestset ({m['n']} Beispiele): Precision {m['precision']:.2f}, Recall {m['recall']:.2f}, "
+              f"F1 {m['f1']:.2f}{auc}")
+    else:
+        counts = meta["counts"]
+        print(f"\nIm Scan noch ohne Urteil: trainiert mit {counts['betrug']} Betrugs- und "
+              f"{counts['serioes']} seriösen Beispielen (nötig: je 20).")
+    print("Ein laufender Server (`scamguard start`) nutzt das neue Modell ab dem nächsten Scan.")
     return 0
 
 
@@ -506,7 +547,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=_cmd_annotate)
 
     p = sub.add_parser("train", help="Modell trainieren")
-    p.add_argument("model", choices=["text-baseline", "text-transformer", "image"])
+    p.add_argument("model", choices=["text-baseline", "text-transformer", "image", "automl"])
     p.set_defaults(func=_cmd_train)
 
     p = sub.add_parser("retrain", help="Alle Datensätze + eigene Labels neu einlesen und trainieren")
@@ -514,7 +555,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--transformer", action="store_true", help="GBERT-Textmodell mittrainieren (langsam)")
     p.add_argument("--ohne-demo", action="store_true",
                    help="Die 24 künstlichen Demo-Inserate weglassen (für echte Auswertungen)")
+    p.add_argument("--automl", action="store_true", help="Welle 2 (AutoML) mittrainieren")
     p.set_defaults(func=_cmd_retrain)
+
+    p = sub.add_parser("automl", help="Welle 2: AutoML auf der Merkmalstabelle (LightGBM, XGBoost, CatBoost …)")
+    p.add_argument("--zeit", type=float, help="Suchzeit in Sekunden (Standard: automl.time_budget_s)")
+    p.add_argument("--ohne-demo", action="store_true", help="Die künstlichen Demo-Inserate weglassen")
+    p.set_defaults(func=_cmd_automl)
 
     p = sub.add_parser("evaluate", help="Modelle auswerten")
     p.add_argument("--split", default="test", choices=["train", "val", "test"])

@@ -59,12 +59,21 @@ Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.8.0** ([Chang
 | **Bild: CLIP** | Stockfoto, Screenshot, Bild passt nicht zur Kategorie | nein (Zero-Shot) | CPU |
 | **Bild: CNN** | Muster in Betrugsbildern (EfficientNet-B0, Transfer Learning) | ja | GPU empfohlen |
 | **LLM-Judge** | Maschen-Geschichten, maschinell übersetzte Sprache, Gesamtbild | nein | lokal: Qwen (~7 GB), alternativ Claude API |
+| **AutoML** (Welle 2) | Zusammenspiel aller Merkmale (Kontoalter × Preis × Warnsignale × Wortwahl); bestes Verfahren aus LightGBM, XGBoost, CatBoost, Random Forest, Extra Trees, LogReg, Deep Forest; Erklärung per SHAP | ja (Minuten) | CPU, alle Kerne |
 
 **Modelle im Überblick:** Selbst trainiert werden GBERT (`models/text_classifier.py` →
 `train_text_transformer`) und EfficientNet-B0 (`models/image_model.py` → `train_image_model`), beide
 per Transfer Learning. Vortrainiert im Einsatz: CLIP (Bildhinweise), Qwen (KI-Analyse) und Apple Vision
 (Texterkennung beim Screenshot-Upload). Die TF-IDF-Baseline ist bewusst klassisches ML und dient als
 Messlatte für die neuronalen Modelle.
+
+**Wellen:** Welle 1 bewertet ungelabelte Texte mit Qwen vor (geplant, `docs/backlog.md`). Welle 2
+(`scamguard automl`) trainiert klassische Verfahren auf einer Merkmalstabelle (`features/tabular.py`:
+alle Regelmerkmale, Warnsignale, Anbieterprofil, Kategorie, Wortwahl als SVD-Komponenten). FLAML sucht
+Verfahren und Einstellungen per Kreuzvalidierung, der Deep Forest (`models/deep_forest.py`) tritt
+gegen die Gewinner an. AutoML läuft in einem eigenen Prozess: LightGBM/XGBoost und PyTorch bringen je
+eine OpenMP-Bibliothek mit, die sich in einem Prozess gegenseitig blockieren. Im Scan urteilt AutoML
+erst ab 20 gelabelten Beispielen je Klasse.
 
 ---
 
@@ -80,8 +89,21 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"            # Kern: Regeln, Baseline, Web-App, API, Tests
 ```
 
+**Windows** (PowerShell; Python 3.12 von python.org oder `winget install Python.Python.3.12`):
+
+```powershell
+git clone https://github.com/derangler3008/ScamGuard.git; cd ScamGuard
+py -3.12 -m venv .venv; .venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
 > **`command not found: scamguard`?** Die CLI liegt in der virtuellen Umgebung: in jedem neuen Terminal
-> `source .venv/bin/activate` – oder direkt `.venv/bin/scamguard start`.
+> `source .venv/bin/activate` (Windows: `.venv\Scripts\activate`) – oder direkt `.venv/bin/scamguard start`.
+
+**VS Code:** Das Repo bringt Aufgaben mit (`.vscode/tasks.json`, macOS und Windows): `Strg+Umschalt+B`
+startet den Server, Web-App, Tests und AutoML über *Terminal → Aufgabe ausführen*. Unter *Ausführen und
+Debuggen* lassen sich API und Tests mit Haltepunkten starten. Unter Windows startet `scamguard start` nur
+die API; Qwen läuft dort über LM Studio oder Ollama (Abschnitt „LLM“).
 
 Optionale Extras:
 
@@ -91,6 +113,7 @@ pip install -e ".[text]"       # GBERT feintunen (torch, transformers)
 pip install -e ".[vision]"     # Bildmodelle (torch, torchvision, CLIP, imagehash)
 pip install -e ".[local-llm]"  # lokales LLM (Qwen via MLX, nur Apple Silicon)
 pip install -e ".[llm]"        # Claude API als LLM-Judge
+pip install -e ".[automl]"     # Welle 2: FLAML, LightGBM, XGBoost, CatBoost, SHAP (Mac: brew install libomp)
 pip install -e ".[all]"        # alles
 pip install -e ".[e2e]"        # Browser-Tests der Extension (danach: playwright install chromium)
 ```
@@ -101,10 +124,11 @@ Erste Schritte:
 scamguard data list                  # registrierte Datensätze
 scamguard data build                 # → data/processed/{train,val,test}.jsonl
 scamguard retrain                    # einlesen + trainieren + auswerten
+scamguard automl                     # Welle 2: AutoML-Suche, Bestenliste, Auswertung (5 Min.)
 scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell und Quelle
 scamguard scan examples/inserat_beispiel.json
 scamguard ui                         # Web-App → http://127.0.0.1:8501
-scamguard api                        # REST-API → http://127.0.0.1:8000/docs
+scamguard api                        # REST-API → http://127.0.0.1:8000 (Startseite), /docs
 scamguard start                      # für die Extension: Qwen + API zusammen
 pytest                               # Tests
 ```
@@ -434,8 +458,8 @@ ScamGuard/
 │   ├── schema.py                Datenschema (Listing, Signal, ScanResult)
 │   ├── data/                    Discovery, Loader, Build/Split, Labels, Import/OCR, Collector,
 │   │                            Anonymisierung, Phrasen, Annotation, Übereinstimmung, Kategoriensystem
-│   ├── features/                URL/Mail/IBAN/Telefon, Sprache, Lexikon, Preis
-│   ├── models/                  rules, text_classifier, image_model, llm_judge, fusion
+│   ├── features/                URL/Mail/IBAN/Telefon, Sprache, Lexikon, Preis, Merkmalstabelle
+│   ├── models/                  rules, text_classifier, image_model, llm_judge, automl, deep_forest, fusion
 │   ├── pipeline.py              alle Detektoren → Fusion
 │   ├── training.py · evaluate.py · finetune.py
 │   ├── api.py                   FastAPI (Backend für die Extension)

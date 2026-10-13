@@ -10,7 +10,8 @@ Betrugserkennung für deutschsprachige Kleinanzeigen (Inserate und Chats). Pytho
 `src/scamguard/`, CLI `scamguard`.
 
 - **Detektoren:** Regeln/Lexikon (`data/lexicons/scam_signals_de.yaml`), Textmodell (TF-IDF bzw.
-  GBERT), Bildmodell (pHash/CLIP/CNN), LLM-Judge (lokal Qwen3.5-9B über MLX, optional Claude API).
+  GBERT), Bildmodell (pHash/CLIP/CNN), AutoML auf der Merkmalstabelle (`models/automl.py`, eigener
+  Prozess ohne PyTorch), LLM-Judge (lokal Qwen3.5-9B über MLX, optional Claude API).
   Gesamturteil per Late Fusion (`models/fusion.py`).
 - **Oberflächen:** Streamlit-Web-App (`frontend/app.py`), FastAPI (`api.py`), Browser-Extension
   (`extension/`, MV3, Chromium und Firefox) mit Live-Chat-Scan im Kleinanzeigen-Postfach.
@@ -27,6 +28,9 @@ git switch <eigener-branch>                 # z. B. Jannis oder Gabriel
 python3.12 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"                     # weitere Extras: README, „Quickstart“
 ```
+
+Windows: `py -3.12 -m venv .venv` statt `python3.12 …`. VS Code: Aufgaben und Debug-Starts
+liegen in `.vscode/` (`Strg+Umschalt+B` startet den Server).
 
 `scamguard` ist nur in der aktivierten `.venv` verfügbar. Qwen (`scamguard start`) läuft nur auf Macs mit
 Apple Silicon; unter Windows/Linux LM Studio oder Ollama nutzen (README, Abschnitt „LLM“).
@@ -70,7 +74,8 @@ pytest -m e2e                           # Browser-Tests (Playwright/Chromium, Se
   Kategoriensystem einem Warnsignal zuordnen (`tests/test_einstufung.py` prüft das).
 - **Labels werden manuell vergeben:** Die Spalte `betrug` der Prüfliste `gesammelt_foren.csv` und die
   Einstufungen im Annotation-Workspace stammen ausschließlich von Menschen. Keine automatisch erzeugten
-  Labels im Arbeitsordner; Tests nutzen `tmp_path`.
+  Labels im Arbeitsordner; Tests nutzen `tmp_path`. Einzige Ausnahme: Qwen-Urteile aus Welle 1
+  (Backlog MODEL-3) – in einer eigenen Datei mit Herkunft `qwen`, nie im Testset.
 - **Kategoriensystem** `data/einstufung/kategorien.yaml`: Änderungen nur nach Abstimmung im Team, dann
   `version` erhöhen und CHANGELOG-Eintrag.
 - **Saubere Evaluation:** Das Testset aus `scamguard data build` nie zum Tunen nutzen; synthetische
@@ -90,5 +95,6 @@ pytest -m e2e                           # Browser-Tests (Playwright/Chromium, Se
 | `scamguard data ordner` | bisherige eigene Labels in die Datensatz-Ordner übernehmen |
 | `scamguard einstufen holen\|bericht\|export` | Annotation-Workspace per CLI (`docs/einstufung.md`) |
 | `scamguard retrain` | alles neu einlesen, trainieren, kurz auswerten |
+| `scamguard automl [--zeit 300]` | Welle 2: AutoML-Suche, Bestenliste, Auswertung (`.[automl]`, Mac: `brew install libomp`) |
 | `scamguard evaluate [--llm --max 100]` | Kennzahlen pro Modell und Quelle |
 | `scamguard llm-daten` | Feintuning-Daten für Qwen (`docs/llm_feintuning.md`) |

@@ -1,0 +1,61 @@
+{
+  // Strg+Umschalt+B (Mac: Cmd+Umschalt+B) startet den Server; alles andere über
+  // „Terminal → Aufgabe ausführen“. Erwartet die virtuelle Umgebung in .venv (README, Quickstart).
+  "version": "2.0.0",
+  "options": {
+    "env": { "PYTHONUTF8": "1" }
+  },
+  "tasks": [
+    {
+      "label": "ScamGuard: Server (API + Qwen)",
+      "detail": "scamguard start – unter Windows nur die API, Qwen dort über LM Studio/Ollama",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/scamguard",
+      "windows": { "command": "${workspaceFolder}\\.venv\\Scripts\\scamguard.exe" },
+      "args": ["start"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "ScamGuard: Web-App",
+      "detail": "scamguard ui → http://127.0.0.1:8501",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/scamguard",
+      "windows": { "command": "${workspaceFolder}\\.venv\\Scripts\\scamguard.exe" },
+      "args": ["ui"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "ScamGuard: Tests",
+      "detail": "pytest ohne Browser-Tests",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe" },
+      "args": ["-m", "pytest", "-m", "not e2e", "-q"],
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "ScamGuard: Neu trainieren",
+      "detail": "scamguard retrain – Daten und eigene Labels einlesen, Textmodell trainieren",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/scamguard",
+      "windows": { "command": "${workspaceFolder}\\.venv\\Scripts\\scamguard.exe" },
+      "args": ["retrain"],
+      "problemMatcher": []
+    },
+    {
+      "label": "ScamGuard: AutoML (Welle 2)",
+      "detail": "scamguard automl – braucht pip install -e \".[automl]\"",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/scamguard",
+      "windows": { "command": "${workspaceFolder}\\.venv\\Scripts\\scamguard.exe" },
+      "args": ["automl"],
+      "problemMatcher": []
+    }
+  ]
+}

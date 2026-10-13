@@ -30,6 +30,9 @@ def _codes(text):
 @pytest.mark.parametrize("text, code", [
     ("Du musst dich sofort entscheiden, sonst ist es bald nicht mehr da.", "PRESSURE_URGENCY"),
     ("Zahl heute noch, ich habe schon 5 andere Interessenten.", "PRESSURE_URGENCY"),
+    ("Der Preis gilt nur noch bis heute.", "PRESSURE_URGENCY"),
+    ("Reservierung bis heute 18 Uhr, danach geht es an den Nächsten.", "PRESSURE_URGENCY"),
+    ("Nur heute zu diesem Preis!", "PRESSURE_URGENCY"),
     ("mein Hund ist gestorben, bitte schicke mir jetzt schnell das Geld", "PRESSURE_URGENCY"),
     ("Erst das Geld, dann die Ware.", "PAYMENT_FIRST"),
     ("Geld zuerst bitte, dann verschicke ich.", "PAYMENT_FIRST"),
@@ -59,6 +62,9 @@ def test_chat_scam_phrases_are_recognized(text, code):
     "Kannst du mir deine Handynummer geben? Dann melde ich mich, wenn ich vor der Tür stehe.",
     "Ich würde es kaufen, meine Handynummer ist 0151 1234567, ruf gern an.",
     "Der Hund wird geimpft und gechippt übergeben, Besuch jederzeit möglich.",
+    # Rückblick statt Frist (echtes seriöses Motorrad-Inserat)
+    "Seit der Reparatur ist das Motorrad bis heute völlig problemlos gelaufen.",
+    "Wurde bis heute regelmäßig gewartet, Rechnungen liegen vor.",
 ])
 def test_ordinary_chat_stays_clean(text):
     assert not _codes(text), text

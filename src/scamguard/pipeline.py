@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from scamguard.config import load_config, with_overrides
+from scamguard.models.automl import AutoMLDetector
 from scamguard.models.base import Detector
 from scamguard.models.fusion import fuse
 from scamguard.models.image_model import ImageDetector
@@ -20,6 +21,8 @@ def build_detectors(cfg: dict) -> list[Detector]:
         detectors.append(transformer if transformer.available else TextBaselineDetector(cfg))
     if cfg["image_model"].get("enabled", True):
         detectors.append(ImageDetector(cfg))
+    if cfg.get("automl", {}).get("enabled", True):
+        detectors.append(AutoMLDetector(cfg))  # Welle 2: meldet selbst, wenn nicht trainiert
     detectors.append(LLMJudgeDetector(cfg))  # meldet selbst, wenn deaktiviert
     return detectors
 

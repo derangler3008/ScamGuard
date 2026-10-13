@@ -30,6 +30,7 @@ fusion:
     rules: 1.0
     text_model: 1.5
     image_model: 0.7
+    automl: 1.0
     llm: 1.2
   # Ein einzelnes "hartes" Signal (z. B. Fake-Bezahlseite) hebt den Score mindestens hierauf.
   hard_signal_floor: 0.75
@@ -58,6 +59,17 @@ image_model:
   epochs: 5
   batch_size: 32
   learning_rate: 1.0e-4
+
+# Welle 2: AutoML auf der Merkmalstabelle (`scamguard automl`, braucht pip install -e ".[automl]").
+# Sucht unter LightGBM, XGBoost, CatBoost, Random Forest, Extra Trees, LogReg und Deep Forest.
+automl:
+  enabled: true
+  path: models/automl.joblib
+  time_budget_s: 300                 # Suchzeit; trainiert wird auf allen CPU-Kernen
+  text_components: 20                # Wortwahl als verdichtete TF-IDF-Merkmale (SVD)
+  deep_forest_trees: 200             # Bäume je Wald im Deep Forest
+  # Gewicht je Datenquelle im Training (1.0 = zählt wie ein menschliches Label), z. B. für Welle 1
+  source_weights: {}
 
 llm:
   # Für CLI/Streamlit; die Browser-Extension entscheidet pro Anfrage (Einstellung „KI-Analyse“).

@@ -23,6 +23,7 @@ from typing import Annotated
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse
 
 from scamguard import __version__
 from scamguard.config import load_config
@@ -74,6 +75,22 @@ def resolve_llm_mode(mode: str) -> bool:
     if mode in LLM_FLAGS:
         return LLM_FLAGS[mode]
     raise HTTPException(422, "use_llm muss auto, true oder false sein")
+
+
+START_PAGE = """<!doctype html><html lang="de"><head><meta charset="utf-8"><title>ScamGuard-API</title>
+<style>body{{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1rem;color:#1b1f24}}
+a{{color:#0b57d0}}code{{background:#f2f4f7;padding:0 .3em;border-radius:4px}}</style></head><body>
+<h1>ScamGuard-API läuft</h1><p>Version {version}. Diese Adresse ist das Backend für Browser-Extension und
+Skripte, keine Oberfläche.</p><ul>
+<li>Inserate prüfen und labeln: Web-App <a href="http://127.0.0.1:8501">127.0.0.1:8501</a> (<code>scamguard ui</code>)</li>
+<li>Status der Modelle: <a href="/health">/health</a></li>
+<li>Schnittstelle zum Ausprobieren: <a href="/docs">/docs</a></li></ul></body></html>"""
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def start_page() -> str:
+    """Wer die API im Browser öffnet, landet sonst auf „Not Found“."""
+    return START_PAGE.format(version=__version__)
 
 
 @app.get("/health")

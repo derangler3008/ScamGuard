@@ -2,6 +2,46 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.9.0] – 2026-10-13
+
+### Neu
+- **Welle 2: AutoML** (`scamguard automl`, `retrain --automl`): Merkmalstabelle je Inserat
+  (`features/tabular.py`: Regelmerkmale, Stärke jedes Warnsignals, Anbieterprofil, Kategorie, Wortwahl
+  als SVD-Komponenten). FLAML sucht unter LightGBM, XGBoost, CatBoost, Random Forest, Extra Trees und
+  logistischer Regression per Kreuzvalidierung, ein Deep Forest (Kaskadenwald nach gcForest,
+  `models/deep_forest.py`) tritt gegen die Gewinner an. Ausgabe: Bestenliste (`models/automl.json`) und
+  Auswertung auf dem Testset. Neuer Detektor `automl` in der Fusion (Gewicht 1,0).
+- **Erklärung per SHAP:** Die drei Merkmale, die den AutoML-Score am stärksten treiben, erscheinen im
+  Panel als Kontext („Extra Trees: Kontoalter (Tage): 2171 senkt das Risiko“).
+- **Eigener Prozess für AutoML:** LightGBM/XGBoost und PyTorch bringen je eine OpenMP-Bibliothek mit;
+  im selben Prozess hing die Auswertung bzw. stürzte ab (Speicherzugriffsfehler). Training und
+  Vorhersage laufen in einem Hilfsprozess ohne PyTorch.
+- AutoML urteilt im Scan erst ab 20 gelabelten Beispielen je Klasse (vorher nur Bestenliste).
+- **API-Startseite:** `http://127.0.0.1:8000` zeigt statt „Not Found“, wo Web-App, Status und `/docs`
+  liegen.
+- **VS Code** (`.vscode/`): Aufgaben für Server (`Strg+Umschalt+B`), Web-App, Tests, Training und
+  AutoML sowie Debug-Starts für API und Tests – für macOS und Windows.
+- **Windows** im README-Quickstart (`py -3.12`, `.venv\Scripts\activate`); Backlog: Einstieg fürs
+  Team, Welle 1 (Qwen bewertet vor, MODEL-3) und Scan-Pool (MODEL-4).
+
+### Behoben
+- **Echte Fotos als „Screenshot/Textbild“:** CLIP kannte als echtes Foto nur „Gegenstand in der
+  Wohnung“; bei Motorrädern, Autos und Wohnungen gewann deshalb oft „Textbild“ (15 von 49 gelabelten
+  Inseratsfotos). Jede Bildart hat jetzt mehrere Beschreibungen, deren Wahrscheinlichkeiten addiert
+  werden: 1 von 49 Fehlalarmen, und alle 6 Test-Screenshots/Textbilder werden erkannt (vorher 3).
+- **„bis heute“ als Zeitdruck:** „läuft bis heute problemlos“ zählte als künstliche Verknappung. Jetzt
+  nur noch mit Frist („nur bis heute“, „bis heute 18 Uhr“, „Angebot gilt bis heute“).
+- Warnung bei einseitigen Daten: fehlendes Leerzeichen („seriöseBeispiele“).
+
+### Nach dem Update (alle)
+1. `git pull origin main` auf dem eigenen Branch.
+2. Für AutoML: `pip install -e ".[automl]"`, auf dem Mac vorher `brew install libomp` (Windows braucht
+   nichts extra). Ohne die Pakete läuft alles wie bisher, AutoML meldet sich dann als „aus“.
+3. Dienste neu starten (`scamguard start`, `scamguard ui`) und die Extension neu laden (Firefox:
+   `python scripts/firefox_mit_extension.py --reload`, Chromium/Edge: Erweiterungen → *Neu laden*).
+4. Optional: `scamguard automl --ohne-demo` – solange es weniger als 20 seriöse Labels gibt, zeigt der
+   Befehl nur die Bestenliste.
+
 ## [0.8.1] – 2026-10-06
 
 ### Behoben

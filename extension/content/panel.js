@@ -12,7 +12,7 @@
   };
   // Schwere nicht nur über Farbe: Dreieck / Raute / Kreis (CSS-Formen, siehe .sev)
   const SEVERITY = { high: "Hoch", mid: "Mittel", low: "Niedrig" };
-  const MODEL_NAMES = { rules: "Regeln", text_model: "Text", image_model: "Bild", llm: "LLM" };
+  const MODEL_NAMES = { rules: "Regeln", text_model: "Text", image_model: "Bild", automl: "AutoML", llm: "LLM" };
   const MAX_VISIBLE_SIGNALS = 6;
 
   const CSS = `

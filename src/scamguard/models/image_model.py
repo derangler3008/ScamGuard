@@ -21,12 +21,17 @@ from scamguard.schema import Listing, ModelResult, Signal
 
 PHASH_MAX_DISTANCE = 6  # Hamming-Distanz (von 64 Bit), ab der zwei Bilder als „gleich“ gelten
 
-# CLIP ist überwiegend englisch trainiert → englische Prompts liefern bessere Ergebnisse
+# CLIP ist überwiegend englisch trainiert → englische Prompts liefern bessere Ergebnisse.
+# Mehrere Prompts je Klasse werden addiert: Mit nur „Foto in der Wohnung“ als echtem Foto gewann bei
+# Motorrädern, Autos und Wohnungen oft „Textbild“ (15 von 49 echten Inseratsfotos, Stand v0.8.1).
 STYLE_PROMPTS = {
-    "real": "an amateur smartphone photo of a used item at someone's home",
+    "real": ("an amateur smartphone photo of a used item at someone's home",
+             "an amateur photo of a used vehicle parked outside",
+             "a casual photo of an object or animal taken by a private person",
+             "a photo of a room, apartment, or building"),
     "stock": "a professional product photo on a plain white background",
     "screenshot": "a screenshot of a website or smartphone app",
-    "text": "an image that mainly shows text",
+    "text": ("an image that mainly shows text", "a document or letter with lots of text"),
 }
 CATEGORY_PROMPTS = {
     "elektronik": "a photo of an electronic device such as a phone, laptop, or game console",
@@ -38,6 +43,18 @@ CATEGORY_PROMPTS = {
     "immobilien": "a photo of a room, apartment, or house",
     "tickets": "a photo of a concert or event ticket",
 }
+
+
+def _as_tuple(prompts: str | tuple[str, ...]) -> tuple[str, ...]:
+    return (prompts,) if isinstance(prompts, str) else prompts
+
+
+def sum_by_key(keys: list[str], probs: list[float]) -> dict[str, float]:
+    """Softmax über alle Prompts → Wahrscheinlichkeit je Klasse (Summe ihrer Prompts)."""
+    out = dict.fromkeys(keys, 0.0)
+    for key, p in zip(keys, probs):
+        out[key] += p
+    return out
 
 
 def phash_of(path: str | Path) -> str:
@@ -148,13 +165,15 @@ class ImageDetector(Detector):
         features = getattr(features, "pooler_output", features)
         return features / features.norm(dim=-1, keepdim=True)
 
-    def _encode_prompts(self, prompts: dict[str, str]):
+    def _encode_prompts(self, prompts: dict[str, str | tuple[str, ...]]):
         import torch
 
-        inputs = self._clip_processor(text=list(prompts.values()), return_tensors="pt", padding=True)
+        keys = [key for key, texts in prompts.items() for _ in _as_tuple(texts)]
+        texts = [text for value in prompts.values() for text in _as_tuple(value)]
+        inputs = self._clip_processor(text=texts, return_tensors="pt", padding=True)
         with torch.no_grad():
             features = self._clip.get_text_features(**inputs.to(self._clip_device))
-        return list(prompts), self._normalized(features)
+        return keys, self._normalized(features)
 
     @property
     def available(self) -> bool:
@@ -175,7 +194,7 @@ class ImageDetector(Detector):
         with TORCH_LOCK, torch.no_grad():
             image = self._normalized(self._clip.get_image_features(**inputs.to(self._clip_device)))
             scale = self._clip.logit_scale.exp()
-            return {name: dict(zip(keys, (scale * image @ texts.T).softmax(dim=-1)[0].tolist()))
+            return {name: sum_by_key(keys, (scale * image @ texts.T).softmax(dim=-1)[0].tolist())
                     for name, (keys, texts) in self._prompt_features.items()}
 
     def _cnn_prob(self, img) -> float:
