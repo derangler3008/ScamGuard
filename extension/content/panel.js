@@ -40,6 +40,7 @@
     .high .meter span { background: #d92d20; }
     .mid .meter span { background: #f79009; }
     .sub, .models, .foot, .hint { color: #475467; margin: 6px 0; }
+    .reverse a { color: #0b57d0; }
     .summary { background: #f9fafb; border-radius: 8px; padding: 8px; margin: 8px 0; }
     .info { list-style: none; margin: 8px 0 0; padding: 8px; border-radius: 8px; background: #f5f8ff;
       display: grid; gap: 4px; color: #344054; font-size: 12px; }
@@ -83,6 +84,7 @@
       .sub, .models, .foot, .hint, .sig .ev, .sig .where { color: #cbd2dc; }
       .summary, code { background: #283548; }
       .info { background: #22314a; color: #cbd2dc; }
+      .reverse a { color: #84adff; }
       .meter { background: #344054; }
       .high .pct, .high .verdict { color: #fda29b; } .mid .pct, .mid .verdict { color: #fec84b; }
       .ok .pct, .ok .verdict { color: #75e0a7; }
@@ -211,7 +213,7 @@
       status);
   }
 
-  function renderResult({ result, marked, onFocus, onRescan, onLabel, aiPending, aiError, context }) {
+  function renderResult({ result, marked, onFocus, onRescan, onLabel, aiPending, aiError, context, imageUrl }) {
     const pct = Math.round(result.score * 100);
     const v = VERDICTS[result.verdict] ?? { cls: "", icon: null, label: result.verdict };
     const summary = result.signals.find((s) => s.code === "LLM_SUMMARY");
@@ -276,6 +278,18 @@
         text: showAll ? "Weniger anzeigen" : `Alle ${signals.length} anzeigen`,
         onclick: () => { showAll = !showAll; render(lastState); },
       }));
+    }
+
+    if (imageUrl) {
+      // Kopierte Fotos (Amazon, eBay, ältere Anzeigen) findet die Rückwärtssuche; öffnet sich erst auf Klick
+      const q = encodeURIComponent(imageUrl);
+      const link = (text, href) => h("a", {
+        href, text, target: "_blank", rel: "noopener noreferrer",
+        title: "Neuer Tab – die Adresse des Titelfotos geht dabei an diesen Dienst",
+      });
+      parts.push(h("p", { class: "hint reverse" }, "Titelfoto rückwärts suchen: ",
+        link("Google Lens", `https://lens.google.com/uploadbyurl?url=${q}`), " · ",
+        link("TinEye", `https://tineye.com/search?url=${q}`)));
     }
 
     const models = result.model_results.map((r) => {

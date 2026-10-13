@@ -143,6 +143,27 @@ def test_price_levels_relative_to_lower_market_bound():
     assert not _price_codes("Unbekannter Artikel", 1)  # ohne Referenz kein Urteil
 
 
+@pytest.mark.parametrize("title, price, expected", [
+    ("Britisch Kurzhaar Kitten", 150, {"PRICE_FAR_TOO_LOW"}),     # Tier-Vorkasse-Masche
+    ("Französische Bulldogge Welpen", 450, {"PRICE_LOW"}),
+    ("Thermomix TM6 wie neu", 150, {"PRICE_FAR_TOO_LOW"}),
+    ("RTX 5070 Founders Edition", 480, set()),                    # Mittelklasse, nicht wie RTX 5090 bewerten
+    ("RTX 5090 OVP", 700, {"PRICE_LOW"}),
+    ("PS5 + 2 Spiele", 150, {"PRICE_LOW"}),                       # Konsole mit Spielen zählt
+])
+def test_price_outliers_for_frequent_scam_items(title, price, expected):
+    assert _price_codes(title, price) == expected
+
+
+@pytest.mark.parametrize("title, price", [
+    ("PS5 Controller DualSense", 40), ("Hülle für iPhone 15 Pro", 15), ("PS5 Spiele Paket", 60),
+    ("Suche Thermomix TM6", 300), ("E-Bike Akku 500 Wh", 200), ("BKH Deckkater", 100),
+    ("iPhone 15 Pro defekt", 120), ("Tausche PS5 gegen Xbox", 0.5),
+])
+def test_accessories_wanted_ads_and_broken_items_are_no_price_outliers(title, price):
+    assert not _price_codes(title, price)
+
+
 # --- Datenimport ------------------------------------------------------------------
 
 def test_parse_price():

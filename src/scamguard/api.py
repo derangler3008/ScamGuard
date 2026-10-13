@@ -95,7 +95,7 @@ def start_page() -> str:
 
 @app.get("/health")
 def health() -> dict:
-    guard = _guard(False)
+    guard = _guard(resolve_llm_mode("auto"))  # wie die Extension standardmäßig prüft (lokales LLM an)
     llm = load_config()["llm"]
     provider = llm.get("provider", "local")
     model = llm.get(provider, {}).get("model", "")

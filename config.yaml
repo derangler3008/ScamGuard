@@ -72,8 +72,10 @@ automl:
   source_weights: {}
 
 llm:
-  # Für CLI/Streamlit; die Browser-Extension entscheidet pro Anfrage (Einstellung „KI-Analyse“).
-  enabled: false
+  # Standard für `scamguard scan` und die Web-App (Schalter „KI-Analyse“); die Browser-Extension entscheidet
+  # pro Anfrage (Einstellung „KI-Analyse“). Auswertungen (`evaluate`, `retrain`, `automl`) laufen ohne LLM,
+  # außer mit `scamguard evaluate --llm` – sonst dauert jede Auswertung Minuten.
+  enabled: true
   # local     = Open-Weight-Modell auf diesem Rechner (kostenlos, Daten bleiben lokal)
   # anthropic = Claude API (kostet pro Anfrage, Daten gehen an Anthropic)
   provider: local

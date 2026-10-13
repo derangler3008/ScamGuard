@@ -20,17 +20,18 @@ def samples() -> list[Listing]:
 
 def test_scan_works_without_any_trained_model(samples):
     guard = ScamGuard(overrides={"text_model": {"baseline_path": "models/__nicht_vorhanden__.joblib",
-                                                "path": "models/__nicht_vorhanden__"}})
+                                                "path": "models/__nicht_vorhanden__"},
+                                 "llm": {"enabled": False}})
     result = guard.scan(samples[0])
     assert 0.0 <= result.score <= 1.0
     status = {r.name: r for r in result.model_results}
     assert status["rules"].score is not None
     assert status["text_model"].available is False
-    assert status["llm"].available is False  # standardmäßig aus
+    assert status["llm"].available is False  # abgeschaltet
 
 
 def test_rules_separate_scam_from_legit_on_samples(samples):
-    guard = ScamGuard(overrides={"image_model": {"enabled": False}})
+    guard = ScamGuard(overrides={"image_model": {"enabled": False}, "llm": {"enabled": False}})
     scam = [guard.scan(l).score for l in samples if l.label == 1]
     legit = [guard.scan(l).score for l in samples if l.label == 0]
     assert sum(scam) / len(scam) > sum(legit) / len(legit) + 0.3
@@ -56,7 +57,7 @@ def test_broken_detector_does_not_crash_scan():
         def predict(self, listing):
             raise RuntimeError("kaputt")
 
-    guard = ScamGuard(overrides={"image_model": {"enabled": False}})
+    guard = ScamGuard(overrides={"image_model": {"enabled": False}, "llm": {"enabled": False}})
     guard.detectors.append(Broken())
     result = guard.scan(Listing(title="Test"))
     broken = next(r for r in result.model_results if r.name == "broken")
@@ -96,7 +97,10 @@ def test_api_start_page_points_to_web_app(api):
 
 
 def test_api_health_and_scan(api):
-    assert api.get("/health").json()["status"] == "ok"
+    health = api.get("/health").json()
+    assert health["status"] == "ok"
+    # Status wie im Standardmodus der Extension: mit lokalem LLM ist die KI-Analyse dabei
+    assert health["detectors"]["llm"] is (health["llm"]["provider"] == "local")
     payload = {"title": "PS5", "description": "Zahlung nur Freunde und Familie", "price": 50,
                "category": "elektronik", "label": 1}
     resp = api.post("/scan", data={"listing": json.dumps(payload)}, headers=CLIENT)

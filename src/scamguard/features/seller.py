@@ -64,7 +64,12 @@ def analyze_seller(listing: Listing) -> tuple[dict[str, float], list[Signal]]:
 
     if age is not None:
         features["seller_account_age_days"] = float(age)
-        if age < 7:
+        if age <= 1 and not commercial and listing.price is not None and listing.price >= HIGH_VALUE:
+            # Typisch für Fake-Inserate: Konto am selben Tag angelegt, sofort teure Ware (Elektronik, Tiere …)
+            signals.append(Signal(SRC, "NEW_ACCOUNT",
+                                  "Verkäuferkonto erst heute bzw. gestern angelegt – und gleich ein teurer Artikel",
+                                  0.45, evidence=f"{age} Tage, {listing.price:.0f} €", target="seller"))
+        elif age < 7:
             signals.append(Signal(SRC, "NEW_ACCOUNT", "Verkäuferkonto ist jünger als eine Woche", 0.3,
                                   evidence=f"{age} Tage", target="seller"))
         elif age < 30:

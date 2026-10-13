@@ -112,6 +112,8 @@
       onRescan: () => runScan(mode, text),
       onLabel: (label) => sendLabel(extracted, label),
       context: chatContext(extracted),
+      // Titelfoto für die Rückwärtssuche (Links im Panel; nur auf Klick, ScamGuard selbst fragt niemanden)
+      imageUrl: extracted.imageUrls.find((url) => url.startsWith("https://")) ?? null,
     };
     // quiet: Nachprüfung im Chat – altes Ergebnis stehen lassen, bis das neue da ist (kein Flackern)
     if (settings.showPanel && !quiet) SG.panel.showLoading(extracted.source);

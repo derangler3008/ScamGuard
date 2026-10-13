@@ -11,7 +11,7 @@
   scamguard train text-transformer    GBERT-Feintuning (GPU empfohlen)
   scamguard train image               CNN-Feintuning auf Inseratsbildern
   scamguard evaluate [--split test]   Kennzahlen pro Modell und Quelle
-  scamguard scan inserat.json [--llm] Einzelnes Inserat prüfen
+  scamguard scan inserat.json         Einzelnes Inserat prüfen (mit KI-Analyse; --ohne-llm: ohne)
   scamguard images hash bild.jpg ...  pHash für die Liste bekannter Fake-Bilder
   scamguard ui [--public]             Streamlit-Frontend starten (Standard: nur lokal)
   scamguard api                       REST-API starten (FastAPI)
@@ -307,7 +307,8 @@ def _cmd_scan(args) -> int:
     from scamguard.schema import Listing
 
     listing = Listing.from_dict(json.loads(Path(args.file).read_text(encoding="utf-8")))
-    guard = ScamGuard(overrides={"llm": {"enabled": True}} if args.llm else None)
+    llm = {"enabled": True} if args.llm else {"enabled": False} if args.ohne_llm else None
+    guard = ScamGuard(overrides={"llm": llm} if llm else None)
     result = guard.scan(listing)
     print(f"Score: {result.score:.2f}  →  {result.verdict.upper()}\n")
     for s in result.signals:
@@ -571,7 +572,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("scan", help="Ein Inserat (JSON-Datei) prüfen")
     p.add_argument("file")
-    p.add_argument("--llm", action="store_true", help="LLM-Judge (Claude) zuschalten")
+    p.add_argument("--llm", action="store_true", help="KI-Analyse erzwingen (auch wenn llm.enabled aus ist)")
+    p.add_argument("--ohne-llm", action="store_true", help="ohne KI-Analyse prüfen (schneller)")
     p.set_defaults(func=_cmd_scan)
 
     p = sub.add_parser("images", help="Bild-Werkzeuge")

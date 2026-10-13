@@ -133,6 +133,18 @@ def test_seller_warnings():
                                seller_legal_form="Muster Haushalt GmbH"))
     assert disguised["COMMERCIAL_AS_PRIVATE"].weight > 0
     assert "LOW_SATISFACTION" in _codes(Listing(title="x", seller_badges=["NA JA Zufriedenheit"]))
+
+
+@pytest.mark.parametrize("age, price, seller_type, weight", [
+    (0, 900, "privat", 0.45),        # heute angelegt, gleich teure Ware → stärker
+    (1, 250, "privat", 0.45),
+    (0, 50, "privat", 0.3),          # billig: nur „jünger als eine Woche“
+    (4, 900, "privat", 0.3),
+    (0, 900, "gewerblich", 0.3),     # Händler mit neuem Konto: kein Sonderfall
+])
+def test_brand_new_account_with_expensive_item(age, price, seller_type, weight):
+    codes = _codes(Listing(title="Grafikkarte", price=price, seller_type=seller_type, seller_account_age_days=age))
+    assert codes["NEW_ACCOUNT"].weight == weight
     service = _codes(Listing(title="Umzugshilfe", description="Preis nach Absprache", category="dienstleistungen"))
     assert service["SERVICE_OR_AD"].info
 

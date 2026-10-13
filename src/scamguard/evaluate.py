@@ -28,7 +28,7 @@ def _metrics(y_true: list[int], y_score: list[float], threshold: float) -> dict[
 
 
 def evaluate(split: str = "test", guard: ScamGuard | None = None, limit: int | None = None) -> dict:
-    guard = guard or ScamGuard()
+    guard = guard or ScamGuard(overrides={"llm": {"enabled": False}})  # LLM nur mit --llm (Sekunden je Beispiel)
     listings = read_split(split)[:limit]
     threshold = guard.cfg["thresholds"]["suspicious"]
 

@@ -92,6 +92,7 @@ def api_server(test_image_bytes, tmp_path_factory):
     hashes.write_text(phash_of(image) + "\n", encoding="utf-8")
     cfg = with_overrides(load_config(), {
         "image_model": {"known_fake_hashes": str(hashes), "use_clip_consistency": False},
+        "llm": {"enabled": False},  # echtes LLM nie im Test; KI-Anfragen gehen an _FakeLLM
     })
     guard = ScamGuard(cfg)
     # Für Anfragen mit KI-Analyse: echtes Setup, aber simuliertes LLM (kein Modell/Server nötig)

@@ -13,6 +13,8 @@ Drei Bausteine (jeder optional, die Pipeline nutzt, was installiert/trainiert is
 
 from __future__ import annotations
 
+import json
+import threading
 from pathlib import Path
 
 from scamguard.config import resolve_path
@@ -20,6 +22,7 @@ from scamguard.models.base import TORCH_LOCK, Detector, noisy_or
 from scamguard.schema import Listing, ModelResult, Signal
 
 PHASH_MAX_DISTANCE = 6  # Hamming-Distanz (von 64 Bit), ab der zwei Bilder als „gleich“ gelten
+LABELED_SCAM_IMAGE_WEIGHT = 0.5  # kein hartes Signal: das Foto kann auch aus einer echten Anzeige kopiert sein
 
 # CLIP ist überwiegend englisch trainiert → englische Prompts liefern bessere Ergebnisse.
 # Mehrere Prompts je Klasse werden addiert: Mit nur „Foto in der Wohnung“ als echtem Foto gewann bei
@@ -92,6 +95,10 @@ class ImageDetector(Detector):
         self._prompt_features: dict = {}
         self._clip_failed = False
         self._notes: list[str] = []
+        # pHashes der Fotos aus selbst als Betrug eingestuften Inseraten (Rückwärtssuche, nur lokal)
+        self._label_hashes: dict[str, object] = {}
+        self._label_mtime: float | None = None
+        self._label_lock = threading.Lock()
 
         try:
             import imagehash
@@ -115,6 +122,37 @@ class ImageDetector(Detector):
                 self._notes.append('torch/torchvision fehlen → pip install -e ".[vision]"')
             except Exception as exc:  # noqa: BLE001 – bewusste Robustheitsgrenze
                 self._notes.append(f"CNN konnte nicht geladen werden: {exc}")
+
+    def _labeled_scam_hashes(self) -> list:
+        """pHashes aller Fotos aus eigenen Betrugs-Labels – neu eingelesen, sobald sich die Labels ändern.
+        Betrüger verwenden dieselben Fotos in vielen Inseraten; so fällt ein Foto wieder auf."""
+        from scamguard.data import labels
+
+        path = resolve_path(labels.LABEL_FILE)
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            return []
+        with self._label_lock:
+            if mtime != self._label_mtime:
+                import imagehash
+                from PIL import Image
+
+                paths = [p for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+                         for entry in [json.loads(line)] if entry.get("label") == 1
+                         for p in entry.get("image_paths") or []]
+                hashes = {}
+                for p in paths:
+                    if p in self._label_hashes:
+                        hashes[p] = self._label_hashes[p]
+                        continue
+                    try:
+                        with Image.open(resolve_path(p)) as img:
+                            hashes[p] = imagehash.phash(img.convert("RGB"))
+                    except OSError:
+                        continue  # Bild gelöscht oder beschädigt
+                self._label_hashes, self._label_mtime = hashes, mtime
+            return list(self._label_hashes.values())
 
     # -- Laden ----------------------------------------------------------------
 
@@ -221,15 +259,20 @@ class ImageDetector(Detector):
             with Image.open(path) as raw:
                 img = raw.convert("RGB")
 
-            if self._has_imagehash and self._known_hashes:
+            if self._has_imagehash:
                 import imagehash
 
                 h = imagehash.phash(img)
-                dist = min(h - known for known in self._known_hashes)
-                if dist <= PHASH_MAX_DISTANCE:
+                labeled = self._labeled_scam_hashes()
+                if self._known_hashes and min(h - k for k in self._known_hashes) <= PHASH_MAX_DISTANCE:
                     signals.append(Signal(self.name, "KNOWN_FAKE_IMAGE",
                                           "Bild ist identisch mit einem bekannten Betrugsbild",
                                           0.9, evidence=label, hard=True, target=target))
+                elif labeled and min(h - k for k in labeled) <= PHASH_MAX_DISTANCE:
+                    signals.append(Signal(self.name, "LABELED_SCAM_IMAGE",
+                                          "Gleiches Foto wie in einem Inserat, das ihr als Betrug eingestuft habt – "
+                                          "Betrüger verwenden Fotos mehrfach (oder haben es hier kopiert)",
+                                          LABELED_SCAM_IMAGE_WEIGHT, evidence=label, target=target))
 
             if self._ensure_clip():
                 clip_ran = True

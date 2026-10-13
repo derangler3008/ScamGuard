@@ -3,6 +3,7 @@
 import json
 import os
 
+import numpy as np
 import pytest
 from PIL import Image
 
@@ -170,6 +171,30 @@ def test_text_model_reloads_after_retraining(tmp_path):
     train_text_baseline(data * 2, cfg)
     assert det.available  # ohne Neustart erkannt
     assert det.predict(Listing()).score is None  # kein Text → kein Text-Urteil
+
+
+def test_photos_from_scam_labels_are_recognized_again(label_store):
+    pytest.importorskip("imagehash")
+    from scamguard.models.image_model import ImageDetector
+
+    def picture(name, seed, size=(64, 64)):
+        rnd = np.random.default_rng(seed)
+        img = Image.fromarray(rnd.integers(0, 255, (48, 48, 3), dtype=np.uint8)).resize(size)
+        img.save(label_store / name)
+        return str(label_store / name)
+
+    scam_photo, legit_photo = picture("betrug.jpg", 1), picture("seriös.jpg", 2)
+    labels.save_label(Listing(title="Welpe", description="Vorkasse", label=1, image_paths=[scam_photo]))
+    labels.save_label(Listing(title="Sofa", description="Abholung", label=0, image_paths=[legit_photo]))
+    det = ImageDetector(with_overrides(CFG, {"image_model": {"use_clip_consistency": False,
+                                                              "path": str(label_store / "kein.pt")}}))
+    copied = picture("kopie.jpg", 1, size=(120, 120))  # dasselbe Foto, anders skaliert
+    other = picture("anders.jpg", 3)
+    result = det.predict(Listing(title="Welpe", image_paths=[other, copied]))
+    hit = [s for s in result.signals if s.code == "LABELED_SCAM_IMAGE"]
+    assert len(hit) == 1 and hit[0].target == "image:1" and not hit[0].hard
+    # Fotos aus seriösen Labels lösen nichts aus
+    assert not det.predict(Listing(title="Sofa", image_paths=[legit_photo])).signals
 
 
 def test_clip_style_classes_sum_their_prompts():

@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 from conftest import EXTENSION_DIR, active_since, free_port, render
@@ -106,6 +107,14 @@ def test_scam_listing_is_marked_and_scored(chromium):
 
     badge = worker.evaluate(BADGE_JS, "https://www.kleinanzeigen.de/*")
     assert re.fullmatch(r"\d{1,3}%", badge)
+
+    # Rückwärtssuche: nur Links (öffnen sich erst auf Klick), mit dem Titelfoto des Inserats
+    lens = page.locator("#scamguard-root .reverse a", has_text="Google Lens")
+    prefix, _, photo = lens.get_attribute("href").partition("?url=")
+    assert prefix == "https://lens.google.com/uploadbyurl"
+    assert unquote(photo).startswith(IMAGE_URL.split("?")[0])  # große Fassung des Titelfotos
+    assert lens.get_attribute("target") == "_blank" and "noopener" in lens.get_attribute("rel")
+    expect(page.locator("#scamguard-root .reverse a", has_text="TinEye")).to_have_count(1)
     if shots := os.environ.get("SCAMGUARD_SCREENSHOTS"):  # optional: Bilder für die Doku
         page.set_viewport_size({"width": 1280, "height": 900})
         page.screenshot(path=f"{shots}/chromium_inserat.png")

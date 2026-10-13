@@ -1,9 +1,13 @@
-# Grobe Gebrauchtpreis-Spannen (EUR) für häufig betroffene Artikel.
-# Platzhalterwerte – bitte mit echten Marktdaten (z. B. eigene Recherche,
-# Preisvergleich, Datensätze) aktualisieren. Schlüssel = Regex auf Titel/Beschreibung.
+# Grobe Gebrauchtpreis-Spannen (EUR) für häufig betroffene Artikel – Preisausreißer-Erkennung.
+# Grobe Schätzung (Stand 2026-10): Untergrenzen bewusst vorsichtig, gelegentlich mit echten Marktdaten
+# (Preisvergleich, eigene Labels) nachziehen. Schlüssel = Regex auf Titel/Beschreibung.
 # Reihenfolge zählt: das erste passende Muster gewinnt → Spezifisches nach oben.
+# Geprüft wird nur der Hauptartikel: Zubehör, Defektes, Such- und Tauschanzeigen nimmt
+# features/price.py vorher aus („PS5 Controller 40 €“ ist kein Dumpingpreis).
+# Signale (relativ zur Untergrenze): unter 40 % → PRICE_FAR_TOO_LOW, unter 65 % → PRICE_LOW.
 
 items:
+  # --- Smartphones, Tablets, Uhren ---------------------------------------------------------
   - pattern: "iphone ?1[67] ?pro"
     min: 650
     max: 1300
@@ -13,42 +17,129 @@ items:
   - pattern: "iphone ?1[3-7]"
     min: 300
     max: 900
+  - pattern: "iphone ?1[12]"
+    min: 150
+    max: 450
+  - pattern: "galaxy z ?(fold|flip) ?[4-7]"
+    min: 300
+    max: 1500
   - pattern: "samsung galaxy s2[3-6]"
     min: 300
     max: 1000
+  - pattern: "pixel ?(8|9|10)"
+    min: 200
+    max: 900
+  - pattern: "ipad pro"
+    min: 350
+    max: 1500
+  - pattern: "ipad air"
+    min: 250
+    max: 800
+  - pattern: "apple watch (ultra|series ?(9|10|11))"
+    min: 150
+    max: 700
+  - pattern: "airpods ?max"
+    min: 250
+    max: 500
+  - pattern: "airpods ?pro"
+    min: 80
+    max: 220
+  # --- Konsolen, VR ----------------------------------------------------------------------------
+  - pattern: "(playstation ?5|ps ?5) ?pro"
+    min: 500
+    max: 800
   - pattern: "playstation ?5|ps ?5"
     min: 280
     max: 500
+  - pattern: "xbox series x"
+    min: 250
+    max: 450
+  - pattern: "steam ?deck"
+    min: 250
+    max: 600
   - pattern: "nintendo switch ?2"
     min: 300
     max: 500
   - pattern: "nintendo switch"
     min: 120
     max: 280
+  - pattern: "meta quest ?3"
+    min: 250
+    max: 500
+  # --- Computer, Grafikkarten --------------------------------------------------------------
+  - pattern: "rtx ?(5090|4090)"
+    min: 1300
+    max: 3000
+  - pattern: "rtx ?(5080|4080)"
+    min: 700
+    max: 1300
+  - pattern: "rtx ?(50|40)70"
+    min: 350
+    max: 800
+  - pattern: "rtx ?30[89]0"
+    min: 300
+    max: 800
+  - pattern: "rx ?(7900|9070)"
+    min: 400
+    max: 900
   - pattern: "macbook (air|pro)"
     min: 450
     max: 2500
-  - pattern: "rtx ?50[789]0|rtx ?4090"
-    min: 900
-    max: 2500
-  - pattern: "airpods ?pro"
-    min: 80
-    max: 220
+  # --- Foto, Drohnen ---------------------------------------------------------------------------
+  - pattern: "sony (a7|alpha ?7)|canon eos r[5-8]|nikon z ?[5-9]"
+    min: 600
+    max: 3000
+  - pattern: "dji (mini|air|mavic) ?[2-5]"
+    min: 250
+    max: 1500
+  - pattern: "gopro hero ?1[1-3]"
+    min: 150
+    max: 400
+  # --- Haushalt, Küche -------------------------------------------------------------------------
   - pattern: "thermomix|tm ?[67]"
     min: 500
     max: 1400
+  - pattern: "kitchenaid"
+    min: 150
+    max: 600
+  - pattern: "jura (e[468]|z10|ena|giga)"
+    min: 250
+    max: 1500
   - pattern: "dyson (v1[0-5]|gen5|airwrap)"
     min: 150
     max: 550
+  - pattern: "roborock|dreame (l|x)\\d"
+    min: 150
+    max: 900
   - pattern: "(waschmaschine|trockner|geschirrspüler|spülmaschine)"
     min: 80
     max: 700
   - pattern: "kühlschrank|kühl-gefrier"
     min: 60
     max: 900
+  # --- Fahrzeuge -------------------------------------------------------------------------------
+  - pattern: "e-?bike|pedelec"
+    min: 500
+    max: 5000
   - pattern: "(vw|volkswagen) golf"
     min: 3000
     max: 35000
   - pattern: "bmw [1-5]er|audi a[3-6]|mercedes (a|c|e)[- ]?klasse"
     min: 4000
     max: 50000
+  # --- Rassetiere (Welpen-/Kittenbetrug mit Vorkasse für den Transport) -------------------------
+  - pattern: "französische bulldogge|french bulldog"
+    min: 800
+    max: 3000
+  - pattern: "golden retriever|labrador"
+    min: 800
+    max: 2500
+  - pattern: "zwergspitz|pomeranian|yorkshire|chihuahua|malteser"
+    min: 600
+    max: 3000
+  - pattern: "maine coon"
+    min: 600
+    max: 2000
+  - pattern: "britisch kurzhaar|\\bbkh\\b|scottish fold|ragdoll"
+    min: 400
+    max: 1500

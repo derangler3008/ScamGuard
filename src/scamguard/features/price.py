@@ -10,6 +10,17 @@ import yaml
 
 from scamguard.schema import Listing, Signal
 
+# Den Referenzpreis hat nur der Artikel selbst: Zubehör, Defektes, Such-, Tausch- und Mietanzeigen
+# („PS5 Controller“, „Hülle für iPhone 15 Pro“, „Suche Thermomix“) bleiben beim Preisvergleich außen vor.
+# „Spiele“ nur ohne „mit“, „und“, „inkl.“, „+“ oder Anzahl davor: „PS5 + 2 Spiele“ ist die Konsole,
+# „PS5 Spiele Paket“ nicht.
+NOT_THE_ITEM = re.compile(
+    r"\b(hülle|case|cover|folie|schutzfolie|panzerglas|schutzglas|displayschutz|kabel|ladekabel|ladegerät|"
+    r"netzteil|adapter|akku|controller|fernbedienung|halterung|ständer|tasche|karton|verpackung|zubehör|"
+    r"ersatzteile?|defekt|kaputt|bastler|reparatur|mainboard|platine|skin|aufkleber|spiel|game|"
+    r"suche|gesucht|tausche?|vermiete\w*|verleih\w*|deckrüde|deckkater|tierschutz|schutzgebühr)\b"
+    r"|(?<!mit )(?<!und )(?<!inkl\. )(?<!\+ )(?<!\s\d )\bspiele\b", re.IGNORECASE)
+
 
 @lru_cache(maxsize=4)
 def _load_reference(path: str) -> list[tuple[re.Pattern, float, float]]:
@@ -21,6 +32,8 @@ def _load_reference(path: str) -> list[tuple[re.Pattern, float, float]]:
 
 def reference_range(listing: Listing, reference_path: str) -> tuple[float, float] | None:
     """Sucht im Titel (dann in der Beschreibung) nach einem bekannten Artikel."""
+    if NOT_THE_ITEM.search(listing.title or ""):
+        return None
     items = _load_reference(reference_path)
     for text in (listing.title, listing.description):
         for pattern, lo, hi in items:

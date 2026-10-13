@@ -32,7 +32,7 @@ Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.8.0** ([Chang
        ┌──────────────────┬─────────────┴─────┬──────────────────────┐
        ▼                  ▼                   ▼                      ▼
  ┌───────────┐   ┌────────────────┐   ┌───────────────┐   ┌────────────────────┐
- │  Regeln   │   │   Textmodell   │   │  Bildmodell   │   │ LLM-Judge (opt.)   │
+ │  Regeln   │   │   Textmodell   │   │  Bildmodell   │   │ LLM-Judge          │
  │ Lexikon,  │   │ TF-IDF-Baseline│   │ pHash, CLIP   │   │ Qwen lokal oder    │
  │ URL/Mail/ │   │ oder GBERT     │   │ Zero-Shot,    │   │ Claude API, JSON   │
  │ IBAN,Preis│   │ (feingetunt)   │   │ CNN (Effic.)  │   │                    │
@@ -52,10 +52,10 @@ Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.8.0** ([Chang
 
 | Detektor | Erkennt z. B. | Training | Hardware |
 |---|---|---|---|
-| **Regeln** (`features/`) | Fake-Zahlungslinks, Lookalike-Domains (`paypa1-…`), ausländische IBAN/Telefonnummern, „Freunde & Familie“, Spediteur-/Treuhand-Geschichten, Ausweis-Forderungen, Dumpingpreise, falsche Artikel („der Auto“); in Nachrichten/Mails/SMS: Konto-gesperrt-Phishing, Paket-/Zoll-SMS, Code-Weitergabe, „Zahlung reserviert“, Zeitdruck, „Geld zuerst“; Anbieter: junges Konto, keine Bewertungen, Firma als „Privater Nutzer“ | nein | CPU |
+| **Regeln** (`features/`) | Fake-Zahlungslinks, Lookalike-Domains (`paypa1-…`), ausländische IBAN/Telefonnummern, „Freunde & Familie“, Spediteur-/Treuhand-Geschichten, Ausweis-Forderungen, Dumpingpreise (Preisliste mit 43 häufig betroffenen Artikeln von iPhone über Grafikkarten bis Rassetiere, ohne Zubehör/Suchanzeigen), falsche Artikel („der Auto“); in Nachrichten/Mails/SMS: Konto-gesperrt-Phishing, Paket-/Zoll-SMS, Code-Weitergabe, „Zahlung reserviert“, Zeitdruck, „Geld zuerst“; Anbieter: junges Konto (stärker: heute angelegt + teure Ware), keine Bewertungen, Firma als „Privater Nutzer“ | nein | CPU |
 | **Text-Baseline** | Wort- und Zeichen-n-Gramme, auch Tippfehler/gebrochenes Deutsch | Sekunden | CPU |
 | **Text-Transformer** | Kontext, Formulierungsmuster (`deepset/gbert-base`, feingetunt) | ja | GPU empfohlen |
-| **Bild: pHash** | wiederverwendete Fake-/Stockfotos | nein (Hash-Liste) | CPU |
+| **Bild: pHash** | wiederverwendete Fake-/Stockfotos; Fotos aus eigenen Betrugs-Labels in neuen Anzeigen (lokale Rückwärtssuche) | nein (Hash-Liste, Labels) | CPU |
 | **Bild: CLIP** | Stockfoto, Screenshot, Bild passt nicht zur Kategorie | nein (Zero-Shot) | CPU |
 | **Bild: CNN** | Muster in Betrugsbildern (EfficientNet-B0, Transfer Learning) | ja | GPU empfohlen |
 | **LLM-Judge** | Maschen-Geschichten, maschinell übersetzte Sprache, Gesamtbild | nein | lokal: Qwen (~7 GB), alternativ Claude API |
@@ -203,6 +203,10 @@ nutzt sie alle Modelle, und die Logik wird an genau einer Stelle gepflegt. Jedes
   Webseiten können ihn daher nicht heimlich nutzen (etwa um kostenpflichtige API-Aufrufe auszulösen).
 - Seiteninhalte landen im Panel nur als Text, nie als HTML – ein präpariertes Inserat kann keinen Code
   einschleusen.
+- Rückwärtssuche: Das Panel bietet Links zu Google Lens und TinEye für das Titelfoto. Erst der Klick
+  öffnet die Suche in einem neuen Tab und gibt die Bildadresse an diesen Dienst weiter; ScamGuard selbst
+  fragt dort nie automatisch an. Automatisch und lokal läuft nur der Abgleich mit Fotos aus eigenen
+  Betrugs-Labels (pHash).
 - Firefox-Datenübertragungs-Erklärung: `websiteContent` (der lokale Server läuft außerhalb des Browsers).
 
 ### Bekannte Grenzen
@@ -424,6 +428,19 @@ Datensatzes wird deshalb selbst aufgebaut:
   `shaw/scambench-training` (66 typisch deutsche Maschen). Einen deutschen Kleinanzeigen-Chat-Datensatz
   gibt es dort nicht; vorbereitet in `huggingface.yaml` (`aktiv: false`).
 - **Synthetisch (mit Vorsicht):** Varianten bekannter Maschen nur als eigene `source` und **nie** im Testset.
+- **Kaggle/Zenodo** (Recherche 10/2026, Suchbegriffe `classified ads fraud`, `online marketplace scam`,
+  `e-commerce fraud detection`): kein Datensatz zu deutschen Kleinanzeigen. Am nächsten kommt EMSCAD
+  („Real or Fake Job Postings“, 17 880 englische Stellenanzeigen, 866 Betrug, 2012–2014) – nur mit
+  mehrsprachigem Modell sinnvoll; Craigslist-Studien veröffentlichen ihre Daten meist nicht.
+  Transaktions-Datensätze („credit card fraud“) enthalten keinen Text und passen nicht.
+- **Foren** (z. B. Reddit-Communities zu Kleinanzeigen-Betrug, Verbraucherzentralen): wertvoll für
+  Maschen und Formulierungen. Reddit verbietet Bots per robots.txt → nur von Hand lesen und Muster ins
+  Lexikon übernehmen oder den offiziellen Forschungszugang beantragen; `scamguard data sammeln --quellen
+  foren` holt nur Quellen, die es erlauben.
+- **Was wir bewusst nicht tun:** Kleinanzeigen scrapen (auch nicht über Scraper-Dienste) und
+  „Honeypots“ (Fake-Inserate, um Betrüger anzulocken) – beides verstößt gegen die Nutzungsbedingungen,
+  Honeypots täuschen zudem echte Interessenten. Die Merkmale aus solchen Studien (Preisausreißer,
+  Konto am selben Tag angelegt, übersetzte Sprache, kopierte Fotos) prüft ScamGuard direkt im Inserat.
 
 ---
 
@@ -507,5 +524,5 @@ kopiert werden. Bilder werden nicht übertragen; keine echten Namen, Nummern ode
   Nicht-Muttersprachler dürfen nicht pauschal als Betrüger gelten. Falsch-Positive werden gezielt ausgewertet.
 - **Bewertung:** Kennzahlen auf den synthetischen Demo-Daten sind bedeutungslos. Die Auswertung pro
   Quelle (`evaluate`) zeigt, ob ein Modell Betrug oder nur die Quelle gelernt hat.
-- **LLM-Kosten:** `llm.enabled` ist standardmäßig `false`; Modell und Effort in `config.yaml`.
+- **LLM-Kosten:** Die KI-Analyse ist standardmäßig an, aber nur mit dem lokalen Qwen kostenlos; mit `provider: anthropic` schaltet sie die Web-App nicht von selbst ein (`--ohne-llm` bzw. Schalter zum Abschalten). Modell und Effort in `config.yaml`.
   API-Keys per Umgebungsvariable (`ANTHROPIC_API_KEY`), nie im Code.

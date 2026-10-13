@@ -2,6 +2,31 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.10.0] – 2026-10-13
+
+### Neu
+- **Preisausreißer für viel mehr Artikel:** Preisliste von 16 auf 43 Artikel – u. a. iPhone 11/12,
+  Galaxy Fold/Flip, Pixel, iPad, Apple Watch, PS5 Pro, Xbox, Steam Deck, Grafikkarten nach Klasse
+  (RTX 5070 wird nicht mehr wie eine 5090 bewertet), Kameras, Drohnen, Thermomix, KitchenAid, Jura,
+  Saugroboter, E-Bikes und Rassetiere (Welpen-/Kitten-Masche). Zubehör, Defektes, Such-, Tausch- und
+  Mietanzeigen fallen aus dem Preisvergleich („PS5 Controller 40 €“ ist kein Dumpingpreis).
+- **Konto am selben Tag angelegt + teurer Artikel** (ab 200 €, privat): `NEW_ACCOUNT` mit Gewicht 0,45
+  statt 0,3.
+- **Rückwärtssuche:** Fotos aus selbst als Betrug eingestuften Inseraten werden in neuen Anzeigen
+  wiedererkannt (`LABELED_SCAM_IMAGE`, pHash, lokal; kein hartes Signal, weil das Foto auch aus einer
+  echten Anzeige kopiert sein kann). Im Panel Links zu Google Lens und TinEye für das Titelfoto – erst
+  der Klick schickt die Bildadresse dorthin.
+- **KI-Analyse standardmäßig an:** `llm.enabled: true` – `scamguard scan` und die Web-App prüfen mit
+  Qwen (`scamguard scan --ohne-llm` bzw. Schalter zum Abschalten). Kostenpflichtige Anbieter schaltet die
+  Web-App nie von selbst ein. Auswertungen (`evaluate`, `retrain`, `automl`) bleiben ohne LLM, außer mit
+  `evaluate --llm`.
+- Datenstrategie (README): Recherche Kaggle/Zenodo, Umgang mit Foren, warum kein Scraping und keine
+  Honeypots.
+
+### Nach dem Update (alle)
+1. `git pull origin main`, Dienste neu starten, Extension neu laden.
+2. Damit die KI-Analyse wirkt: Qwen läuft mit `scamguard start` (Mac); Windows: LM Studio/Ollama.
+
 ## [0.9.0] – 2026-10-13
 
 ### Neu
