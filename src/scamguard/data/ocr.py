@@ -52,6 +52,12 @@ def _windows_engine():
     """Texterkennung von Windows für Deutsch (bzw. die Sprache des Systems) oder None."""
     if sys.platform != "win32":
         return None
+    import importlib.util
+
+    if importlib.util.find_spec("torch") is not None:
+        # PyTorch mit ROCm (AMD) lädt seine DLLs nicht mehr, sobald winrt zuerst geladen wurde
+        # (WinError 1114 in amd_comgr) – deshalb torch vorher laden, falls installiert
+        import torch  # noqa: F401
     try:
         from winrt.windows.globalization import Language
         from winrt.windows.media.ocr import OcrEngine

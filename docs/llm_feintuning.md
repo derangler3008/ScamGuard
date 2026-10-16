@@ -129,6 +129,10 @@ $b = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1"
 
 NVIDIA: stattdessen `pip install torch --index-url https://download.pytorch.org/whl/cu128`.
 
+Dieselben ROCm-Wheels in der ScamGuard-Umgebung `.venv` (danach `pip install -e ".[text,vision]"`)
+bringen GBERT (`scamguard train text-transformer`) und das Bildmodell (`retrain --bilder`) auf die
+Grafikkarte – der Code wählt sie automatisch (`best_torch_device`).
+
 **Ablauf:**
 
 ```powershell

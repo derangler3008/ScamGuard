@@ -2,6 +2,7 @@
 eigenen Labeling etwas zu tun haben.
 
     python scripts/synthetische_daten.py chats --anzahl 200          # nachgebaute Chat-Screenshots
+    python scripts/synthetische_daten.py qwen-chats --anzahl 100     # Gespräche von Qwen geschrieben
     .venv-lora/Scripts/python scripts/synthetische_daten.py fotos --anzahl 60   # KI-Produktfotos (GPU)
 
 Ablage (nicht im Git): data/datensatz_fuellen_inserate/synthetisch/{betrug,serioes}/<id>/
@@ -178,6 +179,19 @@ def _fill(text: str, values: dict) -> str:
     return text.format(**values)
 
 
+def _write_example(label: str, name: str, item: tuple, price: int, city: str, messages: list[tuple[str, str]],
+                   new_account: bool, rng: random.Random) -> None:
+    """Ein Beispiel ablegen: inserat.txt (Inseratstext) + chat_1.png (Screenshot)."""
+    title, path, _, desc = item
+    folder = LISTING_DIR / label / name
+    folder.mkdir(parents=True, exist_ok=True)
+    age = rng.randint(1, 20) if new_account else rng.randint(200, 3000)
+    (folder / "inserat.txt").write_text(
+        f"Kleinanzeigen {city} › {path}\n{title}\n{price} € VB\n{city}\nBeschreibung\n{desc}\n"
+        f"Privater Nutzer\nAktiv seit {age} Tagen\n", encoding="utf-8")
+    render_chat(title, f"{price} €", rng.choice(NAMES), messages, rng).save(folder / "chat_1.png")
+
+
 def cmd_chats(args) -> int:
     rng = random.Random(args.seed)
     written = {"betrug": 0, "serioes": 0}
@@ -198,19 +212,108 @@ def cmd_chats(args) -> int:
                   "city": rng.choice(CITIES), "link": rng.choice(FAKE_LINK), "phone": rng.choice(FAKE_PHONE)}
         messages = [(who, _fill(text, values)) for who, text in script]
         label = "betrug" if scam else "serioes"
-        key = hashlib.sha1(f"{args.seed}-{n}".encode()).hexdigest()[:10]
-        folder = LISTING_DIR / label / f"chat_{key}"
-        folder.mkdir(parents=True, exist_ok=True)
-        age = rng.randint(1, 20) if scam and not seller_side else rng.randint(200, 3000)
-        (folder / "inserat.txt").write_text(
-            f"Kleinanzeigen {values['city']} › {path}\n{title}\n{price} € VB\n{values['city']}\nBeschreibung\n{desc}\n"
-            f"Privater Nutzer\nAktiv seit {age} Tagen\n", encoding="utf-8")
-        partner = rng.choice(NAMES)
-        render_chat(title, f"{price} €", partner, messages, rng).save(folder / "chat_1.png")
+        _write_example(label, f"chat_{hashlib.sha1(f'{args.seed}-{n}'.encode()).hexdigest()[:10]}",
+                       (title, path, base, desc), price, values["city"], messages,
+                       new_account=scam and not seller_side, rng=rng)
         written[label] += 1
     print(f"{sum(written.values())} Chats erzeugt ({written['betrug']} Betrug, {written['serioes']} seriös) "
           f"→ {LISTING_DIR}")
     print("Nur Training (Quelle „synthetisch“). Weiter: scamguard retrain")
+    return 0
+
+
+# Szenarien für Qwen: (Label, Rolle des Kontoinhabers, Masche bzw. Gesprächsart)
+QWEN_SCENARIOS = [
+    ("betrug", "verkauft", ("Käufer schickt angeblichen „Sicher bezahlen“-Link einer gefälschten Seite und drängt, "
+                           "den Zahlungseingang dort mit Kartendaten zu bestätigen")),
+    ("betrug", "verkauft", ("Käufer ist angeblich im Ausland, schickt einen Kurier und will, dass der Verkäufer "
+                           "Spediteurkosten vorab weiterleitet")),
+    ("betrug", "verkauft", "Käufer will die Handynummer und danach den SMS-Code „für die Zahlung“"),
+    ("betrug", "verkauft", "Käufer behauptet Überzahlung und verlangt Rücküberweisung per PayPal Freunde und Familie"),
+    ("betrug", "verkauft", "Käufer will sofort zu WhatsApp wechseln und schickt dort einen Bezahllink"),
+    ("betrug", "kauft", "Verkäufer ist angeblich im Ausland, nur Versand, nur PayPal Freunde und Familie, Zeitdruck"),
+    ("betrug", "kauft", "Verkäufer verlangt Vorkasse per Überweisung auf ausländische IBAN, Preis auffällig günstig"),
+    ("betrug", "kauft", "Verkäufer verlangt vorab ein Foto des Personalausweises „wegen Sicherheit“"),
+    ("betrug", "kauft", "Tierverkauf: Welpe ist bei einer Tierspedition, Transportgebühr vorab per Western Union"),
+    ("betrug", "kauft", "Wohnungsanzeige: Vermieter im Ausland, Kaution vorab, Schlüssel per Post"),
+    ("betrug", "kauft", ("Dreiecksbetrug: Verkäufer gibt Bankdaten einer fremden Person an und drängt zur schnellen "
+                        "Überweisung")),
+    ("serioes", "verkauft", "Interessent fragt, ob der Artikel noch da ist, und vereinbart Abholung mit Barzahlung"),
+    ("serioes", "kauft", "Preisverhandlung, Einigung auf etwas weniger, Abholung am Wochenende"),
+    ("serioes", "verkauft", "Versand über die offizielle Bezahlfunktion in der App, Fragen zu Versandkosten"),
+    ("serioes", "kauft", "Fragen zu Zustand, Rechnung und Garantie, höfliche Antwort mit Details"),
+    ("serioes", "verkauft", "Artikel ist schon reserviert, freundliche Absage"),
+    ("serioes", "kauft", "Terminabsprache zur Besichtigung, kurze Rückfragen zur Adresse"),
+    ("serioes", "verkauft", "Käufer kommt zu spät, entschuldigt sich, Übergabe klappt"),
+]
+QWEN_PROMPT = """Schreibe einen realistischen Chatverlauf aus dem Postfach von Kleinanzeigen (Deutschland).
+Artikel: {item}, angeboten für {price} €.
+Der Kontoinhaber ({role} den Artikel) ist „ich“, das Gegenüber ist „sie“.
+Gesprächsart: {scenario}
+{style}
+Regeln: 4 bis 9 Nachrichten, kurze Chat-Nachrichten wie echte Menschen sie schreiben (umgangssprachlich,
+gelegentlich Tippfehler, mal ohne Satzzeichen). Keine echten Namen, Telefonnummern oder Adressen:
+Telefonnummern nur +44 1111 111111, Mailadressen nur anonym@gmail.com, Links nur auf erfundene Domains mit
+.top, .shop oder .info.
+Antworte nur mit JSON: {{"nachrichten": [{{"wer": "ich" oder "sie", "text": "..."}}]}}"""
+STYLES = {
+    "betrug": ["Das Gegenüber schreibt holpriges, leicht maschinell übersetztes Deutsch.",
+               "Das Gegenüber schreibt freundlich und fehlerfrei, wirkt seriös.",
+               "Das Gegenüber schreibt knapp und drängelnd."],
+    "serioes": ["Beide schreiben locker und kurz.", "Das Gegenüber ist sehr höflich und siezt.",
+                "Das Gegenüber ist kein Muttersprachler und macht Grammatikfehler, ist aber ehrlich."],
+}
+QWEN_SCHEMA = {"type": "object", "required": ["nachrichten"], "properties": {"nachrichten": {
+    "type": "array", "minItems": 3, "maxItems": 10, "items": {
+        "type": "object", "required": ["wer", "text"],
+        "properties": {"wer": {"type": "string", "enum": ["ich", "sie"]}, "text": {"type": "string"}}}}}}
+
+
+def cmd_qwen_chats(args) -> int:
+    """Wie `chats`, aber die Gespräche schreibt Qwen (lokaler Server aus config.yaml) – viel vielfältiger."""
+    import json
+
+    import httpx
+
+    from scamguard.config import load_config
+    from scamguard.data.redact import redact
+
+    local = load_config()["llm"]["local"]
+    base = local["base_url"].rstrip("/")
+    try:
+        httpx.get(f"{base}/models", timeout=3).raise_for_status()
+    except httpx.HTTPError:
+        sys.exit(f"Qwen läuft nicht ({base}) – vorher `scamguard llm-server` bzw. `scamguard start`.")
+    rng = random.Random(args.seed)
+    written = {"betrug": 0, "serioes": 0}
+    for n in range(args.anzahl):
+        want = "betrug" if rng.random() < args.anteil_betrug else "serioes"
+        label, role, scenario = rng.choice([s for s in QWEN_SCENARIOS if s[0] == want])
+        item = ITEMS[10] if "Welpe" in scenario else ITEMS[11] if "Wohnung" in scenario else rng.choice(ITEMS[:10])
+        cheap = label == "betrug" and role == "kauft"
+        price = int(item[2] * (rng.uniform(0.35, 0.6) if cheap else rng.uniform(0.85, 1.1)))
+        prompt = QWEN_PROMPT.format(item=item[0], price=price, role=role, scenario=scenario,
+                                    style=rng.choice(STYLES[label]))
+        try:
+            reply = httpx.post(f"{base}/chat/completions", timeout=180, json={
+                "model": local["model"], "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.9, "top_p": 0.95, "max_tokens": 900,
+                "chat_template_kwargs": {"enable_thinking": False},
+                "response_format": {"type": "json_schema", "json_schema": {
+                    "name": "chat", "schema": QWEN_SCHEMA, "strict": True}}}).json()
+            chat = json.loads(reply["choices"][0]["message"]["content"])["nachrichten"]
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            print(f"  {n + 1:3d}: übersprungen ({exc.__class__.__name__})")
+            continue
+        messages = [(m["wer"], redact(m["text"].strip())) for m in chat if m.get("text", "").strip()]
+        if len(messages) < 3:
+            continue
+        name = f"qwen_{hashlib.sha1(f'{args.seed}-{n}'.encode()).hexdigest()[:10]}"
+        _write_example(label, name, item, price, rng.choice(CITIES), messages, new_account=cheap, rng=rng)
+        written[label] += 1
+        print(f"  {n + 1:3d}/{args.anzahl}  {label:7s}  {scenario[:60]}", flush=True)
+    print(f"{sum(written.values())} Qwen-Chats ({written['betrug']} Betrug, {written['serioes']} seriös) → "
+          f"{LISTING_DIR}. Nur Training. Weiter: scamguard retrain")
     return 0
 
 
@@ -269,6 +372,11 @@ def main() -> int:
     p.add_argument("--anteil-betrug", type=float, default=0.5)
     p.add_argument("--seed", type=int, default=42)
     p.set_defaults(func=cmd_chats)
+    p = sub.add_parser("qwen-chats", help="Chat-Screenshots mit von Qwen geschriebenen Gesprächen (Qwen-Server)")
+    p.add_argument("--anzahl", type=int, default=100)
+    p.add_argument("--anteil-betrug", type=float, default=0.5)
+    p.add_argument("--seed", type=int, default=1)
+    p.set_defaults(func=cmd_qwen_chats)
     p = sub.add_parser("fotos", help="KI-Produktfotos (Stable Diffusion, braucht GPU)")
     p.add_argument("--anzahl", type=int, default=60)
     p.add_argument("--modell", default="stabilityai/sdxl-turbo")

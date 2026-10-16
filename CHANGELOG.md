@@ -13,9 +13,14 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `gesammelt_reddit.csv` (Label von Menschen). Braucht eigenen API-Zugang in `.env`; die Website wird
   weiterhin nicht gescrapt.
 - **Synthetische Daten** (`scripts/synthetische_daten.py`): nachgebaute Chat-Screenshots typischer Maschen
-  und gewöhnlicher Gespräche sowie KI-Produktfotos (SDXL-Turbo, GPU).
+  und gewöhnlicher Gespräche (`chats`: feste Vorlagen, `qwen-chats`: vom lokalen Qwen geschrieben, viel
+  vielfältiger) sowie KI-Produktfotos (`fotos`: SDXL-Turbo, GPU).
 - **Ordner `synthetisch/`** in `datensatz_fuellen_inserate` und `datensatz_fuellen_bilder`: eigene Quelle,
   beim Bauen der Splits nur im Training, nie in Validierung oder Test (`train_only`).
+
+### Behoben
+- Windows mit AMD-GPU: PyTorch (ROCm) ließ sich nicht mehr laden, wenn die Windows-Texterkennung zuerst
+  geladen war (WinError 1114) – `ocr.py` lädt torch deshalb vorher.
 
 ### Nach dem Update
 1. `pip install -e .` (Windows: OCR-Pakete).

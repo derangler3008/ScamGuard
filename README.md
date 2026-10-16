@@ -366,7 +366,7 @@ scamguard einstufen export               # danach retrain / llm-daten
 | Fertige Tabellen | CSV (auch Excel-CSV mit `;`), TSV, JSONL, Parquet in `data/datensatz_fuellen_text/`; Spalten und Labels werden an üblichen Namen erkannt; Vorlage `_vorlage_inserate.csv` | automatisch erkannt |
 | Hugging Face | Eintrag in `data/datensatz_fuellen_text/huggingface.yaml` | automatisch erkannt |
 | Reddit (offizielle API) | `scamguard data sammeln --quellen reddit`: Bilder aus `data/quellen/reddit.yaml`, Chats per Texterkennung → Prüfliste (eigener API-Zugang in `.env`) | `gesammelt_reddit.csv`, Bilder in `data/raw/reddit/` |
-| Synthetisch | `python scripts/synthetische_daten.py chats` (Chat-Screenshots) bzw. `fotos` (KI-Produktfotos, GPU) | `…/synthetisch/{betrug,serioes}/`, **nur Training** |
+| Synthetisch | `python scripts/synthetische_daten.py chats` bzw. `qwen-chats` (Chat-Screenshots) bzw. `fotos` (KI-Produktfotos, GPU) | `…/synthetisch/{betrug,serioes}/`, **nur Training** |
 | Produktfotos | `data/datensatz_fuellen_bilder/{betrug,serioes}/`, Bildmodell mit `scamguard retrain --bilder` | automatisch erkannt |
 | Sonderfälle | `DatasetSpec` mit `transform`-Funktion in `src/scamguard/data/registry.py` | – |
 
@@ -433,6 +433,8 @@ gespeichert.
 Damit Pipeline und Modelle vor dem eigenen Labeling etwas zu tun haben: `chats` erzeugt nachgebaute
 Chat-Screenshots im Postfach-Stil (Fake-Zahlungslink, Freunde & Familie, Kurier, Code-Weitergabe,
 WhatsApp-Wechsel, Ausweis, Tier-Transport, Mietkaution – und gewöhnliche Gespräche) mit Inseratstext;
+`qwen-chats` lässt die Gespräche vom lokalen Qwen schreiben (Szenario, Stil, Tippfehler und holpriges
+Deutsch variieren – deutlich vielfältiger als feste Vorlagen; Qwen-Server muss laufen);
 `fotos` erzeugt KI-Produktfotos mit SDXL-Turbo auf der GPU (`.venv-lora`): makellose Katalogbilder wie
 in Fake-Inseraten bzw. gewöhnliche Handyfotos. Der Ordner `synthetisch/` ist eine eigene Quelle und landet
 beim Bauen der Splits **nur im Training**, nie in Validierung oder Test – Kennzahlen bleiben ehrlich.
