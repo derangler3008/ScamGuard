@@ -539,6 +539,25 @@ austauschen. Schnelle Labels aus Extension und Upload (`data/raw/eigene_labels.j
 Aufgaben zur Zweitprüfung geholt oder als `labels_<name>.jsonl` nach `data/datensatz_fuellen_text/`
 kopiert werden. Bilder werden nicht übertragen; keine echten Namen, Nummern oder Adressen teilen.
 
+**Gelabelte Inserate im Team zusammenführen:** Inserate, Fotos und Labels kommen **nicht ins Git**
+(`.gitignore` – Personendaten, Urheberrecht, Größe). Jede manuelle Einstufung liegt aber als eigener Ordner
+in `data/datensatz_fuellen_inserate/{betrug,serioes}/<kategorie>/<inserat>/` (`inserat.json` + Fotos) – so
+lassen sie sich einfach weitergeben:
+
+1. **Wer gelabelt hat:** ältere Einstufungen einmal in Ordner übernehmen (`scamguard data ordner`), dann den
+   Ordner `data/datensatz_fuellen_inserate/` als ZIP packen.
+2. **Weitergeben** nur über einen **privaten** Speicher (OneDrive, Uni-Cloud) – nicht über GitHub, keine
+   öffentlichen Links.
+3. **Wer empfängt:** ZIP in den eigenen `data/datensatz_fuellen_inserate/` entpacken, sodass die Ordner neben
+   den eigenen in `betrug/` bzw. `serioes/` liegen. Ordnernamen sind eindeutig, es wird nichts überschrieben.
+4. **Neu trainieren:** `scamguard retrain` (VS Code: Aufgabe „ScamGuard: Neu trainieren“). Doppelte Inserate
+   werden beim Bauen der Splits automatisch erkannt.
+
+Darauf achten, dass beide Klassen vorkommen – nur Betrug ergibt ein einseitiges Modell (`retrain` warnt).
+Echte Inserate verteilen sich auf Training, Validierung und Test; erst damit sind die Kennzahlen
+aussagekräftig. Ab etwa 20 Beispielen je Klasse urteilt auch AutoML. Wer regelmäßig gemeinsam labelt,
+nutzt besser den gemeinsamen Ordner des Annotation-Workspace (siehe oben).
+
 **Arbeitsbereiche:**
 
 | Bereich | Umfang |

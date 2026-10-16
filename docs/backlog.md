@@ -14,7 +14,8 @@ Personen übernehmen zusätzlich Modelle oder Oberfläche.
 - **Labeln:** Extension laden (README, „Installation“; unter Windows Edge oder Chrome), `scamguard start`,
   auf kleinanzeigen.de *Betrug* oder *Seriös* klicken. Kategorien aufteilen (z. B. Elektronik, Wohnungen,
   Fahrzeuge), damit niemand dasselbe Inserat doppelt labelt. Labels bleiben lokal (`data/raw/`, nicht im
-  Git) – Weitergabe übers gemeinsame Laufwerk, nicht per Pull.
+  Git) – Weitergabe übers gemeinsame Laufwerk, nicht per Pull (Ablauf: README, „Gelabelte Inserate im
+  Team zusammenführen“).
 - **Gleich labeln:** Was als Betrug zählt, steht im Kategoriensystem `data/einstufung/kategorien.yaml`.
   Gegenseitiges Prüfen läuft über den Annotation-Workspace (Tab *Einstufen im Team*, gemeinsamer Ordner
   per `SCAMGUARD_EINSTUFUNG_ORDNER`): jede Person schreibt eigene Dateien, 25 % werden doppelt
@@ -22,8 +23,8 @@ Personen übernehmen zusätzlich Modelle oder Oberfläche.
 - **Mit Python:** Modelle mit den echten Labels neu trainieren (`scamguard retrain --ohne-demo`,
   `scamguard automl --ohne-demo`), Fehlalarme und verpasste Fälle sammeln, daraus Merkmale ableiten
   (EVAL-1, EVAL-4).
-- **Windows-PC mit Grafikkarte:** Qwen über LM Studio oder Ollama einrichten (README, „LLM“) und die
-  Schritte für das Team ergänzen.
+- **Windows-PC mit Grafikkarte:** Qwen über llama.cpp (startet mit `scamguard start`), Feintuning mit
+  ROCm/CUDA und synthetische Daten sind eingerichtet – README, „LLM“, und docs/llm_feintuning.md, Abschnitt 5.
 
 ## Daten und Labeling
 
