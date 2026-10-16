@@ -457,7 +457,7 @@ PayPal-Seite) hebt den Gesamtscore immer auf mindestens „hohes Risiko“.
 | Bildmodell | EfficientNet-B0, feinjustiert | **ja** (CNN) | mit eigenen Fotos |
 | Bildhinweise (CLIP) | Stockfoto? Screenshot? passt das Bild zur Kategorie? | **ja**, vortrainiert | – |
 | KI-Analyse (Qwen, lokal) | Sprachmodell bewertet das Inserat und erklärt warum | **ja**, vortrainiert | – |
-| Texterkennung (Apple Vision) | liest Screenshots für den Upload | **ja**, vortrainiert | – |
+| Texterkennung (Apple Vision / Windows-OCR) | liest Screenshots für den Upload | **ja**, vortrainiert | – |
 
 **Daten machen den Unterschied:** Die trainierbaren Bausteine sind nur so gut wie die
 eingestuften Inserate. Tab „Meine Daten & Training“ zeigt, was schon da ist.

@@ -7,7 +7,7 @@ Betrugsmaschen: Fake-Zahlungslinks, Vorkasse-Geschichten, PayPal „Freunde & Fa
 Dreiecksbetrug, Datenabfragen und mehr. Mehrere unabhängige Detektoren bewerten Text, Preis, Bilder
 und Nachrichten; das Ergebnis ist ein Risiko-Score mit markierten Fundstellen direkt auf der Seite.
 
-Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.11.0** ([Changelog](CHANGELOG.md)).
+Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.12.0** ([Changelog](CHANGELOG.md)).
 
 - **Browser-Extension** für Chromium und Firefox: markiert Warnsignale wie ein Adblocker, prüft auch das
   Postfach live, jede neue Nachricht ohne Neuladen.
@@ -63,8 +63,8 @@ Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.11.0** ([Chan
 
 **Modelle im Überblick:** Selbst trainiert werden GBERT (`models/text_classifier.py` →
 `train_text_transformer`) und EfficientNet-B0 (`models/image_model.py` → `train_image_model`), beide
-per Transfer Learning. Vortrainiert im Einsatz: CLIP (Bildhinweise), Qwen (KI-Analyse) und Apple Vision
-(Texterkennung beim Screenshot-Upload). Die TF-IDF-Baseline ist bewusst klassisches ML und dient als
+per Transfer Learning. Vortrainiert im Einsatz: CLIP (Bildhinweise), Qwen (KI-Analyse) und Apple Vision bzw.
+Windows-OCR (Texterkennung beim Screenshot-Upload). Die TF-IDF-Baseline ist bewusst klassisches ML und dient als
 Messlatte für die neuronalen Modelle.
 
 **Wellen:** Welle 1 bewertet ungelabelte Texte mit Qwen vor (geplant, `docs/backlog.md`). Welle 2
@@ -359,12 +359,14 @@ scamguard einstufen export               # danach retrain / llm-daten
 
 | Quelle | Weg | Ablage |
 |---|---|---|
-| Einzelnes Inserat | Web-App, Tab *Inserat hochladen & einstufen*: Screenshot(s), `.html`, PDF oder Text → Felder werden ausgelesen (Apple Vision, lokal) → *Betrug*/*Seriös* | `eigene_labels.jsonl` + Ordner-Ablage |
+| Einzelnes Inserat | Web-App, Tab *Inserat hochladen & einstufen*: Screenshot(s), `.html`, PDF oder Text → Felder werden ausgelesen (Apple Vision bzw. Windows-OCR, lokal) → *Betrug*/*Seriös* | `eigene_labels.jsonl` + Ordner-Ablage |
 | Chatverläufe als Bild | dort im Bereich *Chatverlauf mit dem Anbieter*: Chat-Screenshots (PNG/JPG) hineinziehen – der Text wird per Texterkennung gelesen; ein Chat allein (ohne Inserat) geht auch | `eigene_labels.jsonl` + Ordner-Ablage |
 | Live-Inserate und Chats | Extension-Panel → *Betrug*/*Seriös* (erneut klicken ersetzt die alte Einstufung) | `eigene_labels.jsonl` + Ordner-Ablage |
 | Viele Inserate | Dateien in `data/datensatz_fuellen_inserate/{betrug,serioes}/` – eine Datei = ein Inserat, ein Unterordner = ein Inserat aus mehreren Dateien; Chat-Screenshots darin heißen `chat…` (z. B. `chat_1.png`) | wird beim Training ausgelesen |
 | Fertige Tabellen | CSV (auch Excel-CSV mit `;`), TSV, JSONL, Parquet in `data/datensatz_fuellen_text/`; Spalten und Labels werden an üblichen Namen erkannt; Vorlage `_vorlage_inserate.csv` | automatisch erkannt |
 | Hugging Face | Eintrag in `data/datensatz_fuellen_text/huggingface.yaml` | automatisch erkannt |
+| Reddit (offizielle API) | `scamguard data sammeln --quellen reddit`: Bilder aus `data/quellen/reddit.yaml`, Chats per Texterkennung → Prüfliste (eigener API-Zugang in `.env`) | `gesammelt_reddit.csv`, Bilder in `data/raw/reddit/` |
+| Synthetisch | `python scripts/synthetische_daten.py chats` (Chat-Screenshots) bzw. `fotos` (KI-Produktfotos, GPU) | `…/synthetisch/{betrug,serioes}/`, **nur Training** |
 | Produktfotos | `data/datensatz_fuellen_bilder/{betrug,serioes}/`, Bildmodell mit `scamguard retrain --bilder` | automatisch erkannt |
 | Sonderfälle | `DatasetSpec` mit `transform`-Funktion in `src/scamguard/data/registry.py` | – |
 
@@ -412,8 +414,28 @@ die Daten bleiben lokal.
 
 Forennamen werden nicht gespeichert; Mailadressen, Telefonnummern, IBANs und Link-Pfade werden
 anonymisiert, ihre Form bleibt für die Merkmale erhalten (`anonym@gmail.com`, `+44 1111 111111`).
-Bewusst nicht gesammelt: **Reddit** (robots.txt sperrt alle Bots, Zugang nur über das
-Forschungsprogramm), **gutefrage.net** (Bot-Sperre), **eBay-Community** (Nutzungsbedingungen).
+Bewusst nicht gesammelt: die **Reddit-Website** (robots.txt sperrt alle Bots – Reddit nur über die
+offizielle API, siehe unten), **gutefrage.net** (Bot-Sperre), **eBay-Community** (Nutzungsbedingungen).
+
+### Reddit über die offizielle API: `scamguard data sammeln --quellen reddit`
+
+Holt Screenshots aus Betrugs-Subreddits (Liste in `data/quellen/reddit.yaml`) über die Reddit Data API –
+kein Scraping der Website. Einmalig auf https://www.reddit.com/prefs/apps eine App vom Typ „script“
+anlegen und `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` in `.env` eintragen
+(Vorlage `.env.example`; Reddit schaltet neue Apps ggf. erst frei). Bilder landen lokal in
+`data/raw/reddit/` (nicht weitergeben), Bilder mit Text werden per Texterkennung gelesen, anonymisiert und
+zur Prüfliste `data/datensatz_fuellen_text/gesammelt_reddit.csv`. Die Spalte `betrug` füllt ein Mensch –
+Beiträge dort sind oft Fragen („Ist das Betrug?“), kein bestätigtes Label. Benutzernamen werden nicht
+gespeichert.
+
+### Synthetische Daten: `scripts/synthetische_daten.py`
+
+Damit Pipeline und Modelle vor dem eigenen Labeling etwas zu tun haben: `chats` erzeugt nachgebaute
+Chat-Screenshots im Postfach-Stil (Fake-Zahlungslink, Freunde & Familie, Kurier, Code-Weitergabe,
+WhatsApp-Wechsel, Ausweis, Tier-Transport, Mietkaution – und gewöhnliche Gespräche) mit Inseratstext;
+`fotos` erzeugt KI-Produktfotos mit SDXL-Turbo auf der GPU (`.venv-lora`): makellose Katalogbilder wie
+in Fake-Inseraten bzw. gewöhnliche Handyfotos. Der Ordner `synthetisch/` ist eine eigene Quelle und landet
+beim Bauen der Splits **nur im Training**, nie in Validierung oder Test – Kennzahlen bleiben ehrlich.
 
 **Klassenbalance:** Diese Quellen liefern fast nur Betrug. Ohne seriöse Nachrichten als Gegenstück lernt
 ein Modell „kurze Nachricht = Betrug“. Seriöse Chats ergänzen (Extension, Annotation-Workspace);
@@ -451,8 +473,8 @@ Datensatzes wird deshalb selbst aufgebaut:
   mehrsprachigem Modell sinnvoll; Craigslist-Studien veröffentlichen ihre Daten meist nicht.
   Transaktions-Datensätze („credit card fraud“) enthalten keinen Text und passen nicht.
 - **Foren** (z. B. Reddit-Communities zu Kleinanzeigen-Betrug, Verbraucherzentralen): wertvoll für
-  Maschen und Formulierungen. Reddit verbietet Bots per robots.txt → nur von Hand lesen und Muster ins
-  Lexikon übernehmen oder den offiziellen Forschungszugang beantragen; `scamguard data sammeln --quellen
+  Maschen und Formulierungen. Reddit verbietet Bots per robots.txt → Website nur von Hand lesen, automatisch
+  nur über die offizielle API (`--quellen reddit`); `scamguard data sammeln --quellen
   foren` holt nur Quellen, die es erlauben.
 - **Was wir bewusst nicht tun:** Kleinanzeigen scrapen (auch nicht über Scraper-Dienste) und
   „Honeypots“ (Fake-Inserate, um Betrüger anzulocken) – beides verstößt gegen die Nutzungsbedingungen,

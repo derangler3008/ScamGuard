@@ -18,7 +18,8 @@ Welche Threads gelesen werden, steht in data/quellen/foren.yaml (dort ergänzen)
 die verbreiteten Forensoftwares XenForo (ComputerBase, gs-forum …), WoltLab (unknowns.de …) und das
 vBulletin-Archiv (Antispam e.V.).
 
-Bewusst NICHT: Reddit (robots.txt sperrt alle Bots, Datennutzung nur mit Genehmigung), gutefrage.net
+Bewusst NICHT: die Reddit-Website (robots.txt sperrt alle Bots – Reddit nur über die offizielle API,
+collect_reddit.py), gutefrage.net
 (Bot-Sperre – wird nicht umgangen), eBay-Community (Nutzungsbedingungen verbieten automatisches Lesen).
 
 Datenschutz: Forennamen werden nicht gespeichert, Kontaktdaten anonymisiert (data/redact.py), Texte

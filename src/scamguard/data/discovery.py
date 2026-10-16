@@ -13,6 +13,9 @@ data/datensatz_fuellen_bilder/
   Nur Produktfotos (fürs Bildmodell). Unterordner geben das Label vor: betrug/ (auch scam/, fake/)
   und serioes/ (auch echt/, legit/).
 
+Unterordner synthetisch/ (in beiden Ablagen) mit betrug/ und serioes/: selbst erzeugte Beispiele
+(scripts/synthetische_daten.py) – eigene Quelle, landen nur im Training, nie in Validierung oder Test.
+
 Dateien und Ordner, die mit „_“ beginnen, werden ignoriert (Vorlagen, Entwürfe).
 Für Sonderfälle (Texte zusammensetzen, filtern …) bleibt registry.py mit `transform`-Funktionen.
 """
@@ -35,6 +38,7 @@ TEXT_DIR = "data/datensatz_fuellen_text"
 IMAGE_DIR = "data/datensatz_fuellen_bilder"
 LISTING_DIR = "data/datensatz_fuellen_inserate"
 HF_FILE = "huggingface.yaml"
+SYNTHETIC_DIR = "synthetisch"
 FILE_TYPES = {".csv": "csv", ".tsv": "csv", ".jsonl": "jsonl", ".parquet": "parquet"}
 
 # Unser Feld → mögliche Spaltennamen (klein geschrieben, Leerzeichen → "_")
@@ -169,12 +173,15 @@ def _specs_from_hf_file(path: Path) -> list[DatasetSpec]:
     return specs
 
 
-def _specs_from_label_dirs(folder: Path, kind: str) -> list[DatasetSpec]:
+def _specs_from_label_dirs(folder: Path, kind: str, synthetic: bool = False) -> list[DatasetSpec]:
     """Ein Datensatz pro Label-Unterordner (betrug/, serioes/ …).
     kind "bilder": jedes Bild ist ein Beispiel; kind "inserate": jede Datei bzw. jeder Unterordner
     (mehrere Screenshots/Fotos eines Inserats) ist ein Beispiel."""
     specs = []
     for sub in sorted(p for p in folder.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))):
+        if sub.name == SYNTHETIC_DIR:
+            specs.extend(_specs_from_label_dirs(sub, kind, synthetic=True))
+            continue
         label = label_of(sub.name)
         if kind == "bilder":
             count = sum(1 for f in sub.rglob("*") if f.suffix.lower() in IMAGE_SUFFIXES)
@@ -183,9 +190,11 @@ def _specs_from_label_dirs(folder: Path, kind: str) -> list[DatasetSpec]:
             count = len(listing_items(sub))
             unit, source, modality = "Inserate", "listingfolder", "multimodal"
         specs.append(DatasetSpec(
-            name=f"{kind}:{sub.name}", source=source, path=str(sub), modality=modality,
-            fixed_label=label, german_only=False, enabled=label is not None and count > 0,
-            license=f"eigene {unit} – Quelle dokumentieren",
+            name=f"{kind}:{SYNTHETIC_DIR + '_' if synthetic else ''}{sub.name}", source=source, path=str(sub),
+            modality=modality, fixed_label=label, german_only=False, enabled=label is not None and count > 0,
+            train_only=synthetic,
+            license=("selbst erzeugt (synthetisch) – nur Training" if synthetic
+                     else f"eigene {unit} – Quelle dokumentieren"),
             notes=(f"{count} {unit}, Label {'Betrug' if label else 'seriös'}" if label is not None
                    else "Ordnername ist kein Label – „betrug“ oder „serioes“ verwenden"),
         ))

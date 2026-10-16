@@ -55,6 +55,7 @@ class DatasetSpec:
     hf_kwargs: dict[str, Any] = field(default_factory=dict)  # z. B. {"revision": "main"}
     read_kwargs: dict[str, Any] = field(default_factory=dict)  # pandas.read_csv: sep, encoding …
     base_dir: str | None = None                 # relative Bildpfade in der Datei beziehen sich hierauf
+    train_only: bool = False                    # synthetische Daten: nur Training, nie Val/Test
 
 
 def _beispiel_transform(row: dict) -> dict | None:

@@ -152,17 +152,19 @@ def test_wrapped_lines_and_table_rows_are_joined():
                     "Marke Bosch"] and side == []
 
 
-# --------------------------------------------------------------------------- echte Texterkennung (Mac)
+# --------------------------------------------------------------------------- echte Texterkennung (Mac/Windows)
 
 def _screenshot(lines: list[tuple[str, int]]) -> bytes:
     img = Image.new("RGB", (900, 120 + 60 * len(lines)), "white")
     draw = ImageDraw.Draw(img)
     y = 40
     for text, size in lines:
-        try:
-            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", size)
-        except OSError:
-            font = ImageFont.load_default(size)
+        for name in ("/System/Library/Fonts/Helvetica.ttc", "arial.ttf"):  # Mac, Windows
+            try:
+                font = ImageFont.truetype(name, size)
+                break
+            except OSError:
+                font = ImageFont.load_default(size)
         draw.text((40, y), text, font=font, fill="black")
         y += size + 30
     buf = io.BytesIO()
@@ -170,7 +172,7 @@ def _screenshot(lines: list[tuple[str, int]]) -> bytes:
     return buf.getvalue()
 
 
-@pytest.mark.skipif(not ocr.available(), reason="Texterkennung nur auf dem Mac (Apple Vision)")
+@pytest.mark.skipif(not ocr.available(), reason="keine Texterkennung (Mac: Apple Vision, Windows: Sprachpaket Deutsch)")
 def test_screenshot_and_photo_are_told_apart():
     shot = _screenshot([("PlayStation 5 Disc Edition", 40), ("120 € VB", 40), ("Beschreibung", 24),
                         ("Zahlung nur über PayPal Freunde und Familie.", 24),
@@ -190,7 +192,7 @@ def test_without_ocr_images_become_photos(monkeypatch):
 
     monkeypatch.setattr(ocr, "recognize", unavailable)
     result = import_listing([("screen.png", b"egal")], text="Titel\n10 €\nBeschreibung\nText hier")
-    assert result.photos and "nur auf dem Mac" in result.notes[0]
+    assert result.photos and "Texterkennung" in result.notes[0]
     assert result.listing.description == "Text hier"
 
 
@@ -218,3 +220,32 @@ def test_listing_folder_is_a_dataset(tmp_path, monkeypatch):
     assert by_title["PlayStation 5 Disc"].label == 1
     assert by_title["PlayStation 5 Disc"].image_paths[0].endswith("foto.jpg")  # Foto bleibt, wo es liegt
     assert by_title["Waschmaschine Bosch 8 kg"].price == 1200.0
+
+
+def test_synthetic_folder_is_train_only(tmp_path, monkeypatch):
+    from scamguard.data import build, registry
+
+    root = tmp_path / "datensatz_fuellen_inserate"
+    for i in range(12):
+        for label, text in (("betrug", "Zahlung nur per PayPal Freunde und Familie, Versand aus dem Ausland."),
+                            ("serioes", "Gut erhalten, Abholung in Mannheim, Barzahlung bei Abholung.")):
+            for base in (root, root / "synthetisch"):
+                folder = base / label
+                folder.mkdir(parents=True, exist_ok=True)
+                kind = "synth" if base != root else "echt"
+                (folder / f"{kind}_{i}.txt").write_text(f"Artikel {kind} {label} {i}\n{10 + i} €\nBeschreibung\n"
+                                                        f"{text} Nummer {kind}{i}", encoding="utf-8")
+    monkeypatch.setattr(discovery, "LISTING_DIR", str(root))
+    monkeypatch.setattr(discovery, "TEXT_DIR", str(tmp_path / "leer"))
+    monkeypatch.setattr(discovery, "IMAGE_DIR", str(tmp_path / "leer"))
+    monkeypatch.setattr(registry, "DATASETS", [])
+    monkeypatch.setattr(build, "PROCESSED_DIR", str(tmp_path / "processed"))
+
+    specs = {s.name: s for s in discovery.discover_specs()}
+    assert specs["inserate:synthetisch_betrug"].train_only and specs["inserate:synthetisch_betrug"].enabled
+    assert not specs["inserate:betrug"].train_only
+    _, stats = build.build_dataset()
+    assert stats["train_only"] == 24
+    for split in ("val", "test"):
+        sources = {l.source for l in build.read_jsonl(tmp_path / "processed" / f"{split}.jsonl")}
+        assert sources and not any("synthetisch" in s for s in sources)

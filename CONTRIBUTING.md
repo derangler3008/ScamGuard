@@ -66,8 +66,9 @@ pytest -m e2e                           # Browser-Tests (Playwright/Chromium, Se
   Annotation-Arbeitsordner und die Inhalte der Ablageordner sind ignoriert. Keine echten Namen,
   Telefonnummern, Adressen oder Mailadressen in Code, Tests oder Doku (Platzhalter wie
   `anonym@gmail.com`); gesammelte Texte über `data/redact.py` anonymisieren.
-- **Kein Scraping gesperrter Seiten:** Kleinanzeigen (Nutzungsbedingungen), Reddit (robots.txt sperrt
-  alle Bots), gutefrage.net (Bot-Sperre) u. Ä. nicht automatisiert auslesen, Bot-Sperren nicht umgehen.
+- **Kein Scraping gesperrter Seiten:** Kleinanzeigen (Nutzungsbedingungen), Reddit-Website (robots.txt
+  sperrt alle Bots – Reddit nur über die offizielle API, `data/collect_reddit.py`), gutefrage.net
+  (Bot-Sperre) u. Ä. nicht automatisiert auslesen, Bot-Sperren nicht umgehen.
   Collector (`data/collect_*.py`) prüfen robots.txt und drosseln Anfragen – neue Quellen ebenso.
 - **Lexikon** (`scam_signals_de.yaml`): Jedes neue Muster braucht einen Test mit Treffer und harmlose
   Gegenbeispiele, die nicht anschlagen dürfen (`tests/test_chat_and_forums.py`). Neue Gruppen im

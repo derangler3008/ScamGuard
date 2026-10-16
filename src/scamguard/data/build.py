@@ -65,25 +65,30 @@ def _split(listings: list[Listing], val_size: float, test_size: float, seed: int
 
 def build_dataset(names: list[str] | None = None, val_size: float = 0.15, test_size: float = 0.15,
                   seed: int = 42) -> tuple[list[LoadReport], dict]:
-    reports = [load_spec(spec) for spec in get_specs(names)]
+    specs = get_specs(names)
+    reports = [load_spec(spec) for spec in specs]
+    synthetic = {spec.name for spec in specs if spec.train_only}
 
     seen: set[str] = set()
     listings: list[Listing] = []
+    train_only: list[Listing] = []  # synthetische Daten: nie in Val/Test (saubere Evaluation)
     duplicates = 0
-    for report in reports:
+    for report in sorted(reports, key=lambda r: r.name in synthetic):  # echte Daten gewinnen bei Duplikaten
         for listing in report.listings:
             fp = listing_fingerprint(listing)
             if fp in seen:
                 duplicates += 1
                 continue
             seen.add(fp)
-            listings.append(listing)
+            (train_only if report.name in synthetic else listings).append(listing)
 
     if len(listings) < 10:
         raise ValueError(f"Nur {len(listings)} verwertbare Beispiele – mindestens 10 nötig. "
                          "Datensätze in registry.py aktivieren/prüfen.")
 
     train, val, test = _split(listings, val_size, test_size, seed)
+    train = train + train_only
+    listings = listings + train_only
     out_dir = resolve_path(PROCESSED_DIR)
     for name, part in zip(SPLITS, (train, val, test)):
         write_jsonl(part, out_dir / f"{name}.jsonl")
@@ -91,6 +96,7 @@ def build_dataset(names: list[str] | None = None, val_size: float = 0.15, test_s
     stats = {
         "total": len(listings),
         "duplicates_removed": duplicates,
+        "train_only": len(train_only),
         "splits": {name: {"n": len(part), "scam": sum(l.label == 1 for l in part)}
                    for name, part in zip(SPLITS, (train, val, test))},
         "by_source": dict(Counter(l.source for l in listings)),

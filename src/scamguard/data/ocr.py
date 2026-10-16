@@ -1,5 +1,5 @@
-"""Texterkennung (OCR) für Screenshots von Inseraten – lokal mit Apple Vision (macOS, neuronales Netz
-von Apple, ohne Download und ohne Cloud).
+"""Texterkennung (OCR) für Screenshots von Inseraten – lokal und ohne Cloud: Apple Vision (macOS) bzw.
+die Texterkennung von Windows (Windows.Media.Ocr, Sprachpaket Deutsch). Beide ohne Modell-Download.
 
 `recognize` liefert Zeilen mit Position in Pixeln. `layout_rows` setzt daraus wieder lesbare Zeilen
 zusammen: Desktop-Screenshots haben rechts eine Seitenspalte (Anbieter, Login-Hinweis), die sonst
@@ -17,8 +17,9 @@ from functools import lru_cache
 # Erkennung. Deshalb in Kacheln von höchstens 1,5 × Bildbreite lesen, mit etwas Überlappung.
 TILE_RATIO = 1.5
 TILE_OVERLAP = 120
-UNAVAILABLE_HINT = ("Texterkennung für Screenshots gibt es bisher nur auf dem Mac (Apple Vision). "
-                    "Auf anderen Rechnern die Seite als .html oder PDF speichern oder den Text einfügen.")
+UNAVAILABLE_HINT = ("Texterkennung für Screenshots gibt es auf dem Mac (Apple Vision) und unter Windows "
+                    "(Sprachpaket Deutsch, pip install -e .). Sonst die Seite als .html oder PDF speichern "
+                    "oder den Text einfügen.")
 
 
 @dataclass(frozen=True)
@@ -46,12 +47,68 @@ def _vision():
     return Vision, NSData
 
 
+@lru_cache(maxsize=1)
+def _windows_engine():
+    """Texterkennung von Windows für Deutsch (bzw. die Sprache des Systems) oder None."""
+    if sys.platform != "win32":
+        return None
+    try:
+        from winrt.windows.globalization import Language
+        from winrt.windows.media.ocr import OcrEngine
+    except ImportError:
+        return None
+    return (OcrEngine.try_create_from_language(Language("de-DE"))
+            or OcrEngine.try_create_from_user_profile_languages())
+
+
 def available() -> bool:
-    return _vision() is not None
+    return _vision() is not None or _windows_engine() is not None
+
+
+async def _windows_lines(png: bytes) -> tuple[list, int, int]:
+    from winrt.windows.graphics.imaging import BitmapDecoder
+    from winrt.windows.storage.streams import DataWriter, InMemoryRandomAccessStream
+
+    stream = InMemoryRandomAccessStream()
+    writer = DataWriter(stream)
+    writer.write_bytes(png)
+    await writer.store_async()
+    writer.detach_stream()
+    stream.seek(0)
+    decoder = await BitmapDecoder.create_async(stream)
+    bitmap = await decoder.get_software_bitmap_async()
+    result = await _windows_engine().recognize_async(bitmap)
+    return list(result.lines), decoder.pixel_width, decoder.pixel_height
+
+
+def _recognize_tile_windows(png: bytes) -> list[tuple[str, float, float, float, float]]:
+    """Windows-OCR auf einem Bildausschnitt; Koordinaten normiert (0..1), Ursprung oben links."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:  # kein laufender Event-Loop (CLI, Threadpool der API) → direkt
+        lines, width, height = asyncio.run(_windows_lines(png))
+    else:  # in einem Event-Loop (z. B. async-Code) → eigener Thread
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            lines, width, height = pool.submit(asyncio.run, _windows_lines(png)).result()
+    out = []
+    for line in lines:
+        boxes = [w.bounding_rect for w in line.words]
+        text = str(line.text).strip()
+        if not text or not boxes:
+            continue
+        top, bottom = min(b.y for b in boxes), max(b.y + b.height for b in boxes)
+        left, right = min(b.x for b in boxes), max(b.x + b.width for b in boxes)
+        out.append((text, top / height, (bottom - top) / height, left / width, right / width))
+    return out
 
 
 def _recognize_tile(png: bytes) -> list[tuple[str, float, float, float, float]]:
     """Vision auf einem Bildausschnitt; Koordinaten normiert (0..1), Ursprung oben links."""
+    if _vision() is None:
+        return _recognize_tile_windows(png)
     vision, nsdata = _vision()
     handler = vision.VNImageRequestHandler.alloc().initWithData_options_(
         nsdata.dataWithBytes_length_(png, len(png)), None)
@@ -75,7 +132,7 @@ def _recognize_tile(png: bytes) -> list[tuple[str, float, float, float, float]]:
 
 def recognize(data: bytes) -> tuple[list[OcrLine], int]:
     """Alle Textzeilen eines Bildes plus Bildbreite.
-    Wirft OcrUnavailable (kein Mac) bzw. ValueError (kein Bild)."""
+    Wirft OcrUnavailable (weder Mac noch Windows-OCR) bzw. ValueError (kein Bild)."""
     if not available():
         raise OcrUnavailable(UNAVAILABLE_HINT)
     from PIL import Image, UnidentifiedImageError

@@ -56,6 +56,14 @@ def _cmd_data(args) -> int:
         rows = []
         if warning_sources := [q for q in chosen if q in collect_warnings.SOURCES]:
             rows += collect_warnings.collect(sources=warning_sources, max_items=args.max)
+        if "reddit" in chosen:  # nur ausdrücklich: braucht eigenen API-Zugang
+            from scamguard.data import collect_reddit, ocr
+
+            try:
+                rows += collect_reddit.collect(max_posts=args.max)
+            except (collect_reddit.MissingCredentials, ocr.OcrUnavailable) as exc:
+                print(exc)
+                return 1
         if "foren" in chosen:
             quotes, reports = collect_forums.collect(max_pages=args.max)
             rows += quotes
@@ -564,7 +572,7 @@ def main(argv: list[str] | None = None) -> int:
                         "ordner = bisherige eigene Labels in die Datensatz-Ordner übernehmen")
     p.add_argument("--only", nargs="+", help="Nur diese Datensätze (Namen aus registry.py)")
     p.add_argument("--max", type=int, help="sammeln: höchstens so viele Seiten je Quelle bzw. Thread")
-    p.add_argument("--quellen", nargs="+", choices=["watchlist_alarm", "vz_radar", "watchlist_news", "foren"],
+    p.add_argument("--quellen", nargs="+", choices=["watchlist_alarm", "vz_radar", "watchlist_news", "foren", "reddit"],
                    help="sammeln: nur diese Quellen")
     p.add_argument("--top", type=int, default=60, help="phrasen: so viele Kandidaten ausgeben")
     p.add_argument("--hf", action="store_true",

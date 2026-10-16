@@ -43,7 +43,7 @@ Personen übernehmen zusätzlich Modelle oder Oberfläche.
 **Ziel:** Chats aus dem Bekanntenkreis ohne Abtippen erfassen (Datenspende).
 
 - Unter *Aufgaben holen → Eigenen Text hinzufügen* zusätzlich Screenshots annehmen, Text per
-  `data/listing_import.py` (Apple Vision) auslesen.
+  `data/listing_import.py` (Apple Vision bzw. Windows-OCR) auslesen.
 - Einwilligung wie beim Texteingang abfragen (Zweck, lokale Speicherung, Löschung auf Wunsch);
   Kontaktdaten automatisch anonymisieren, erkannte Namen zur Kontrolle hervorheben.
 - **Fertig, wenn:** Tests für Upload, Einwilligung und Anonymisierung, CHANGELOG, README-Abschnitt.

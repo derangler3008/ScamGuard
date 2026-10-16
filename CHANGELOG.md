@@ -2,6 +2,25 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.12.0] – 2026-10-16
+
+### Neu
+- **Texterkennung unter Windows:** Screenshots (Upload in der Web-App, Chat-Screenshots, Ablageordner)
+  werden jetzt auch auf dem PC gelesen – mit der eingebauten Windows-OCR (Sprachpaket Deutsch), lokal und
+  ohne Download. Der Mac nutzt weiter Apple Vision.
+- **Reddit über die offizielle API** (`scamguard data sammeln --quellen reddit`, `data/collect_reddit.py`):
+  Bilder aus den Subreddits in `data/quellen/reddit.yaml`, Texterkennung, Anonymisierung, Prüfliste
+  `gesammelt_reddit.csv` (Label von Menschen). Braucht eigenen API-Zugang in `.env`; die Website wird
+  weiterhin nicht gescrapt.
+- **Synthetische Daten** (`scripts/synthetische_daten.py`): nachgebaute Chat-Screenshots typischer Maschen
+  und gewöhnlicher Gespräche sowie KI-Produktfotos (SDXL-Turbo, GPU).
+- **Ordner `synthetisch/`** in `datensatz_fuellen_inserate` und `datensatz_fuellen_bilder`: eigene Quelle,
+  beim Bauen der Splits nur im Training, nie in Validierung oder Test (`train_only`).
+
+### Nach dem Update
+1. `pip install -e .` (Windows: OCR-Pakete).
+2. Optional: `python scripts/synthetische_daten.py chats`, dann `scamguard retrain`.
+
 ## [0.11.0] – 2026-10-16
 
 ### Neu

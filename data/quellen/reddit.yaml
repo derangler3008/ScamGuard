@@ -1,0 +1,9 @@
+# Quellen für `scamguard data sammeln --quellen reddit` (offizielle Reddit-API, Zugang in .env).
+# Je Eintrag ein Subreddit, optional mit Suche darin. Nicht existierende Subreddits melden einen Fehler.
+max_beitraege: 100          # je Quelle; überschreibbar mit --max
+quellen:
+  - subreddit: kleinanzeigen_betrug
+  - subreddit: de
+    suche: kleinanzeigen betrug
+  - subreddit: LegaladviceGerman
+    suche: kleinanzeigen betrug
