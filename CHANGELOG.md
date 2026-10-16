@@ -15,6 +15,10 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **Synthetische Daten** (`scripts/synthetische_daten.py`): nachgebaute Chat-Screenshots typischer Maschen
   und gewöhnlicher Gespräche (`chats`: feste Vorlagen, `qwen-chats`: vom lokalen Qwen geschrieben, viel
   vielfältiger) sowie KI-Produktfotos (`fotos`: SDXL-Turbo, GPU).
+- **Update-Check** (`scripts/update_check.py`): zeigt nach `git pull`, was seit der installierten Version
+  zu tun ist (pip-Befehl mit den vorhandenen Extras, „Nach dem Update“-Schritte aus dem CHANGELOG). Mit
+  Claude Code läuft er beim Start automatisch (`.claude/settings.json`), `CLAUDE.md` sagt Claude, wie die
+  Schritte abzuarbeiten sind.
 - **Ordner `synthetisch/`** in `datensatz_fuellen_inserate` und `datensatz_fuellen_bilder`: eigene Quelle,
   beim Bauen der Splits nur im Training, nie in Validierung oder Test (`train_only`).
 
@@ -23,8 +27,10 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   geladen war (WinError 1114) – `ocr.py` lädt torch deshalb vorher.
 
 ### Nach dem Update
-1. `pip install -e .` (Windows: OCR-Pakete).
-2. Optional: `python scripts/synthetische_daten.py chats`, dann `scamguard retrain`.
+1. `pip install -e .` mit den bisherigen Extras (Windows: bringt die OCR-Pakete mit).
+2. Optional: `python scripts/synthetische_daten.py chats`, dann `scamguard retrain` (Startdaten, nur Training).
+3. Gelabelte Inserate im Team über einen privaten Ordner zusammenführen, nicht über Git (README,
+   „Gelabelte Inserate im Team zusammenführen“).
 
 ## [0.11.0] – 2026-10-16
 
@@ -42,9 +48,10 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   (Accuracy/Precision/Recall/F1, gültiges JSON) und `export` (Adapter einfügen, GGUF für llama.cpp).
   Standard Qwen3.5-4B in bf16, passt auf 16 GB VRAM.
 
-### Nach dem Update (Windows-PC)
-1. llama.cpp-Build und GGUF-Modell herunterladen, in `config.local.yaml` eintragen (README, „LLM“).
-2. Für das Feintuning: eigene Umgebung `.venv-lora` (docs/llm_feintuning.md, Abschnitt 5).
+### Nach dem Update (nur Windows-PC, optional)
+1. Optional, für die KI-Analyse auf dem PC: llama.cpp-Build und GGUF-Modell (~13 GB) herunterladen, in
+   `config.local.yaml` eintragen (README, „LLM“).
+2. Optional, für das Feintuning: eigene Umgebung `.venv-lora` (docs/llm_feintuning.md, Abschnitt 5).
 Mac: nichts zu tun.
 
 ## [0.10.0] – 2026-10-13

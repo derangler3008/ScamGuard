@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/update_check.py\" 2>/dev/null || python \"$CLAUDE_PROJECT_DIR/scripts/update_check.py\" 2>/dev/null || py -3 \"$CLAUDE_PROJECT_DIR/scripts/update_check.py\"",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}
