@@ -2,6 +2,19 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.13.0] – 2026-10-17
+
+### Neu
+- **Datensätze im Team zusammenführen** (`scamguard team export|import`, `data/team.py`): Jede Person exportiert
+  ihre Einstufungen als ZIP (Inserat-Ordner mit Fotos, Tabellen, Produktfotos, Annotation-Workspace; ohne
+  synthetische Daten) und lädt es über den Upload-Link des Teams hoch. `team import` liest alle ZIPs aus dem
+  Eingang (`team.eingang` in `config.local.yaml`), überspringt schon eingelesene, übernimmt gleiche Inserate
+  nicht doppelt und schützt vor präparierten ZIPs.
+
+### Nach dem Update
+1. Eigene Daten abgeben: `scamguard team export --name <Vorname>` und das ZIP über den Upload-Link hochladen
+   (Link vom Team, steht nicht im Repo). Gern regelmäßig wiederholen, Doppeltes wird erkannt.
+
 ## [0.12.0] – 2026-10-16
 
 ### Neu

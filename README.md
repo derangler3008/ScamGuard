@@ -7,7 +7,7 @@ Betrugsmaschen: Fake-Zahlungslinks, Vorkasse-Geschichten, PayPal „Freunde & Fa
 Dreiecksbetrug, Datenabfragen und mehr. Mehrere unabhängige Detektoren bewerten Text, Preis, Bilder
 und Nachrichten; das Ergebnis ist ein Risiko-Score mit markierten Fundstellen direkt auf der Seite.
 
-Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.12.0** ([Changelog](CHANGELOG.md)).
+Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.13.0** ([Changelog](CHANGELOG.md)).
 
 - **Browser-Extension** für Chromium und Firefox: markiert Warnsignale wie ein Adblocker, prüft auch das
   Postfach live, jede neue Nachricht ohne Neuladen.
@@ -540,23 +540,23 @@ Aufgaben zur Zweitprüfung geholt oder als `labels_<name>.jsonl` nach `data/date
 kopiert werden. Bilder werden nicht übertragen; keine echten Namen, Nummern oder Adressen teilen.
 
 **Gelabelte Inserate im Team zusammenführen:** Inserate, Fotos und Labels kommen **nicht ins Git**
-(`.gitignore` – Personendaten, Urheberrecht, Größe). Jede manuelle Einstufung liegt aber als eigener Ordner
-in `data/datensatz_fuellen_inserate/{betrug,serioes}/<kategorie>/<inserat>/` (`inserat.json` + Fotos) – so
-lassen sie sich einfach weitergeben:
+(`.gitignore` – das Repo ist öffentlich; Personendaten, Urheberrecht, Größe). Stattdessen gibt jede Person
+ihre Daten als ZIP ab, zusammengeführt und trainiert wird an einer Stelle:
 
-1. **Wer gelabelt hat:** ältere Einstufungen einmal in Ordner übernehmen (`scamguard data ordner`), dann den
-   Ordner `data/datensatz_fuellen_inserate/` als ZIP packen.
-2. **Weitergeben** nur über einen **privaten** Speicher (OneDrive, Uni-Cloud) – nicht über GitHub, keine
-   öffentlichen Links.
-3. **Wer empfängt:** ZIP in den eigenen `data/datensatz_fuellen_inserate/` entpacken, sodass die Ordner neben
-   den eigenen in `betrug/` bzw. `serioes/` liegen. Ordnernamen sind eindeutig, es wird nichts überschrieben.
-4. **Neu trainieren:** `scamguard retrain` (VS Code: Aufgabe „ScamGuard: Neu trainieren“). Doppelte Inserate
-   werden beim Bauen der Splits automatisch erkannt.
+1. **Abgeben (alle):** `scamguard team export --name <Vorname>` → `scamguard_<name>_<datum>.zip` mit allen
+   eigenen Einstufungen (Inserat-Ordner mit Fotos, Prüflisten/Tabellen, Produktfotos, Dateien des
+   Annotation-Workspace; ohne synthetische Daten). Die Datei über den **Upload-Link** hochladen – den Link
+   gibt es im Team, er steht bewusst nicht im öffentlichen Repo. Neu exportieren und erneut hochladen geht
+   jederzeit.
+2. **Zusammenführen (eine Person):** Der Upload-Link zeigt auf einen privaten OneDrive-Ordner („Dateien
+   anfordern“). Dessen Pfad einmal in `config.local.yaml` eintragen (`team: {eingang: <Pfad>}`; Mac z. B.
+   `~/Library/CloudStorage/OneDrive-Persönlich/…/Eingang`), dann `scamguard team import` und
+   `scamguard retrain`. Schon eingelesene ZIPs werden übersprungen, gleiche Inserate nicht doppelt
+   übernommen; Tabellen landen als `team_<name>__<datei>`, Fotos unter `team_<name>/`.
 
 Darauf achten, dass beide Klassen vorkommen – nur Betrug ergibt ein einseitiges Modell (`retrain` warnt).
 Echte Inserate verteilen sich auf Training, Validierung und Test; erst damit sind die Kennzahlen
-aussagekräftig. Ab etwa 20 Beispielen je Klasse urteilt auch AutoML. Wer regelmäßig gemeinsam labelt,
-nutzt besser den gemeinsamen Ordner des Annotation-Workspace (siehe oben).
+aussagekräftig. Ab etwa 20 Beispielen je Klasse urteilt auch AutoML.
 
 **Arbeitsbereiche:**
 

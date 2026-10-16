@@ -16,6 +16,8 @@
   scamguard ui [--public]             Streamlit-Frontend starten (Standard: nur lokal)
   scamguard api                       REST-API starten (FastAPI)
   scamguard llm-server [--model ID]   Lokales LLM (Qwen, MLX) für die KI-Analyse starten
+  scamguard team export --name X       Eigene Daten als ZIP fürs Team
+  scamguard team import [ORDNER]       Export-ZIPs aus dem Team einlesen
   scamguard start [--ohne-llm]        Qwen-Server + API zusammen starten (für die Extension)
 """
 
@@ -561,6 +563,36 @@ def _cmd_start(args) -> int:
                 llm_process.kill()
 
 
+def _cmd_team(args) -> int:
+    from scamguard.data import team
+
+    settings = load_config().get("team") or {}
+    if args.action == "export":
+        if not args.name:
+            print("Name fehlt: scamguard team export --name <Vorname>")
+            return 1
+        target = args.ziel or settings.get("ausgang") or "."
+        path, counts = team.export(args.name, target)
+        print(f"Export: {path}")
+        print("  " + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())) if counts else "  (noch keine Daten)")
+        print("Diese Datei über den Upload-Link hochladen (README, „Gelabelte Inserate im Team zusammenführen“).")
+        return 0
+    results = team.import_inbox(args.pfade, force=args.erneut)
+    if not results:
+        print("Keine Export-ZIPs gefunden.")
+    for r in results:
+        if r.get("übersprungen"):
+            print(f"  {r['datei']}: schon eingelesen ({r['person']}) – übersprungen")
+        elif r.get("fehler"):
+            print(f"  {r['datei']}: FEHLER – {r['fehler']}")
+        else:
+            details = ", ".join(f"{k}: {v}" for k, v in sorted(r.items()) if k not in ("datei", "person"))
+            print(f"  {r['datei']} ({r['person']}): {details or 'nichts Neues'}")
+    if any(not r.get("übersprungen") and not r.get("fehler") for r in results):
+        print("Weiter: scamguard retrain")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scamguard", description="Betrugserkennung für Kleinanzeigen")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -578,6 +610,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--hf", action="store_true",
                    help="phrasen: auch inaktive Hugging-Face-Datensätze aus huggingface.yaml einbeziehen")
     p.set_defaults(func=_cmd_data)
+
+    p = sub.add_parser("team", help="Datensätze im Team zusammenführen (ZIP exportieren / einlesen)")
+    p.add_argument("action", choices=["export", "import"],
+                   help="export = eigene Daten als ZIP; import = ZIPs aus dem Eingang einlesen")
+    p.add_argument("pfade", nargs="*", help="import: Ordner oder ZIP-Dateien (Standard: team.eingang)")
+    p.add_argument("--name", help="export: dein Vorname, z. B. Jannis")
+    p.add_argument("--ziel", help="export: Zielordner für das ZIP (Standard: team.ausgang bzw. aktueller Ordner)")
+    p.add_argument("--erneut", action="store_true", help="import: auch schon eingelesene ZIPs erneut einlesen")
+    p.set_defaults(func=_cmd_team)
 
     p = sub.add_parser("einstufen", help="Annotation-Workspace: Aufgaben holen, Qualität prüfen, exportieren")
     p.add_argument("action", choices=["holen", "bericht", "export"],

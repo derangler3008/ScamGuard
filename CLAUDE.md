@@ -14,7 +14,10 @@
   Installationen außerhalb von `.venv` vorher mit der Person abstimmen.
 - **Prüfen:** danach `pytest -m "not e2e"` und erneut `python scripts/update_check.py` – es bleibt still,
   wenn alles erledigt ist. Laufende Dienste neu starten, an das Neuladen der Extension erinnern.
-- **Daten kommen nicht über Git:** gelabelte Inserate anderer Teammitglieder werden als Ordner
-  weitergegeben (README, „Gelabelte Inserate im Team zusammenführen“) – nie Datendateien committen.
+- **Daten kommen nicht über Git:** nie Datendateien committen. „Gib meine Daten ab“ o. Ä.:
+  `scamguard team export --name <Vorname der Person>` und der Person sagen, dass sie das ZIP über den
+  Upload-Link des Teams hochladen soll (Link steht nicht im Repo – nicht danach suchen, sondern die Person
+  fragen bzw. auf das Team verweisen). Zusammenführen: `scamguard team import`, dann `scamguard retrain`
+  (README, „Gelabelte Inserate im Team zusammenführen“).
 - **Neue Version veröffentlichen:** im CHANGELOG unter der Version einen Abschnitt „### Nach dem Update“
   mit den Schritten für alle anlegen – genau den liest `update_check.py` für die anderen aus.

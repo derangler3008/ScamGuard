@@ -12,6 +12,12 @@ thresholds:
   suspicious: 0.40
   high_risk: 0.70
 
+# Datensätze im Team zusammenführen (`scamguard team export|import`). Pfade gehören in config.local.yaml,
+# z. B. der OneDrive-Eingang mit dem Upload-Link (README, „Gelabelte Inserate im Team zusammenführen“).
+team:
+  eingang: null      # Ordner mit den hochgeladenen Export-ZIPs (für `team import`)
+  ausgang: null      # wohin `team export` das eigene ZIP schreibt (Standard: aktueller Ordner)
+
 # Annotation-Workspace (Web-App, Tab „Einstufen im Team“; Kategorien: data/einstufung/kategorien.yaml)
 einstufung:
   # Arbeitsordner. Geht auch als gemeinsamer Ordner fürs Team (z. B. DHBW-OneDrive): Jede Person
