@@ -272,6 +272,7 @@ QWEN_SCHEMA = {"type": "object", "required": ["nachrichten"], "properties": {"na
 def cmd_qwen_chats(args) -> int:
     """Wie `chats`, aber die Gespräche schreibt Qwen (lokaler Server aus config.yaml) – viel vielfältiger."""
     import json
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     import httpx
 
@@ -285,7 +286,7 @@ def cmd_qwen_chats(args) -> int:
     except httpx.HTTPError:
         sys.exit(f"Qwen läuft nicht ({base}) – vorher `scamguard llm-server` bzw. `scamguard start`.")
     rng = random.Random(args.seed)
-    written = {"betrug": 0, "serioes": 0}
+    tasks = []  # erst alle Aufträge festlegen (reproduzierbar), dann parallel an Qwen schicken
     for n in range(args.anzahl):
         want = "betrug" if rng.random() < args.anteil_betrug else "serioes"
         label, role, scenario = rng.choice([s for s in QWEN_SCENARIOS if s[0] == want])
@@ -294,24 +295,38 @@ def cmd_qwen_chats(args) -> int:
         price = int(item[2] * (rng.uniform(0.35, 0.6) if cheap else rng.uniform(0.85, 1.1)))
         prompt = QWEN_PROMPT.format(item=item[0], price=price, role=role, scenario=scenario,
                                     style=rng.choice(STYLES[label]))
-        try:
-            reply = httpx.post(f"{base}/chat/completions", timeout=180, json={
-                "model": local["model"], "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.9, "top_p": 0.95, "max_tokens": 900,
-                "chat_template_kwargs": {"enable_thinking": False},
-                "response_format": {"type": "json_schema", "json_schema": {
-                    "name": "chat", "schema": QWEN_SCHEMA, "strict": True}}}).json()
-            chat = json.loads(reply["choices"][0]["message"]["content"])["nachrichten"]
-        except (httpx.HTTPError, KeyError, ValueError) as exc:
-            print(f"  {n + 1:3d}: übersprungen ({exc.__class__.__name__})")
-            continue
-        messages = [(m["wer"], redact(m["text"].strip())) for m in chat if m.get("text", "").strip()]
-        if len(messages) < 3:
-            continue
-        name = f"qwen_{hashlib.sha1(f'{args.seed}-{n}'.encode()).hexdigest()[:10]}"
-        _write_example(label, name, item, price, rng.choice(CITIES), messages, new_account=cheap, rng=rng)
-        written[label] += 1
-        print(f"  {n + 1:3d}/{args.anzahl}  {label:7s}  {scenario[:60]}", flush=True)
+        tasks.append((n, label, scenario, item, price, cheap, prompt))
+
+    def ask(prompt: str) -> list[dict]:
+        reply = httpx.post(f"{base}/chat/completions", timeout=600, json={
+            "model": local["model"], "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.9, "top_p": 0.95, "max_tokens": 900,
+            "chat_template_kwargs": {"enable_thinking": False},
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "chat", "schema": QWEN_SCHEMA, "strict": True}}}).json()
+        return json.loads(reply["choices"][0]["message"]["content"])["nachrichten"]
+
+    # Mehrere Anfragen gleichzeitig: llama.cpp rechnet sie gemeinsam (Batching) – die GPU ist so viel
+    # besser ausgelastet als mit einer Anfrage nach der anderen
+    written, done = {"betrug": 0, "serioes": 0}, 0
+    with ThreadPoolExecutor(max_workers=args.parallel) as pool:
+        futures = {pool.submit(ask, task[-1]): task for task in tasks}
+        for future in as_completed(futures):
+            n, label, scenario, item, price, cheap, _ = futures[future]
+            done += 1
+            try:
+                chat = future.result()
+            except (httpx.HTTPError, KeyError, ValueError) as exc:
+                print(f"  {done:3d}/{args.anzahl}  übersprungen ({exc.__class__.__name__})", flush=True)
+                continue
+            messages = [(m["wer"], redact(m["text"].strip())) for m in chat if m.get("text", "").strip()]
+            if len(messages) < 3:
+                continue
+            own = random.Random(f"{args.seed}-{n}")
+            name = f"qwen_{hashlib.sha1(f'{args.seed}-{n}'.encode()).hexdigest()[:10]}"
+            _write_example(label, name, item, price, own.choice(CITIES), messages, new_account=cheap, rng=own)
+            written[label] += 1
+            print(f"  {done:3d}/{args.anzahl}  {label:7s}  {scenario[:60]}", flush=True)
     print(f"{sum(written.values())} Qwen-Chats ({written['betrug']} Betrug, {written['serioes']} seriös) → "
           f"{LISTING_DIR}. Nur Training. Weiter: scamguard retrain")
     return 0
@@ -376,6 +391,7 @@ def main() -> int:
     p.add_argument("--anzahl", type=int, default=100)
     p.add_argument("--anteil-betrug", type=float, default=0.5)
     p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--parallel", type=int, default=4, help="gleichzeitige Anfragen (Slots des Qwen-Servers)")
     p.set_defaults(func=cmd_qwen_chats)
     p = sub.add_parser("fotos", help="KI-Produktfotos (Stable Diffusion, braucht GPU)")
     p.add_argument("--anzahl", type=int, default=60)
