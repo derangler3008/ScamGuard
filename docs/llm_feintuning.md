@@ -102,7 +102,54 @@ Fehlt `models/qwen_lora/adapters.safetensors`, startet ScamGuard das Basismodell
 - **Datenschutz:** `data/finetune/` und `models/` landen nicht im Git. Keine echten Namen,
   Telefonnummern oder Adressen in den Trainingsdaten.
 
-## 5. Alternativen
+## 5. Windows-PC mit AMD- oder NVIDIA-Grafikkarte
+
+Statt MLX: PyTorch mit ROCm (AMD) bzw. CUDA (NVIDIA), Hugging Face PEFT und
+[`scripts/qwen_lora_pc.py`](../scripts/qwen_lora_pc.py). Gleiche Daten (`data/finetune`), gleicher Prompt
+(`enable_thinking: false`), gelernt wird nur die Antwort. Getestet auf RX 7800 XT (16 GB), Windows 11,
+AMD-Treiber 26.8, ROCm 7.2.1.
+
+**Modell:** Qwen3.5-4B in bf16 (~9 GB). Das 9B-Modell braucht in bf16 ~19 GB, und 4-Bit-QLoRA
+(bitsandbytes) gibt es unter Windows mit AMD nicht. Adapter bekommen nur die Sprachschichten.
+
+**Einmalig: eigene Umgebung `.venv-lora`** (die ScamGuard-Umgebung bleibt unverändert). AMD: Treiber ab
+26.2.2, Wheels laut [AMD-Anleitung](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html):
+
+```powershell
+py -3.12 -m venv .venv-lora
+$b = "https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1"
+.venv-lora\Scripts\pip install --no-cache-dir "$b/rocm_sdk_core-7.2.1-py3-none-win_amd64.whl" `
+  "$b/rocm_sdk_devel-7.2.1-py3-none-win_amd64.whl" "$b/rocm_sdk_libraries_custom-7.2.1-py3-none-win_amd64.whl" `
+  "$b/rocm-7.2.1.tar.gz"
+.venv-lora\Scripts\pip install --no-cache-dir "$b/torch-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl" `
+  "$b/torchaudio-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl" "$b/torchvision-0.24.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl"
+.venv-lora\Scripts\pip install transformers peft accelerate datasets sentencepiece "protobuf<6"
+.venv-lora\Scripts\python -c "import torch; print(torch.cuda.is_available())"   # → True
+```
+
+NVIDIA: stattdessen `pip install torch --index-url https://download.pytorch.org/whl/cu128`.
+
+**Ablauf:**
+
+```powershell
+scamguard data build; scamguard llm-daten                                  # wie auf dem Mac
+.venv-lora\Scripts\python scripts\qwen_lora_pc.py test --ohne-adapter     # Ausgangswert
+.venv-lora\Scripts\python scripts\qwen_lora_pc.py train                   # → models/qwen_lora_pc/
+.venv-lora\Scripts\python scripts\qwen_lora_pc.py test                    # gleiches Testset
+.venv-lora\Scripts\python scripts\qwen_lora_pc.py export --llama-cpp <llama.cpp-Quellordner>
+```
+
+`train` speichert nach jeder Epoche den Adapter mit dem bisher besten Val loss und schreibt Parameter und
+Verlauf nach `models/qwen_lora_pc/training_pc.json`. `export` fügt den Adapter ins Modell ein
+(`models/qwen_pc_merged/`) und erzeugt mit `convert_hf_to_gguf.py` aus dem
+[llama.cpp-Quellcode](https://github.com/ggml-org/llama.cpp) eine GGUF-Datei (`q8_0`, ~4,5 GB). Die trägt man
+in `config.local.yaml` unter `llm.local.llama_cpp.gguf` ein (README, Abschnitt „LLM“).
+
+Probelauf (Qwen3.5-0.8B, 16 Demo-Beispiele, 2 Epochen): 38 s, 5,4 GB VRAM, gültiges JSON in allen
+Testfällen. Die linearen Attention-Schichten von Qwen3.5 laufen ohne `flash-linear-attention` über die
+PyTorch-Referenz – korrekt, aber langsamer.
+
+## 6. Alternativen
 
 - **Ohne Training (Few-Shot):** 3–6 ähnliche, bereits gelabelte Fälle in den Prompt stellen
   (Retrieval). Bei wenigen Daten oft genauso gut, und leicht zu ändern. Wäre eine kleine Erweiterung in
@@ -113,7 +160,7 @@ Fehlt `models/qwen_lora/adapters.safetensors`, startet ScamGuard das Basismodell
 - **Desktop-PC mit großer GPU:** größeres Qwen (z. B. 27B in LM Studio) ohne Feintuning gegen 9B mit
   Feintuning vergleichen.
 
-## 6. Experimente
+## 7. Experimente
 
 | Experiment | Messen |
 |---|---|

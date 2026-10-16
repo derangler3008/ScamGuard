@@ -2,6 +2,27 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.11.0] – 2026-10-16
+
+### Neu
+- **Qwen auf dem Windows-PC:** `scamguard start` (VS Code: `Strg+Umschalt+B`) startet ohne MLX jetzt
+  llama.cpp mit, wenn `llm.local.llama_cpp` eingetragen ist (`server`, `gguf`, optional `context`,
+  `gpu_layers`) – Qwen und API in einem Terminal wie auf dem Mac, `Ctrl+C` beendet beides. Auch
+  `scamguard llm-server`. Der Server läuft nur auf `127.0.0.1`, ohne Chat-Oberfläche und ohne CORS für
+  fremde Seiten, „Denken“ aus. Getestet: Qwen3.8-27B `UD-Q3_K_XL` auf RX 7800 XT (Vulkan).
+- **`config.local.yaml`:** rechnerspezifische Einstellungen (Pfade, Modellname) außerhalb des Git, über
+  `config.yaml` gelegt. Mac- und PC-Einstellungen kommen sich so nicht mehr in die Quere. Tests ignorieren
+  die Datei.
+- **Qwen-Feintuning auf dem PC** (`scripts/qwen_lora_pc.py`, docs/llm_feintuning.md Abschnitt 5): LoRA mit
+  PyTorch/ROCm (AMD) bzw. CUDA (NVIDIA) und PEFT auf denselben Daten wie `mlx_lm.lora` – `train`, `test`
+  (Accuracy/Precision/Recall/F1, gültiges JSON) und `export` (Adapter einfügen, GGUF für llama.cpp).
+  Standard Qwen3.5-4B in bf16, passt auf 16 GB VRAM.
+
+### Nach dem Update (Windows-PC)
+1. llama.cpp-Build und GGUF-Modell herunterladen, in `config.local.yaml` eintragen (README, „LLM“).
+2. Für das Feintuning: eigene Umgebung `.venv-lora` (docs/llm_feintuning.md, Abschnitt 5).
+Mac: nichts zu tun.
+
 ## [0.10.0] – 2026-10-13
 
 ### Neu

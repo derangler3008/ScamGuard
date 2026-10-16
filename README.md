@@ -7,7 +7,7 @@ Betrugsmaschen: Fake-Zahlungslinks, Vorkasse-Geschichten, PayPal „Freunde & Fa
 Dreiecksbetrug, Datenabfragen und mehr. Mehrere unabhängige Detektoren bewerten Text, Preis, Bilder
 und Nachrichten; das Ergebnis ist ein Risiko-Score mit markierten Fundstellen direkt auf der Seite.
 
-Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.8.0** ([Changelog](CHANGELOG.md)).
+Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.11.0** ([Changelog](CHANGELOG.md)).
 
 - **Browser-Extension** für Chromium und Firefox: markiert Warnsignale wie ein Adblocker, prüft auch das
   Postfach live, jede neue Nachricht ohne Neuladen.
@@ -259,11 +259,28 @@ schnellen Modelle erscheint sofort, die KI-Einschätzung wird nachgereicht.
 | Rechner | Modell | Größe | Server |
 |---|---|---|---|
 | MacBook M4, 16 GB | Qwen3.5-9B, MLX OptiQ 4-Bit – gemessen: ca. 6 s (unauffällig) bis 20 s (Betrug) | 6,6 GB | `scamguard llm-server` |
-| PC mit 16 GB VRAM (z. B. RX 7800 XT) | Qwen3.8-27B, GGUF `UD-Q3_K_XL` (alternativ `UD-IQ4_XS`, 14,3 GB) | 13,1 GB | LM Studio oder Ollama |
+| PC mit 16 GB VRAM (z. B. RX 7800 XT) | Qwen3.8-27B, GGUF `UD-Q3_K_XL` (alternativ `UD-IQ4_XS`, 14,3 GB) | 13,1 GB | llama.cpp (startet mit `scamguard start`), LM Studio oder Ollama |
 | wenig Speicher | Qwen3.5-4B, 4-Bit | ~3 GB | wie oben |
 
-**Windows/Linux (AMD/NVIDIA):** GGUF-Modell in LM Studio oder Ollama laden, Server starten und in
-`config.yaml` eintragen – ohne Code-Änderung:
+**Windows/Linux (AMD/NVIDIA) mit llama.cpp:** fertigen Build von
+[llama.cpp](https://github.com/ggml-org/llama.cpp/releases) entpacken (AMD ohne ROCm: `win-vulkan-x64`),
+GGUF-Modell herunterladen (z. B. `unsloth/Qwen3.8-27B-GGUF`) und beides in **`config.local.yaml`** eintragen
+(nicht im Git, gilt nur auf diesem Rechner, wird über `config.yaml` gelegt). Dann startet `scamguard start`
+(VS Code: `Strg+Umschalt+B`) Qwen und API zusammen, wie auf dem Mac:
+
+```yaml
+llm:
+  local:
+    model: qwen3.8-27b
+    timeout: 180
+    llama_cpp:
+      server: C:/Pfad/zu/llama.cpp/llama-server.exe
+      gguf: C:/Pfad/zu/Qwen3.8-27B-UD-Q3_K_XL.gguf
+      context: 8192                      # optional; gpu_layers: 99 (Standard, alles auf der GPU)
+```
+
+**Alternativ LM Studio oder Ollama:** Modell laden, Server starten und in `config.local.yaml` eintragen –
+ohne Code-Änderung:
 
 ```yaml
 llm:
@@ -281,7 +298,7 @@ Details:
   für die Klassifikation reicht die direkte Antwort, und sie ist deutlich schneller.
 - Lokale Server erzwingen das JSON-Format nicht immer; die Antwort wird validiert, normalisiert und bei
   ungültigem JSON einmal deterministisch neu angefragt.
-- Der MLX-Server läuft nur auf `127.0.0.1` ohne CORS-Freigabe für fremde Seiten.
+- MLX- und llama.cpp-Server laufen nur auf `127.0.0.1` ohne CORS-Freigabe für fremde Seiten.
 - 16-GB-Mac: Solange Qwen läuft, sind rund 7 GB belegt; `Ctrl+C` gibt den Speicher frei.
 - Vergleich mit den anderen Modellen: `scamguard evaluate --llm --max 100`.
 

@@ -307,3 +307,74 @@ def test_torch_models_never_compute_in_parallel():
     listing = Listing(title="PS5", description="Neu und originalverpackt")
     _run_in_threads(lambda: (text.predict(listing), image._clip_probs(None)))
     assert probe.max == 1
+
+
+def _llama_cfg(tmp_path, **spec):
+    server, gguf = tmp_path / "llama-server.exe", tmp_path / "qwen.gguf"
+    server.write_bytes(b"")
+    gguf.write_bytes(b"")
+    return with_overrides(CFG, {"llm": {"local": {"model": "qwen-pc", "llama_cpp": {
+        "server": str(server), "gguf": str(gguf), **spec}}}})
+
+
+def test_llama_cpp_command_matches_requests(tmp_path, monkeypatch):
+    from scamguard import cli
+
+    monkeypatch.setattr(cli, "load_config", lambda: _llama_cfg(tmp_path, context=4096))
+    command, where = cli._llama_cpp_process_args()
+    assert command[command.index("-m") + 1].endswith("qwen.gguf")
+    assert command[command.index("--alias") + 1] == "qwen-pc"           # gleicher Name wie in den Anfragen
+    assert command[command.index("--port") + 1] == "8080"               # aus llm.local.base_url
+    assert command[command.index("-c") + 1] == "4096"
+    assert json.loads(command[command.index("--chat-template-kwargs") + 1]) == {"enable_thinking": False}
+    assert command[command.index("--cors-origins") + 1] != "*"
+    assert "llama.cpp" in where
+
+
+def test_llama_cpp_not_configured_or_missing(tmp_path, monkeypatch, capsys):
+    from scamguard import cli
+
+    assert cli._llama_cpp_process_args() is None                        # Standard: nicht eingerichtet
+    cfg = _llama_cfg(tmp_path)
+    cfg["llm"]["local"]["llama_cpp"]["gguf"] = str(tmp_path / "fehlt.gguf")
+    monkeypatch.setattr(cli, "load_config", lambda: cfg)
+    assert cli._llama_cpp_process_args() is None
+    assert "nicht gefunden" in capsys.readouterr().out
+
+
+def test_start_launches_llama_cpp_without_mlx(tmp_path, monkeypatch, capsys):
+    from scamguard import cli
+
+    started = []
+    monkeypatch.setattr(cli, "load_config", lambda: _llama_cfg(tmp_path))
+    monkeypatch.setattr(cli, "_port_busy", lambda host, port: False)
+    monkeypatch.setattr(cli, "_http_json", lambda url, headers=None: None)
+    monkeypatch.setattr(cli, "_mlx_available", lambda: False)
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda cmd, **kw: started.append(cmd) or _Process())
+    monkeypatch.setattr(cli, "_serve_api", lambda args: 0)
+    assert cli._cmd_start(_start_args()) == 0
+    assert started and started[0][0].endswith("llama-server.exe")
+    assert "llama.cpp" in capsys.readouterr().out
+
+
+class _Process:
+    def poll(self):
+        return 0
+
+
+def test_local_config_overrides_shared_config(tmp_path, monkeypatch):
+    from scamguard import config
+
+    shared = tmp_path / "config.yaml"
+    shared.write_text("llm:\n  local:\n    model: mac\n    timeout: 120\n", encoding="utf-8")
+    local = tmp_path / "config.local.yaml"
+    local.write_text("llm:\n  local:\n    model: pc\n", encoding="utf-8")
+    monkeypatch.setattr(config, "DEFAULT_CONFIG_PATH", shared)
+    monkeypatch.setenv("SCAMGUARD_CONFIG_LOCAL", str(local))
+    config.load_config.cache_clear()
+    try:
+        merged = config.load_config()
+        assert merged["llm"]["local"] == {"model": "pc", "timeout": 120}
+        assert config.load_config(str(shared))["llm"]["local"]["model"] == "mac"  # expliziter Pfad: ohne lokal
+    finally:
+        config.load_config.cache_clear()

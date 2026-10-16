@@ -417,10 +417,39 @@ def _cmd_api(args) -> int:
     return code if code is not None else _serve_api(args)
 
 
-MLX_HINT = ("MLX läuft nur auf Macs mit Apple Silicon. Auf anderen Rechnern einen OpenAI-kompatiblen\n"
-            "Server nutzen und llm.local.base_url/model in config.yaml anpassen, z. B.:\n"
+MLX_HINT = ("MLX läuft nur auf Macs mit Apple Silicon. Auf anderen Rechnern llama.cpp eintragen\n"
+            "(llm.local.llama_cpp in config.local.yaml, README „LLM“) – dann startet ScamGuard es selbst –\n"
+            "oder einen anderen OpenAI-kompatiblen Server nutzen und llm.local.base_url/model anpassen:\n"
             "  Ollama:    ollama pull <qwen-modell> && ollama serve   → http://127.0.0.1:11434/v1\n"
             "  LM Studio: Modell laden, Server starten              → http://127.0.0.1:1234/v1")
+
+
+def _llama_cpp_process_args() -> tuple[list[str], str] | None:
+    """Befehl für llama-server (llama.cpp, z. B. Windows-PC mit AMD-/NVIDIA-GPU) oder None, falls nicht
+    eingerichtet (llm.local.llama_cpp mit server + gguf)."""
+    from scamguard.config import resolve_path
+
+    local = load_config()["llm"]["local"]
+    spec = local.get("llama_cpp") or {}
+    if not spec.get("server") or not spec.get("gguf"):
+        return None
+    server, gguf = resolve_path(spec["server"]), resolve_path(spec["gguf"])
+    for path, what in ((server, "llama-server"), (gguf, "GGUF-Modell")):
+        if not path.exists():
+            print(f"{what} nicht gefunden: {path} (llm.local.llama_cpp) – lokales LLM wird nicht gestartet.")
+            return None
+    port = urlparse(local["base_url"]).port or 8080
+    command = [
+        str(server), "-m", str(gguf), "--host", "127.0.0.1", "--port", str(port),
+        # Gleicher Name wie in den Anfragen (llm.local.model)
+        "--alias", local["model"],
+        "-ngl", str(spec.get("gpu_layers", 99)), "-c", str(spec.get("context", 8192)),
+        # Qwen „denkt“ sonst vor jeder Antwort – für die Einstufung unnötig und langsam
+        "--chat-template-kwargs", json.dumps({"enable_thinking": False}),
+        # Kein CORS für fremde Webseiten, keine Chat-Oberfläche: nur der ScamGuard-Server nutzt das Modell
+        "--cors-origins", "http://127.0.0.1:8000", "--no-webui",
+    ]
+    return command, f"{gguf.name} (llama.cpp) auf http://127.0.0.1:{port}/v1"
 
 
 def _mlx_available() -> bool:
@@ -470,14 +499,18 @@ def _llm_server_process_args(model: str | None = None,
 
 
 def _cmd_llm_server(args) -> int:
-    if not _mlx_available():
-        print(MLX_HINT if sys.platform != "darwin" else
-              'mlx-lm fehlt → pip install -e ".[local-llm]"')
-        return 1
     base_url = load_config()["llm"]["local"]["base_url"]
     if _local_llm_running(base_url):
         print(f"Das lokale LLM läuft bereits ({base_url}) – nichts zu tun.")
         return 0
+    if not _mlx_available():
+        llama = _llama_cpp_process_args()
+        if llama:
+            print(f"Starte {llama[1]} …")
+            return subprocess.call(llama[0])
+        print(MLX_HINT if sys.platform != "darwin" else
+              'mlx-lm fehlt → pip install -e ".[local-llm]"')
+        return 1
     command, env, where = _llm_server_process_args(args.model, args.adapter)
     print(f"Starte {where} …")
     return subprocess.call(command, env=env)
@@ -502,8 +535,12 @@ def _cmd_start(args) -> int:
         command, env, where = _llm_server_process_args()
         print(f"Starte Qwen: {where} (bereit nach ca. 10–20 s) …")
         llm_process = subprocess.Popen(command, env=env)
+    elif llama := _llama_cpp_process_args():
+        print(f"Starte Qwen: {llama[1]} (bereit nach ca. 10–60 s) …")
+        llm_process = subprocess.Popen(llama[0])
     else:
-        print(f"Kein MLX verfügbar – lokales LLM bitte separat starten ({base_url}).")
+        print(f"Kein MLX verfügbar – lokales LLM bitte separat starten ({base_url}) "
+              "oder llama.cpp eintragen (README „LLM“).")
     print(f"Starte ScamGuard-API auf http://{args.host}:{args.port} … (Beenden mit Ctrl+C)")
     try:
         return _serve_api(args)

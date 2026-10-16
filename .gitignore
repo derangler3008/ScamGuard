@@ -1,7 +1,10 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-lora/
 .env
+# Rechnerspezifische Einstellungen (z. B. llama.cpp-Pfade auf dem Windows-PC)
+config.local.yaml
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
