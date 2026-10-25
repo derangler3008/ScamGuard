@@ -172,6 +172,13 @@ def _to_result(name: str, data: dict, model_label: str) -> ModelResult:
         signals.insert(0, Signal(name, "LLM_SUMMARY",
                                  f"{data['summary']} – Masche: {data['scam_type']}, "
                                  f"Sprache: {data['language_quality']} ({model_label})", weight=score))
+    if examples := data.get("examples"):
+        scam = sum(ex.label == 1 for ex in examples)
+        titles = ", ".join(f"„{ex.title[:40]}“" for ex in examples[:2] if ex.title)
+        signals.append(Signal(name, "LLM_EXAMPLES",
+                              f"KI-Analyse verglichen mit {len(examples)} ähnlichen, von uns geprüften Fällen "
+                              f"({scam} Betrug, {len(examples) - scam} seriös)" + (f", z. B. {titles}" if titles else ""),
+                              0.0, info=True))
     return ModelResult(name, score=score, signals=signals)
 
 
@@ -180,7 +187,7 @@ def _to_result(name: str, data: dict, model_label: str) -> ModelResult:
 class LocalBackend:
     """OpenAI-kompatibler Chat-Endpunkt: mlx_lm.server, Ollama, LM Studio, llama.cpp, vLLM …"""
 
-    def __init__(self, cfg: dict, transport=None):
+    def __init__(self, cfg: dict, transport=None, examples=None):
         local = cfg.get("local", {})
         self.base_url = local.get("base_url", "http://127.0.0.1:8080/v1").rstrip("/")
         self.model = local.get("model", "")
@@ -189,13 +196,22 @@ class LocalBackend:
         self.max_tokens = int(cfg.get("max_tokens", 1024))
         self.label = f"{self.model.split('/')[-1] or 'lokales Modell'}, lokal"
         self._transport = transport  # nur für Tests (httpx.MockTransport)
+        self.examples = examples  # ExampleBank: Vergleichsfälle aus dem eigenen Datensatz (oder None)
 
-    def _body(self, listing: Listing, strict_format: bool, temperature: float) -> dict:
+    def _user_content(self, listing: Listing) -> tuple[str, list[Listing]]:
+        examples = self.examples.select(listing) if self.examples else []
+        if not examples:
+            return _format_listing(listing), []
+        from scamguard.models.llm_examples import prompt_block
+
+        return f"{prompt_block(examples)}\n\n{_format_listing(listing)}", examples
+
+    def _body(self, content: str, strict_format: bool, temperature: float) -> dict:
         body = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{JSON_INSTRUCTIONS}"},
-                {"role": "user", "content": _format_listing(listing)},
+                {"role": "user", "content": content},
             ],
             "max_tokens": self.max_tokens,
             "temperature": temperature,
@@ -230,9 +246,10 @@ class LocalBackend:
 
     def judge(self, listing: Listing) -> dict:
         strict, temperature = True, self.temperature
+        content, examples = self._user_content(listing)
         for attempt in range(3):
             try:
-                reply = self._post(self._body(listing, strict, temperature))
+                reply = self._post(self._body(content, strict, temperature))
             except _FormatUnsupported:
                 strict = False  # Server kennt response_format nicht → Format nur per Prompt
                 continue
@@ -240,7 +257,7 @@ class LocalBackend:
             if choice.get("finish_reason") == "length":
                 raise JudgeError("Antwort abgeschnitten – llm.max_tokens erhöhen")
             try:
-                return parse_judgement(choice["message"].get("content") or "")
+                return {**parse_judgement(choice["message"].get("content") or ""), "examples": examples}
             except (ValueError, TypeError) as exc:
                 if attempt == 2:
                     raise JudgeError(f"Antwort des lokalen LLM war kein gültiges JSON ({exc})") from exc
@@ -355,7 +372,13 @@ class LLMJudgeDetector(Detector):
             self._error = f"Unbekannter LLM-Provider „{provider}“ (local | anthropic)"
             return
         try:
-            self.backend = backend_cls(self.cfg)
+            if provider == "local" and int(self.cfg.get("beispiele", 0)) > 0:
+                # Vergleichsfälle nur fürs lokale Modell: der Teamdatensatz verlässt den Rechner nicht
+                from scamguard.models.llm_examples import ExampleBank
+
+                self.backend = backend_cls(self.cfg, examples=ExampleBank(int(self.cfg["beispiele"])))
+            else:
+                self.backend = backend_cls(self.cfg)
         except JudgeError as exc:
             self._error = str(exc)
 

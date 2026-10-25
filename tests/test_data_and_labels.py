@@ -197,6 +197,30 @@ def test_photos_from_scam_labels_are_recognized_again(label_store):
     assert not det.predict(Listing(title="Sofa", image_paths=[legit_photo])).signals
 
 
+def test_photos_from_imported_scam_folders_are_recognized(label_store, monkeypatch):
+    pytest.importorskip("imagehash")
+    from scamguard.models.image_model import ImageDetector
+
+    monkeypatch.setattr(labels, "DATASET_DIR", str(label_store / "inserate"))
+    folder = label_store / "inserate" / "betrug" / "tickets" / "team_fall__abc"
+    folder.mkdir(parents=True)
+    rnd = np.random.default_rng(7)
+    Image.fromarray(rnd.integers(0, 255, (48, 48, 3), dtype=np.uint8)).resize((64, 64)).save(folder / "bild_1.jpg")
+    copy = label_store / "kopie.jpg"
+    Image.open(folder / "bild_1.jpg").resize((100, 100)).save(copy)
+    det = ImageDetector(with_overrides(CFG, {"image_model": {"use_clip_consistency": False,
+                                                              "path": str(label_store / "kein.pt")}}))
+    codes = [s.code for s in det.predict(Listing(title="Tickets", image_paths=[str(copy)])).signals]
+    assert "LABELED_SCAM_IMAGE" in codes  # Team-Import ohne eigene Labeldatei
+
+    # Später nachgetragenes Foto im selben Ordner (erneut eingestuft) wird ebenfalls erkannt
+    rnd = np.random.default_rng(8)
+    Image.fromarray(rnd.integers(0, 255, (48, 48, 3), dtype=np.uint8)).resize((64, 64)).save(folder / "bild_2.jpg")
+    det._label_checked = float("-inf")  # 30-s-Pause überspringen
+    later = det.predict(Listing(title="Tickets", image_paths=[str(folder / "bild_2.jpg")]))
+    assert "LABELED_SCAM_IMAGE" in [s.code for s in later.signals]
+
+
 def test_clip_style_classes_sum_their_prompts():
     from scamguard.models.image_model import STYLE_PROMPTS, sum_by_key
 

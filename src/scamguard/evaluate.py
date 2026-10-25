@@ -27,10 +27,21 @@ def _metrics(y_true: list[int], y_score: list[float], threshold: float) -> dict[
     return out
 
 
+def _hide_from_llm_examples(guard: ScamGuard, listings) -> None:
+    """Mit `--llm`: Vergleichsfälle nie aus der ausgewerteten Menge (sonst sähe das LLM deren Labels)."""
+    from scamguard.data.build import listing_fingerprint
+
+    for det in guard.detectors:
+        bank = getattr(getattr(det, "backend", None), "examples", None)
+        if bank is not None:
+            bank.exclude(listing_fingerprint(listing) for listing in listings)
+
+
 def evaluate(split: str = "test", guard: ScamGuard | None = None, limit: int | None = None) -> dict:
     guard = guard or ScamGuard(overrides={"llm": {"enabled": False}})  # LLM nur mit --llm (Sekunden je Beispiel)
     listings = read_split(split)[:limit]
     threshold = guard.cfg["thresholds"]["suspicious"]
+    _hide_from_llm_examples(guard, listings)
 
     per_model: dict[str, tuple[list[int], list[float]]] = defaultdict(lambda: ([], []))
     per_source: dict[str, tuple[list[int], list[float]]] = defaultdict(lambda: ([], []))

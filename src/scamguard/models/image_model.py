@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 
 from scamguard.config import resolve_path
@@ -23,6 +24,7 @@ from scamguard.schema import Listing, ModelResult, Signal
 
 PHASH_MAX_DISTANCE = 6  # Hamming-Distanz (von 64 Bit), ab der zwei Bilder als „gleich“ gelten
 LABELED_SCAM_IMAGE_WEIGHT = 0.5  # kein hartes Signal: das Foto kann auch aus einer echten Anzeige kopiert sein
+LABEL_REFRESH_S = 30  # Betrugs-Fotos höchstens alle 30 s neu einsammeln (Scans laufen oft im Sekundentakt)
 
 # CLIP ist überwiegend englisch trainiert → englische Prompts liefern bessere Ergebnisse.
 # Mehrere Prompts je Klasse werden addiert: Mit nur „Foto in der Wohnung“ als echtem Foto gewann bei
@@ -58,6 +60,25 @@ def sum_by_key(keys: list[str], probs: list[float]) -> dict[str, float]:
     for key, p in zip(keys, probs):
         out[key] += p
     return out
+
+
+def _scam_photo_paths() -> list[str]:
+    """Fotos aus Betrugs-Labels: eigene Labels (`eigene_labels.jsonl`) und Betrugs-Ordner der Inserat-Ablage,
+    auch aus Team-Importen – ohne synthetische Daten und ohne Ordner mit „_“."""
+    from scamguard.data import labels
+
+    paths: list[str] = []
+    label_file = resolve_path(labels.LABEL_FILE)
+    if label_file.exists():
+        for line in label_file.read_text(encoding="utf-8").splitlines():
+            entry = json.loads(line) if line.strip() else {}
+            if entry.get("label") == 1:
+                paths += entry.get("image_paths") or []
+    scam_dir = resolve_path(labels.DATASET_DIR) / "betrug"
+    if scam_dir.is_dir():
+        paths += [str(p) for p in sorted(scam_dir.rglob("bild_*"))
+                  if not any(part.startswith("_") or part == "synthetisch" for part in p.relative_to(scam_dir).parts)]
+    return paths
 
 
 def phash_of(path: str | Path) -> str:
@@ -97,7 +118,7 @@ class ImageDetector(Detector):
         self._notes: list[str] = []
         # pHashes der Fotos aus selbst als Betrug eingestuften Inseraten (Rückwärtssuche, nur lokal)
         self._label_hashes: dict[str, object] = {}
-        self._label_mtime: float | None = None
+        self._label_checked = float("-inf")
         self._label_lock = threading.Lock()
 
         try:
@@ -124,35 +145,31 @@ class ImageDetector(Detector):
                 self._notes.append(f"CNN konnte nicht geladen werden: {exc}")
 
     def _labeled_scam_hashes(self) -> list:
-        """pHashes aller Fotos aus eigenen Betrugs-Labels – neu eingelesen, sobald sich die Labels ändern.
+        """pHashes aller Fotos aus Betrugs-Labels (eigene und Team-Importe), höchstens alle 30 s neu geprüft.
         Betrüger verwenden dieselben Fotos in vielen Inseraten; so fällt ein Foto wieder auf."""
-        from scamguard.data import labels
-
-        path = resolve_path(labels.LABEL_FILE)
-        try:
-            mtime = path.stat().st_mtime
-        except FileNotFoundError:
-            return []
         with self._label_lock:
-            if mtime != self._label_mtime:
-                import imagehash
-                from PIL import Image
-
-                paths = [p for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
-                         for entry in [json.loads(line)] if entry.get("label") == 1
-                         for p in entry.get("image_paths") or []]
-                hashes = {}
-                for p in paths:
-                    if p in self._label_hashes:
-                        hashes[p] = self._label_hashes[p]
-                        continue
-                    try:
-                        with Image.open(resolve_path(p)) as img:
-                            hashes[p] = imagehash.phash(img.convert("RGB"))
-                    except OSError:
-                        continue  # Bild gelöscht oder beschädigt
-                self._label_hashes, self._label_mtime = hashes, mtime
+            if time.monotonic() - self._label_checked >= LABEL_REFRESH_S:
+                self._label_checked = time.monotonic()
+                paths = _scam_photo_paths()
+                if set(paths) != set(self._label_hashes):  # neue Labels, Team-Import oder nachgetragene Fotos
+                    self._label_hashes = self._hash_photos(paths)
             return list(self._label_hashes.values())
+
+    def _hash_photos(self, paths: list[str]) -> dict:
+        import imagehash
+        from PIL import Image
+
+        hashes = {}
+        for p in paths:
+            if p in self._label_hashes:  # schon berechnet
+                hashes[p] = self._label_hashes[p]
+                continue
+            try:
+                with Image.open(resolve_path(p)) as img:
+                    hashes[p] = imagehash.phash(img.convert("RGB"))
+            except OSError:
+                continue  # Bild gelöscht oder beschädigt
+        return hashes
 
     # -- Laden ----------------------------------------------------------------
 

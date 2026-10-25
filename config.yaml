@@ -86,6 +86,10 @@ llm:
   # anthropic = Claude API (kostet pro Anfrage, Daten gehen an Anthropic)
   provider: local
   max_tokens: 1024
+  # Vergleichsfälle: die ähnlichsten von Menschen gelabelten Inserate (eigene Labels und Team-Importe aus
+  # data/datensatz_fuellen_inserate, je Klasse gleich viele) gehen mit in den Prompt – so fließt der
+  # Teamdatensatz ohne Training ins LLM. 0 = aus. Nur beim lokalen Modell (Daten bleiben auf dem Rechner).
+  beispiele: 4
 
   local:
     # OpenAI-kompatibler Server. Mac (Apple Silicon): `scamguard llm-server` (MLX).

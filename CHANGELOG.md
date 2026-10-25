@@ -2,6 +2,24 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.14.0] – 2026-10-25
+
+### Neu
+- **Teamdatensatz fließt ins lokale LLM** (`models/llm_examples.py`, `llm.beispiele: 4`): Qwen bekommt bei
+  jeder Prüfung die ähnlichsten von Menschen gelabelten Inserate als Vergleichsfälle – eigene Labels und
+  Team-Importe, ohne synthetische Daten. Nur wirklich ähnliche Fälle (TF-IDF ≥ 0,08), je Klasse höchstens
+  die Hälfte, nie das geprüfte Inserat selbst, Texte anonymisiert, nur beim lokalen Modell. Das Panel
+  nennt die verglichenen Fälle. `evaluate --llm` blendet die ausgewertete Menge aus den Vergleichsfällen aus.
+- **Fotoabgleich mit Team-Importen:** `LABELED_SCAM_IMAGE` erkennt jetzt auch Fotos aus importierten
+  Betrugs-Ordnern wieder, ebenso später nachgetragene Fotos.
+
+### Behoben
+- Fotoabgleich stürzte ab, wenn es keine eigene Labeldatei gab (nur Team-Importe).
+
+### Nach dem Update
+1. Dienste neu starten (`scamguard start`, `scamguard ui`). Die Vergleichsfälle wirken sofort mit allen
+   gelabelten Inseraten auf dem Rechner; mehr Daten über `scamguard team import` (wer zusammenführt).
+
 ## [0.13.0] – 2026-10-17
 
 ### Neu

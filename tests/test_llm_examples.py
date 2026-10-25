@@ -1,0 +1,135 @@
+"""Vergleichsfälle: gelabelte Inserate aus dem eigenen Datensatz fließen in den Prompt des lokalen LLM."""
+
+import json
+
+import pytest
+
+from scamguard.config import load_config, with_overrides
+from scamguard.models.llm_examples import ExampleBank, load_labeled
+from scamguard.models.llm_judge import LLMJudgeDetector
+from scamguard.schema import Listing
+
+CFG = load_config()
+httpx = pytest.importorskip("httpx")
+
+TICKETS_BETRUG = [("2 Tickets Konzert Köln", "Bezahlung nur per PayPal Freunde, Tickets schicke ich per Mail."),
+                  ("Bahngutschein 10 € für 1 €", "Erst zahlen, dann schicke ich den Code per WhatsApp.")]
+TICKETS_SERIOES = [("2 Tickets Konzert Mannheim", "Tickets für das Konzert, Abholung in Mannheim, Barzahlung."),
+                   ("Konzert Tickets Stehplatz", "Tickets für das Konzert, persönliche Übergabe am Einlass.")]
+
+
+def _folder(root, label, name, title, text, **extra):
+    path = root / label / "tickets" / name
+    path.mkdir(parents=True)
+    data = {"label": label, "title": title, "description": text, "price": 50.0, "category": "tickets", **extra}
+    (path / "inserat.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+
+@pytest.fixture
+def dataset(tmp_path):
+    listing_dir, label_file = tmp_path / "inserate", tmp_path / "eigene_labels.jsonl"
+    for i, (title, text) in enumerate(TICKETS_BETRUG):
+        _folder(listing_dir, "betrug", f"b{i}__k{i}", title, text)
+    for i, (title, text) in enumerate(TICKETS_SERIOES):
+        _folder(listing_dir, "serioes", f"s{i}__k{i}", title, text)
+    _folder(listing_dir / "betrug", "synthetisch", "x__1", "Synthetisch", "darf nicht als Vergleichsfall auftauchen")
+    _folder(listing_dir, "betrug", "_testartefakt/y__2", "Testartefakt", "Ordner mit _ werden ignoriert")
+    label_file.write_text(json.dumps({"title": "Sofa grau", "description": "Ruf an: 0151 2345678", "label": 0,
+                                      "category": "moebel"}, ensure_ascii=False) + "\n", encoding="utf-8")
+    return label_file, listing_dir
+
+
+def test_labeled_listings_are_loaded_deduplicated_and_anonymized(dataset):
+    label_file, listing_dir = dataset
+    found = load_labeled(label_file, listing_dir)
+    titles = {l.title for l in found}
+    assert len(found) == 5 and "Synthetisch" not in titles and "Testartefakt" not in titles
+    sofa = next(l for l in found if l.title == "Sofa grau")
+    assert "2345678" not in sofa.description  # Telefonnummer anonymisiert
+    assert {l.label for l in found} == {0, 1}
+
+
+def test_examples_are_similar_balanced_and_never_the_listing_itself(dataset):
+    label_file, listing_dir = dataset
+    bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
+    query = Listing(title="Tickets Konzert Hamburg", category="tickets",
+                    description="Bezahlung per PayPal Freunde, die Tickets kommen per Mail.")
+    picked = bank.select(query)
+    assert len(picked) == 4 and sum(l.label == 1 for l in picked) == 2  # je Klasse gleich viele
+    assert picked[0].title == "2 Tickets Konzert Köln"  # ähnlichster Fall zuerst
+
+    # Ein bereits gelabeltes Inserat sieht sich nie selbst (sonst „weiß“ das LLM die Antwort)
+    labeled = Listing(title="2 Tickets Konzert Köln", category="tickets",
+                      description="Bezahlung nur per PayPal Freunde, Tickets schicke ich per Mail.")
+    assert all(l.title != labeled.title for l in bank.select(labeled))
+    block = bank.prompt_block(query)
+    assert block.startswith("<vergleichsfaelle>") and "BETRUG" in block and "SERIÖS" in block
+
+
+def test_unrelated_listings_get_no_examples(dataset):
+    label_file, listing_dir = dataset
+    bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
+    # Unpassende Vergleichsfälle führen eher in die Irre als keine
+    assert bank.select(Listing(title="Kinderwagen Bugaboo", description="Regenschutz dabei, kaum genutzt.")) == []
+
+
+def test_one_class_never_fills_all_slots(dataset):
+    label_file, listing_dir = dataset
+    bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
+    # Ähnlich sind hier nur die Betrugsfälle – trotzdem höchstens die Hälfte der Plätze
+    picked = bank.select(Listing(title="Bahngutschein", description="Erst zahlen, dann schicke ich den Code per WhatsApp."))
+    assert 1 <= len(picked) <= 2 and all(l.label == 1 for l in picked)
+
+
+def test_evaluated_listings_are_hidden_from_examples(dataset):
+    from scamguard.data.build import listing_fingerprint
+
+    label_file, listing_dir = dataset
+    bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
+    query = Listing(title="Tickets Konzert Hamburg", category="tickets", description="Tickets per PayPal Freunde.")
+    hidden = bank.select(query)[0]
+    bank.exclude([listing_fingerprint(hidden)])  # z. B. die Testmenge bei `scamguard evaluate --llm`
+    assert all(l.title != hidden.title for l in bank.select(query))
+
+
+def test_local_llm_gets_examples_in_prompt_and_reports_them(dataset, monkeypatch):
+    from scamguard.data import labels
+
+    label_file, listing_dir = dataset
+    monkeypatch.setattr(labels, "LABEL_FILE", str(label_file))
+    monkeypatch.setattr(labels, "DATASET_DIR", str(listing_dir))
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        reply = {"scam_probability": 0.8, "scam_type": "vorkasse", "language_quality": "gut",
+                 "red_flags": [], "summary": "Vorkasse für Tickets"}
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(reply)},
+                                                      "finish_reason": "stop"}]})
+
+    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "local", "beispiele": 4}}))
+    det.backend._transport = httpx.MockTransport(handler)
+    result = det.predict(Listing(title="Tickets Fußball", category="tickets", description="Nur Vorkasse per PayPal."))
+    user = sent[0]["messages"][1]["content"]
+    assert "<vergleichsfaelle>" in user and user.index("<vergleichsfaelle>") < user.index("<inserat>")
+    info = next(s for s in result.signals if s.code == "LLM_EXAMPLES")
+    assert info.info and "4 ähnlichen" in info.message and "2 Betrug, 2 seriös" in info.message
+
+
+def test_examples_only_for_local_model():
+    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "local", "beispiele": 0}}))
+    assert det.backend.examples is None
+
+
+def test_evaluate_hides_the_evaluated_split_from_examples(dataset):
+    from types import SimpleNamespace
+
+    from scamguard.data.build import listing_fingerprint
+    from scamguard.evaluate import _hide_from_llm_examples
+
+    label_file, listing_dir = dataset
+    bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
+    evaluated = [Listing(title=t, description=d, category="tickets", label=1) for t, d in TICKETS_BETRUG]
+    guard = SimpleNamespace(detectors=[SimpleNamespace(backend=SimpleNamespace(examples=bank)), SimpleNamespace()])
+    _hide_from_llm_examples(guard, evaluated)
+    assert bank._excluded == {listing_fingerprint(l) for l in evaluated}

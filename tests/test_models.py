@@ -114,7 +114,7 @@ httpx = pytest.importorskip("httpx")
 
 def _local(handler):
     """Lokales Backend gegen einen simulierten OpenAI-kompatiblen Server."""
-    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "local"}}))
+    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "local", "beispiele": 0}}))
     det.backend._transport = httpx.MockTransport(handler)
     return det
 
