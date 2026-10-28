@@ -39,8 +39,12 @@ def streamlit_app(tmp_path):
     port = free_port()
     wrapper = tmp_path / "app_wrapper.py"
     wrapper.write_text(WRAPPER, encoding="utf-8")
+    # KI-Analyse ist standardmäßig an – im Test nie das echte LLM fragen (langsam, nicht deterministisch)
+    local_cfg = tmp_path / "config.local.yaml"
+    local_cfg.write_text("llm:\n  enabled: false\n", encoding="utf-8")
     env = {**os.environ, "SG_LABEL_FILE": str(tmp_path / "labels.jsonl"),
-           "SG_LABEL_IMAGES": str(tmp_path / "label_bilder"), "SG_DATASET_DIR": str(tmp_path / "datensatz")}
+           "SG_LABEL_IMAGES": str(tmp_path / "label_bilder"), "SG_DATASET_DIR": str(tmp_path / "datensatz"),
+           "SCAMGUARD_CONFIG_LOCAL": str(local_cfg)}
     proc = subprocess.Popen(
         [sys.executable, "-m", "streamlit", "run", str(wrapper), "--server.port", str(port),
          "--server.address", "127.0.0.1", "--server.headless", "true",
@@ -61,7 +65,10 @@ def streamlit_app(tmp_path):
         yield url, tmp_path / "labels.jsonl"
     finally:
         proc.terminate()
-        proc.wait(timeout=15)
+        try:
+            proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 def _screenshot(path: Path) -> None:

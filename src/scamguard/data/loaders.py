@@ -35,7 +35,22 @@ CATEGORY_KEYWORDS = {
 }
 
 
-IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+# .jfif/.jpe: so speichert Windows JPEGs oft (z. B. aus dem Browser) – sonst landete das Bild als Text im Inserat
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".jfif", ".jpe", ".png", ".webp"}
+IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG", b"GIF8")
+
+
+def looks_like_image(data: bytes) -> bool:
+    """Bilddatei am Dateikopf erkennen – unabhängig von der Endung."""
+    return data.startswith(IMAGE_MAGIC) or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")
+
+
+def looks_binary(text: str, max_share: float = 0.02) -> bool:
+    """Text aus einer Binärdatei (z. B. ein als Text gelesenes JPEG): viele Steuer- und Ersatzzeichen."""
+    if not text:
+        return False
+    odd = sum(1 for ch in text[:20000] if (ord(ch) < 32 and ch not in "\n\r\t") or ch == "\ufffd")
+    return odd / min(len(text), 20000) > max_share
 
 
 @dataclass

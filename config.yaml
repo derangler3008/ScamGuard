@@ -99,6 +99,11 @@ llm:
     model: mlx-community/Qwen3.5-9B-OptiQ-4bit
     # Nach dem Feintuning (docs/llm_feintuning.md): Ordner mit adapters.safetensors, z. B. models/qwen_lora
     adapter_path: null
+    # Fotos ans lokale Modell schicken (bis 4, verkleinert). Braucht einen Bild-fähigen Server: Qwen3.5 kann
+    # Bilder, aber nur über mlx-vlm in eigener Umgebung (README „Qwen mit Fotos“). Auf dem Rechner in
+    # config.local.yaml einschalten: bilder: true und vlm_python: .venv-vlm/bin/python
+    bilder: false
+    vlm_python: null
     # PC (Windows/Linux, AMD/NVIDIA): llama.cpp-Server, den `scamguard start` mitstartet. Pfade gehören in
     # config.local.yaml (nicht im Git, gilt nur auf diesem Rechner) – Beispiel im README, Abschnitt „LLM“.
     # Felder: server, gguf, optional context (Standard 8192), gpu_layers (Standard 99 = alle auf der GPU)

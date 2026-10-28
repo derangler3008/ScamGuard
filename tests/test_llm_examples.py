@@ -133,3 +133,18 @@ def test_evaluate_hides_the_evaluated_split_from_examples(dataset):
     guard = SimpleNamespace(detectors=[SimpleNamespace(backend=SimpleNamespace(examples=bank)), SimpleNamespace()])
     _hide_from_llm_examples(guard, evaluated)
     assert bank._excluded == {listing_fingerprint(l) for l in evaluated}
+
+
+def test_prompt_stays_small_even_for_huge_listings():
+    from scamguard.models.llm_judge import _format_listing
+
+    huge = Listing(title="x" * 1000, description="Wort " * 20000, messages=["alt " * 5000, "neu " * 5000])
+    prompt = _format_listing(huge)
+    assert len(prompt) < 12000  # sonst sprengt ein Inserat den Grafikspeicher des lokalen Modells
+    assert "neu" in prompt.split("Chat-Nachrichten:")[1]  # die neuesten Nachrichten bleiben
+
+
+def test_binary_listings_are_no_examples(dataset):
+    label_file, listing_dir = dataset
+    _folder(listing_dir, "betrug", "jfif__x", "", "", messages=["ÿØÿà\x00\x10JFIF\x00\x01\x01" * 200])
+    assert all("JFIF" not in " ".join(l.messages) for l in load_labeled(label_file, listing_dir))

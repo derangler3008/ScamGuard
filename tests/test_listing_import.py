@@ -249,3 +249,25 @@ def test_synthetic_folder_is_train_only(tmp_path, monkeypatch):
     for split in ("val", "test"):
         sources = {l.source for l in build.read_jsonl(tmp_path / "processed" / f"{split}.jsonl")}
         assert sources and not any("synthetisch" in s for s in sources)
+
+
+@pytest.mark.parametrize("name", ["chat.jfif", "chat.jpg", "chat_ohne_endung"])
+def test_chat_images_are_never_read_as_text(monkeypatch, name):
+    # Ein als Text gelesenes JPEG (129 000 Zeichen Zeichensalat) legte das lokale LLM lahm
+    from scamguard.data import ocr
+
+    def no_ocr(data):
+        raise ocr.OcrUnavailable("keine Texterkennung")
+
+    monkeypatch.setattr(ocr, "recognize", no_ocr)
+    jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + bytes(range(256)) * 50
+    result = import_listing([], text="Titel: Sofa", chat_files=[(name, jpeg)])
+    assert result.listing.messages == []
+
+
+def test_binary_text_is_detected():
+    from scamguard.data.loaders import looks_binary, looks_like_image
+
+    assert looks_binary("ÿØÿà\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00ÿÛ\x00C\x00\x03\x02")
+    assert not looks_binary("Hallo, ist das Sofa noch da?\nIch könnte morgen vorbeikommen.")
+    assert looks_like_image(b"\x89PNG\r\n\x1a\n...") and not looks_like_image(b"Hallo")

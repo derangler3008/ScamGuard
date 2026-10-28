@@ -92,15 +92,19 @@ def _start_driver(binary: str, profile: Path):
         options = Options()
         options.binary_location = binary
         options.add_argument("-headless")
+        options.add_argument("-remote-allow-system-access")
         options.profile = str(profile)
-        return webdriver.Firefox(options=options), None
+        service = Service(env={**os.environ, "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS": "1"})
+        return webdriver.Firefox(options=options, service=service), None
 
     port = free_port()
     with (profile / "user.js").open("a", encoding="utf-8") as prefs:
         prefs.write(f'user_pref("marionette.port", {port});\n')
     app = str(Path(binary).parents[2])  # …/Firefox.app
-    subprocess.run(["open", "-n", "-g", "-a", app, "--args", "-headless", "-no-remote",
-                    "-profile", str(profile), "-marionette", "-remote-allow-system-access"], check=True)
+    # Firefox ≥ 159 verlangt für den Browser-Chrome (Popup öffnen) zusätzlich die Umgebungsvariable
+    subprocess.run(["open", "-n", "-g", "-a", app, "--env", "MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1", "--args",
+                    "-headless", "-no-remote", "-profile", str(profile), "-marionette",
+                    "-remote-allow-system-access"], check=True)
     if not _wait_for_port(port):
         raise WebDriverException("Firefox-Marionette nicht erreichbar")
     service = Service(service_args=["--connect-existing", "--marionette-port", str(port)])
@@ -141,7 +145,7 @@ def firefox(api_server, site, tmp_path_factory):
     try:
         driver.set_script_timeout(20)
         driver.install_addon(str(ext_dir), temporary=True)
-        driver.get(POPUP_URL)
+        _open_extension_page(driver, POPUP_URL)
         driver.execute_async_script(
             "const done = arguments[arguments.length - 1];"
             "browser.storage.sync.set({ apiUrl: arguments[0], llmMode: 'off' }).then(() => done(true));",
@@ -152,6 +156,20 @@ def firefox(api_server, site, tmp_path_factory):
         driver.quit()
         if launched_profile:  # per `open` gestartet → nur diese Instanz (Wegwerf-Profil) beenden
             subprocess.run(["pkill", "-f", str(launched_profile)], check=False)
+
+
+def _open_extension_page(driver, url: str) -> None:
+    """Extension-Seite (Popup) im aktuellen Tab öffnen. Seit Firefox 159 verweigert Marionette `get()` auf
+    moz-extension://-Adressen („not allowed in this context“) – deshalb lädt der Browser-Chrome die Seite
+    selbst (Firefox läuft dafür mit -remote-allow-system-access)."""
+    with driver.context(driver.CONTEXT_CHROME):
+        driver.execute_script(
+            "const win = Services.wm.getMostRecentWindow('navigator:browser');"
+            "win.gBrowser.selectedBrowser.loadURI(Services.io.newURI(arguments[0]),"
+            " { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });",
+            url,
+        )
+    WebDriverWait(driver, 10).until(lambda d: d.current_url.startswith(url.split("/popup")[0]))
 
 
 def _panel(driver):
@@ -200,7 +218,7 @@ def test_selected_text_on_any_page_is_checked(firefox, site):
     mail_tab = firefox.current_window_handle
     message = firefox.find_element(By.ID, "nachricht").text
     firefox.switch_to.new_window("tab")
-    firefox.get(POPUP_URL)
+    _open_extension_page(firefox, POPUP_URL)
     result = firefox.execute_async_script(
         """const [text, done] = [arguments[0], arguments[arguments.length - 1]];
         browser.tabs.query({ url: 'http://127.0.0.1/posteingang' })
@@ -218,7 +236,7 @@ def test_selected_text_on_any_page_is_checked(firefox, site):
 
 
 def test_popup_shows_server_status(firefox):
-    firefox.get(POPUP_URL)
+    _open_extension_page(firefox, POPUP_URL)
     status = WebDriverWait(firefox, 10).until(
         lambda d: (el := d.find_element(By.ID, "server-status")).text != "Server …" and el)
     assert status.text == "Server verbunden"

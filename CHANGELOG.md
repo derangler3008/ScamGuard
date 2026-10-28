@@ -2,6 +2,30 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.15.0] – 2026-10-28
+
+### Neu
+- **Qwen mit Fotos (provisorisch, Mac):** Qwen3.5 versteht Bilder; die Gewichte liegen schon im Modell. Mit
+  `mlx-vlm` in eigener Umgebung (`.venv-vlm`) und `llm.local.bilder: true` + `vlm_python` in
+  `config.local.yaml` startet `scamguard start` den Bild-Server (`scripts/qwen_vlm_server.py`) und die
+  KI-Analyse prüft bis zu 4 Fotos mit (z. B. Zustand passt nicht zum Text). Prüfung dann ca. 20–35 s.
+  Standard bleibt Text (README, „Qwen mit Fotos“).
+
+### Behoben
+- **Qwen-Absturz durch riesige Prompts:** Beschreibung und Chat werden begrenzt; ein als Text gelesenes Bild
+  (129 000 Zeichen) hatte den Grafikspeicher gesprengt, danach antwortete Qwen nicht mehr.
+- **Chat-Screenshots als Text gelesen:** `.jfif`/`.jpe` gelten als Bild, Bilder werden zusätzlich am
+  Dateikopf erkannt und nie als Text übernommen. Inserate mit Binär-Zeichensalat sind keine Vergleichsfälle.
+- Der Bild-Server von mlx-vlm erlaubte Anfragen jeder Webseite (CORS „*“) – der Startbaustein schaltet das ab.
+- Firefox 159: Browser-Tests öffnen das Popup über den Browser-Chrome (`MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`).
+- Web-App-Browsertest fragte das echte LLM (KI-Analyse ist standardmäßig an) – läuft jetzt ohne.
+
+### Nach dem Update
+1. Dienste neu starten (`scamguard start`, `scamguard ui`).
+2. Optional, nur Mac: Qwen mit Fotos einrichten (README, „Qwen mit Fotos“).
+3. Wer schon gelabelt hat: Chat-Screenshots, die als `.jfif` gespeichert waren, neu einstufen und erneut
+   exportieren (`scamguard team export --name <Vorname>`).
+
 ## [0.14.0] – 2026-10-25
 
 ### Neu

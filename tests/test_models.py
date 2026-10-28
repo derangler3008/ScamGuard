@@ -181,3 +181,31 @@ def test_parse_judgement_normalizes_unknown_values():
     assert data["red_flags"] == [{"code": "link_prüfen", "explanation": "x", "evidence": ""}]
     with pytest.raises(ValueError):
         parse_judgement("Kein JSON hier")
+
+
+def test_local_llm_sends_photos_only_when_enabled(tmp_path):
+    from PIL import Image
+
+    photo = tmp_path / "foto.jpg"
+    Image.new("RGB", (1200, 900), "white").save(photo)
+    broken = tmp_path / "kaputt.jpg"
+    broken.write_bytes(b"kein Bild")
+    listing = Listing(title="iPhone", description="Top Zustand", image_paths=[str(broken), str(photo)])
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return _chat_reply(json.dumps(VALID))
+
+    plain = _local(handler).predict(listing)  # Standard: nur Text (mlx_lm kann keine Bilder)
+    assert isinstance(sent[-1]["messages"][1]["content"], str)
+    assert not any(s.code == "LLM_PHOTOS" for s in plain.signals)
+
+    det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "local", "beispiele": 0,
+                                                          "local": {"bilder": True, "vlm_python": "x"}}}))
+    det.backend._transport = httpx.MockTransport(handler)
+    result = det.predict(listing)
+    parts = sent[-1]["messages"][1]["content"]
+    assert parts[0]["type"] == "text" and "1 Foto" in parts[0]["text"]
+    assert parts[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert any(s.code == "LLM_PHOTOS" and s.info for s in result.signals)

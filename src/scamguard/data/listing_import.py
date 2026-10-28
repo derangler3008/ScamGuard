@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from scamguard.data import ocr
-from scamguard.data.loaders import IMAGE_SUFFIXES, normalize_category, parse_price
+from scamguard.data.loaders import IMAGE_SUFFIXES, looks_like_image, normalize_category, parse_price
 from scamguard.schema import Listing, badge_key, legal_form_of, seller_type_of
 
 HTML_SUFFIXES = {".html", ".htm"}
@@ -285,7 +285,7 @@ def import_listing(files: list[tuple[str, bytes]], text: str = "",
         elif suffix in TEXT_SUFFIXES:
             rows.extend(_decode(data).splitlines())
             notes.append(f"{name}: Text gelesen")
-        elif suffix in IMAGE_SUFFIXES:
+        elif suffix in IMAGE_SUFFIXES or looks_like_image(data):
             shot = _screenshot_rows(name, data, notes)
             if shot is None:
                 photos.append((name, data))
@@ -301,8 +301,12 @@ def import_listing(files: list[tuple[str, bytes]], text: str = "",
 
     messages = []
     for name, data in chat_files:
-        shot = _screenshot_rows(name, data, notes) if Path(name).suffix.lower() in IMAGE_SUFFIXES else None
-        chat = "\n".join(shot[0] + shot[1]) if shot else _decode(data)
+        if Path(name).suffix.lower() in IMAGE_SUFFIXES or looks_like_image(data):
+            # Bild: nur der erkannte Text zählt – nie die Bilddatei selbst als Text lesen
+            shot = _screenshot_rows(name, data, notes)
+            chat = "\n".join(shot[0] + shot[1]) if shot else ""
+        else:
+            chat = _decode(data)
         if chat.strip():
             messages.append(chat.strip())
     if chat_text.strip():

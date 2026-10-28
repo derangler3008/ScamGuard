@@ -41,6 +41,7 @@ def _visible(path: Path, root: Path) -> bool:
 def load_labeled(label_file: Path, listing_dir: Path) -> list[Listing]:
     """Alle von Menschen gelabelten Inserate, dedupliziert (eigene Labels und Ordner-Ablage überschneiden sich)."""
     from scamguard.data.build import listing_fingerprint
+    from scamguard.data.loaders import looks_binary
     from scamguard.data.redact import redact
 
     found: list[Listing] = []
@@ -63,8 +64,8 @@ def load_labeled(label_file: Path, listing_dir: Path) -> list[Listing]:
 
     seen, out = set(), []
     for listing in found:
-        if listing.label not in (0, 1) or not listing.full_text:
-            continue
+        if listing.label not in (0, 1) or not listing.full_text or looks_binary(listing.full_text):
+            continue  # z. B. ein versehentlich als Text gelesenes Bild
         fp = listing_fingerprint(listing)
         if fp in seen:
             continue

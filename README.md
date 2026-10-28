@@ -305,6 +305,30 @@ Details:
   Inserate aus eigenen Labels und Team-Importen – so wirkt jeder neue Datensatz sofort, ohne Training.
   Nur beim lokalen Modell; das Panel zeigt, womit verglichen wurde.
 
+### Qwen mit Fotos (provisorisch, Mac)
+
+Qwen3.5 versteht auch Bilder; die Gewichte dafür stecken schon im heruntergeladenen Modell. Der normale
+Server (`mlx_lm`) liest aber nur Text. Mit `mlx-vlm` in einer eigenen Umgebung prüft dasselbe Modell bis zu
+4 Fotos pro Inserat mit (verkleinert; z. B. „Foto zeigt ein anderes Modell“, „Glas gesprungen, Text sagt
+‚sehr gut‘“):
+
+```bash
+python3.12 -m venv .venv-vlm && .venv-vlm/bin/pip install mlx-vlm   # ca. 1 GB, eigene Umgebung
+```
+
+Dann in `config.local.yaml`:
+
+```yaml
+llm:
+  local:
+    bilder: true
+    vlm_python: .venv-vlm/bin/python
+```
+
+`scamguard start` startet dann `scripts/qwen_vlm_server.py` statt `mlx_lm` (gleiches Modell, gleicher
+Port, keine Freigabe für fremde Webseiten). Eine Prüfung dauert mit Fotos etwa 20–35 s statt 5–15 s; bei
+Details (genaues Modell) irrt Qwen sich gelegentlich. Zurück zum reinen Text: `bilder: false`, neu starten.
+
 ### Qwen feintunen (LoRA)
 
 Mit genug eigenen Labels lässt sich Qwen per LoRA anpassen – lokal mit MLX, ohne Cloud:

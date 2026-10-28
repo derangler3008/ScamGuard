@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-*/
 .venv-lora/
 .env
 # Rechnerspezifische Einstellungen (z. B. llama.cpp-Pfade auf dem Windows-PC)

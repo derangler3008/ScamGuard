@@ -95,6 +95,7 @@ scam_probability, scam_type "keiner", red_flags leer."""
 
 MAX_IMAGES = 4
 MAX_IMAGE_SIDE = 1568  # größere Bilder skaliert die Claude API ohnehin herunter
+LOCAL_IMAGE_SIDE = 768  # lokales Modell: kleinere Fotos, sonst dauert jede Prüfung deutlich länger
 
 
 class JudgeError(Exception):
@@ -103,12 +104,34 @@ class JudgeError(Exception):
 
 # --------------------------------------------------------------------------- gemeinsam
 
+# Obergrenzen für den Prompt (Zeichen): Ein einzelnes riesiges Inserat (z. B. versehentlich als Text
+# gelesenes Bild, 129 000 Zeichen) sprengte sonst den Grafikspeicher des lokalen Modells – danach antwortete
+# Qwen gar nicht mehr. Echte Inserate liegen weit darunter; bei Chats zählen die neuesten Nachrichten.
+MAX_DESCRIPTION_CHARS = 4000
+MAX_MESSAGE_CHARS = 6000
+
+
+def _clip(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + " … [gekürzt]"
+
+
+def _recent_messages(messages: list[str], limit: int = MAX_MESSAGE_CHARS) -> list[str]:
+    kept, used = [], 0
+    for message in reversed(messages):
+        if used >= limit:
+            break
+        message = _clip(message, limit - used)
+        kept.append(message)
+        used += len(message)
+    return kept[::-1]
+
+
 def _format_listing(listing: Listing) -> str:
     lines = []
     if listing.title or listing.description:  # reiner Chat (Extension im Postfach): keine Inseratsfelder
         price = f"{listing.price:.2f} €" if listing.price is not None else "nicht angegeben"
-        lines += [f"Kategorie: {listing.category}", f"Preis: {price}", f"Titel: {listing.title}",
-                  f"Beschreibung:\n{listing.description}"]
+        lines += [f"Kategorie: {listing.category}", f"Preis: {price}", f"Titel: {listing.title[:300]}",
+                  f"Beschreibung:\n{_clip(listing.description, MAX_DESCRIPTION_CHARS)}"]
     if listing.seller_type:
         lines.append("Anbieter: " + ("gewerblich (Händler/Firma)" if listing.seller_type == "gewerblich"
                                      else "privat"))
@@ -122,7 +145,7 @@ def _format_listing(listing: Listing) -> str:
     if listing.seller_num_ads is not None:
         lines.append(f"Anzeigen des Anbieters: {listing.seller_num_ads}")
     if listing.messages:
-        lines.append("Chat-Nachrichten:\n" + "\n---\n".join(listing.messages))
+        lines.append("Chat-Nachrichten:\n" + "\n---\n".join(_recent_messages(listing.messages)))
     return "<inserat>\n" + "\n".join(lines) + "\n</inserat>"
 
 
@@ -172,6 +195,9 @@ def _to_result(name: str, data: dict, model_label: str) -> ModelResult:
         signals.insert(0, Signal(name, "LLM_SUMMARY",
                                  f"{data['summary']} – Masche: {data['scam_type']}, "
                                  f"Sprache: {data['language_quality']} ({model_label})", weight=score))
+    if photos := data.get("photos"):
+        signals.append(Signal(name, "LLM_PHOTOS", f"KI-Analyse hat {photos} Foto(s) des Inserats mitgeprüft",
+                              0.0, info=True))
     if examples := data.get("examples"):
         scam = sum(ex.label == 1 for ex in examples)
         titles = ", ".join(f"„{ex.title[:40]}“" for ex in examples[:2] if ex.title)
@@ -197,16 +223,32 @@ class LocalBackend:
         self.label = f"{self.model.split('/')[-1] or 'lokales Modell'}, lokal"
         self._transport = transport  # nur für Tests (httpx.MockTransport)
         self.examples = examples  # ExampleBank: Vergleichsfälle aus dem eigenen Datensatz (oder None)
+        # Fotos mitschicken – nur mit einem Bild-fähigen Server (mlx-vlm über vlm_python, siehe config.yaml);
+        # der reine Text-Server (mlx_lm, llama.cpp) würde Anfragen mit Bildern ablehnen
+        self.send_images = bool(local.get("bilder") and local.get("vlm_python"))
 
-    def _user_content(self, listing: Listing) -> tuple[str, list[Listing]]:
+    def _user_content(self, listing: Listing) -> tuple[str | list[dict], list[Listing], int]:
         examples = self.examples.select(listing) if self.examples else []
-        if not examples:
-            return _format_listing(listing), []
-        from scamguard.models.llm_examples import prompt_block
+        text = _format_listing(listing)
+        if examples:
+            from scamguard.models.llm_examples import prompt_block
 
-        return f"{prompt_block(examples)}\n\n{_format_listing(listing)}", examples
+            text = f"{prompt_block(examples)}\n\n{text}"
+        photos = [p for p in listing.image_paths if Path(p).exists()][:MAX_IMAGES] if self.send_images else []
+        images = []
+        for path in photos:
+            try:
+                images.append({"type": "image_url",
+                               "image_url": {"url": f"data:image/jpeg;base64,{_jpeg_base64(path, LOCAL_IMAGE_SIDE)}"}})
+            except OSError:
+                continue  # beschädigtes Foto: ohne es weiterprüfen
+        if not images:
+            return text, examples, 0
+        hint = (f"Angehängt: {len(images)} Foto(s) des Inserats. Prüfe auch, ob sie zum Text passen (Artikel, "
+                "Modell, Zustand) und ob es Screenshots, Stock- oder Katalogfotos statt eigener Fotos sind.")
+        return [{"type": "text", "text": f"{hint}\n\n{text}"}, *images], examples, len(images)
 
-    def _body(self, content: str, strict_format: bool, temperature: float) -> dict:
+    def _body(self, content: str | list[dict], strict_format: bool, temperature: float) -> dict:
         body = {
             "model": self.model,
             "messages": [
@@ -246,7 +288,7 @@ class LocalBackend:
 
     def judge(self, listing: Listing) -> dict:
         strict, temperature = True, self.temperature
-        content, examples = self._user_content(listing)
+        content, examples, photos = self._user_content(listing)
         for attempt in range(3):
             try:
                 reply = self._post(self._body(content, strict, temperature))
@@ -257,7 +299,8 @@ class LocalBackend:
             if choice.get("finish_reason") == "length":
                 raise JudgeError("Antwort abgeschnitten – llm.max_tokens erhöhen")
             try:
-                return {**parse_judgement(choice["message"].get("content") or ""), "examples": examples}
+                return {**parse_judgement(choice["message"].get("content") or ""), "examples": examples,
+                        "photos": photos}
             except (ValueError, TypeError) as exc:
                 if attempt == 2:
                     raise JudgeError(f"Antwort des lokalen LLM war kein gültiges JSON ({exc})") from exc
@@ -271,16 +314,20 @@ class _FormatUnsupported(Exception):
 
 # --------------------------------------------------------------------------- Claude
 
-def _image_block(path: str) -> dict:
+def _jpeg_base64(path: str, max_side: int) -> str:
     from PIL import Image
 
     with Image.open(path) as img:
         img = img.convert("RGB")
-        img.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))
+        img.thumbnail((max_side, max_side))
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _image_block(path: str) -> dict:
     return {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
-                                        "data": base64.b64encode(buf.getvalue()).decode("ascii")}}
+                                        "data": _jpeg_base64(path, MAX_IMAGE_SIDE)}}
 
 
 def _final_text(response) -> str:

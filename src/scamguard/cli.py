@@ -488,6 +488,15 @@ def _llm_server_process_args(model: str | None = None,
         env["HF_HUB_OFFLINE"] = "1"
     except Exception:  # noqa: BLE001 – nicht im Cache: beim Start herunterladen (~6–7 GB)
         print(f"Modell {model} ist noch nicht heruntergeladen – der erste Start lädt es (~6–7 GB).")
+    if local.get("bilder") and local.get("vlm_python"):
+        # Mit Fotos: dasselbe Qwen über mlx-vlm (eigene Umgebung, siehe README „Qwen mit Fotos“), gestartet über
+        # scripts/qwen_vlm_server.py (ohne Freigabe für fremde Webseiten). Denken ist dort standardmäßig aus;
+        # Fotos werden auf ca. 630×630 Pixel begrenzt (schneller).
+        command = [str(resolve_path(local["vlm_python"])), str(PROJECT_ROOT / "scripts" / "qwen_vlm_server.py"),
+                   "--model", model, "--host", "127.0.0.1", "--port", str(port), "--max-pixels", "401408"]
+        return command, env, f"{model} mit Fotos (mlx-vlm) auf http://127.0.0.1:{port}/v1"
+    if local.get("bilder"):
+        print("llm.local.bilder ist an, aber vlm_python fehlt – starte Qwen ohne Fotos (README „Qwen mit Fotos“).")
     command = [
         # Die Modell-ID muss genau der in den Anfragen entsprechen, sonst lädt mlx_lm das Modell neu
         sys.executable, "-m", "mlx_lm", "server", "--model", model,
