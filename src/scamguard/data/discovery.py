@@ -169,6 +169,8 @@ def _specs_from_hf_file(path: Path) -> list[DatasetSpec]:
             german_only=bool(entry.get("nur_deutsch", True)), max_rows=entry.get("max_zeilen"),
             enabled=bool(entry.get("aktiv", True)), license=str(entry.get("lizenz", "bitte prüfen")),
             notes=str(entry.get("notiz", "aus huggingface.yaml")),
+            # SMS-/Spam-Texte sind keine Inserate: standardmäßig nur Training, Kennzahlen bleiben echte Inserate
+            train_only=bool(entry.get("nur_training", True)),
         ))
     return specs
 

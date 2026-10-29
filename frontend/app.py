@@ -23,11 +23,12 @@ from einstufen import render as render_einstufen
 from scamguard.config import load_config, resolve_path
 from scamguard.data.codebook import load_codebook
 from scamguard.data.discovery import IMAGE_DIR, LISTING_DIR, TEXT_DIR
-from scamguard.data.labels import LABEL_FILE, count_labels, save_label, save_label_images
+from scamguard.data.labels import LABEL_FILE, save_label, save_label_images
 from scamguard.data.listing_import import SUPPORTED_SUFFIXES, ImportResult, import_listing
 from scamguard.data.loaders import IMAGE_SUFFIXES
 from scamguard.data.registry import get_specs
 from scamguard.features.seller import profile_summary
+from scamguard.models.llm_examples import count_reviewed
 from scamguard.pipeline import ScamGuard
 from scamguard.schema import CATEGORIES, CATEGORY_NAMES, SELLER_TYPES, Listing, ScanResult
 from scamguard.training import DEMO_DATASET, retrain
@@ -252,8 +253,19 @@ with st.sidebar:
                               if is_local else
                               "Sendet Titel, Beschreibung und Nachrichten an die Claude API. "
                               "Verkäufername und Ort werden nicht übertragen. Kostet API-Guthaben."))
-    send_images = st.toggle("Bilder an LLM senden", value=False, disabled=not use_llm or is_local,
-                            help="Nur mit Claude (provider: anthropic) möglich.")
+    if is_local:
+        # Lokal entscheidet config(.local).yaml: Fotos gehen nur an einen Bild-fähigen Server (mlx-vlm)
+        local_cfg = llm_cfg.get("local", {})
+        local_photos = bool(local_cfg.get("bilder") and local_cfg.get("vlm_python"))
+        if use_llm:  # kein ausgegrauter Schalter: der sähe auch eingeschaltet wie „aus“ aus
+            st.caption(":material/photo_library: Fotos an Qwen: **an** – bis zu 4, verkleinert, bleiben auf dem "
+                       "Rechner" if local_photos else
+                       ":material/hide_image: Fotos an Qwen: **aus** – einschalten in config.local.yaml "
+                       "(llm.local.bilder + vlm_python, README „Qwen mit Fotos“)")
+        send_images = False  # gilt nur für die Claude API
+    else:
+        send_images = st.toggle("Bilder an LLM senden", value=False, disabled=not use_llm,
+                                help="Schickt die Fotos mit an die Claude API.")
     guard = get_guard(use_llm, send_images)
 
     st.header("Modellstatus")
@@ -381,12 +393,14 @@ with tab_team:
 # --------------------------------------------------------------------------- Meine Daten & Training
 
 with tab_data:
-    counts = count_labels()
+    counts = count_reviewed()
     m1, m2, m3 = st.columns(3)
-    m1.metric("Selbst eingestuft", counts["gesamt"])
+    m1.metric("Geprüfte Inserate", counts["gesamt"])
     m2.metric("davon Betrug", counts["betrug"])
     m3.metric("davon seriös", counts["serioes"])
-    st.caption(f"Gespeichert in `{LABEL_FILE}` – aus dem Upload, der Extension und „Felder selbst eingeben“.")
+    st.caption(f"Alle von Menschen eingestuften Inserate (ohne Doppelte): {counts['eigene']} selbst eingestuft "
+               f"(`{LABEL_FILE}` – Upload, Extension, „Felder selbst eingeben“) plus Team-Importe und Ablage in "
+               f"`{LISTING_DIR}/`. Die KI-Analyse zieht ihre Vergleichsfälle aus genau diesen Inseraten.")
 
     st.subheader("Wohin mit großen Mengen?")
     st.markdown(

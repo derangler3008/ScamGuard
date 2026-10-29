@@ -86,6 +86,7 @@ DATASETS: list[DatasetSpec] = [
         enabled=True,
         license="eigene synthetische Beispiele (frei)",
         notes="Nur zum Testen der Pipeline – NICHT für Aussagen über Modellqualität verwenden.",
+        train_only=True,                         # erfunden → nie in Validierung/Test
     ),
     DatasetSpec(
         name="eigene_labels",

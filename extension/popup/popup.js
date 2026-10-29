@@ -75,7 +75,7 @@ async function checkServer() {
   status.title = health?.ok ? `ScamGuard ${health.data.version}` : health?.error ?? "";
   const labels = health?.data?.labels;
   $("label-info").textContent = labels
-    ? `Eigene Labels: ${labels.gesamt} (${labels.betrug} Betrug, ${labels.serioes} seriös) – einstufen im Panel auf der Seite`
+    ? `Geprüfte Inserate: ${labels.gesamt} (${labels.betrug} Betrug, ${labels.serioes} seriös) – einstufen im Panel auf der Seite`
     : "";
   const llm = health?.data?.llm;
   $("llm-info").textContent = !llm

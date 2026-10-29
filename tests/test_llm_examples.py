@@ -5,7 +5,7 @@ import json
 import pytest
 
 from scamguard.config import load_config, with_overrides
-from scamguard.models.llm_examples import ExampleBank, load_labeled
+from scamguard.models.llm_examples import ExampleBank, count_reviewed, load_labeled
 from scamguard.models.llm_judge import LLMJudgeDetector
 from scamguard.schema import Listing
 
@@ -49,11 +49,22 @@ def test_labeled_listings_are_loaded_deduplicated_and_anonymized(dataset):
     assert {l.label for l in found} == {0, 1}
 
 
+def test_count_reviewed_includes_team_folders_not_only_own_labels(dataset, monkeypatch):
+    from scamguard.data import labels
+
+    label_file, listing_dir = dataset
+    monkeypatch.setattr(labels, "LABEL_FILE", str(label_file))
+    monkeypatch.setattr(labels, "DATASET_DIR", str(listing_dir))
+    # Web-App und Extension zeigen damit dieselbe Menge, aus der das LLM seine Vergleichsfälle zieht
+    assert count_reviewed() == {"gesamt": 5, "betrug": len(TICKETS_BETRUG),
+                                "serioes": len(TICKETS_SERIOES) + 1, "eigene": 1}
+
+
 def test_examples_are_similar_balanced_and_never_the_listing_itself(dataset):
     label_file, listing_dir = dataset
     bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
     query = Listing(title="Tickets Konzert Hamburg", category="tickets",
-                    description="Bezahlung per PayPal Freunde, die Tickets kommen per Mail.")
+                    description="Bezahlung per PayPal Freunde, die Tickets schicke ich per Mail oder WhatsApp.")
     picked = bank.select(query)
     assert len(picked) == 4 and sum(l.label == 1 for l in picked) == 2  # je Klasse gleich viele
     assert picked[0].title == "2 Tickets Konzert Köln"  # ähnlichster Fall zuerst
@@ -71,6 +82,17 @@ def test_unrelated_listings_get_no_examples(dataset):
     bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
     # Unpassende Vergleichsfälle führen eher in die Irre als keine
     assert bank.select(Listing(title="Kinderwagen Bugaboo", description="Regenschutz dabei, kaum genutzt.")) == []
+
+
+def test_one_shared_word_does_not_make_listings_similar(dataset):
+    label_file, listing_dir = dataset
+    bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir)
+    # Schuhe kommen im Datensatz nicht vor: ihre Wörter zählen trotzdem, sonst bliebe nur „Mail“ übrig und
+    # die Ticket-Fälle sähen wie perfekte Treffer aus. Standardfloskeln verbinden ohnehin nichts.
+    shoes = Listing(title="Schwarze Lackschuhe", category="mode",
+                    description="Lackschuhe Größe 43, einmal getragen. Privatverkauf unter Ausschluss jeglicher "
+                                "Gewährleistung, Versand möglich. Fotos gerne per Mail.")
+    assert bank.select(shoes) == []
 
 
 def test_one_class_never_fills_all_slots(dataset):
@@ -109,7 +131,9 @@ def test_local_llm_gets_examples_in_prompt_and_reports_them(dataset, monkeypatch
 
     det = LLMJudgeDetector(with_overrides(CFG, {"llm": {"enabled": True, "provider": "local", "beispiele": 4}}))
     det.backend._transport = httpx.MockTransport(handler)
-    result = det.predict(Listing(title="Tickets Fußball", category="tickets", description="Nur Vorkasse per PayPal."))
+    result = det.predict(Listing(title="Tickets Konzert Stuttgart", category="tickets",
+                                 description="Tickets für das Konzert, Bezahlung per PayPal Freunde, ich schicke "
+                                             "sie per Mail oder WhatsApp."))
     user = sent[0]["messages"][1]["content"]
     assert "<vergleichsfaelle>" in user and user.index("<vergleichsfaelle>") < user.index("<inserat>")
     info = next(s for s in result.signals if s.code == "LLM_EXAMPLES")

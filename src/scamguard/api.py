@@ -28,8 +28,9 @@ from fastapi.responses import HTMLResponse
 from scamguard import __version__
 from scamguard.config import load_config
 from scamguard.data.discovery import label_of
-from scamguard.data.labels import count_labels, save_label, save_label_images
+from scamguard.data.labels import save_label, save_label_images
 from scamguard.data.loaders import IMAGE_SUFFIXES, normalize_category, parse_price
+from scamguard.models.llm_examples import count_reviewed
 from scamguard.pipeline import ScamGuard
 from scamguard.schema import Listing, ModelResult
 
@@ -102,7 +103,7 @@ def health() -> dict:
     return {"status": "ok", "version": __version__,
             "detectors": {d.name: d.available for d in guard.detectors},
             "llm": {"provider": provider, "model": model, "auto": provider == "local"},
-            "labels": count_labels()}
+            "labels": count_reviewed()}
 
 
 def _parse_listing(listing: str) -> dict:

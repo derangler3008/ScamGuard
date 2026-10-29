@@ -484,7 +484,10 @@ def _llm_server_process_args(model: str | None = None,
     try:  # Modell schon heruntergeladen → ohne Netzabfrage bei Hugging Face starten
         from huggingface_hub import snapshot_download
 
-        snapshot_download(model, local_files_only=True)
+        # Nur, was das Modell braucht (wie mlx-lm/mlx-vlm laden) – README & Co. lädt der Server gar nicht erst
+        snapshot_download(model, local_files_only=True,
+                          allow_patterns=["*.json", "*.safetensors", "*.py", "tokenizer.model", "*.tiktoken",
+                                          "*.txt", "*.jsonl", "*.jinja"])
         env["HF_HUB_OFFLINE"] = "1"
     except Exception:  # noqa: BLE001 – nicht im Cache: beim Start herunterladen (~6–7 GB)
         print(f"Modell {model} ist noch nicht heruntergeladen – der erste Start lädt es (~6–7 GB).")

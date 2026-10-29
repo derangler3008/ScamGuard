@@ -2,6 +2,34 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.16.0] – 2026-10-29
+
+### Neu
+- **KI-generierte Trainingsdaten:** `tanaos/synthetic-spam-detection-dataset-german` (KI-erzeugte deutsche
+  Spam-/Normalnachrichten, MIT, max. 500 Zeilen) ist aktiv. Hugging-Face-Datensätze und die Demo-Inserate
+  landen jetzt nur im Training, nie in Validierung/Test (`nur_training`, Standard: an) – Kennzahlen bleiben
+  echte Inserate. Damit hat AutoML genug seriöse Beispiele und urteilt im Scan.
+- **Zählung aller geprüften Inserate:** Web-App („Meine Daten“) und Extension-Popup zeigen alle von Menschen
+  eingestuften Inserate (eigene Labels + Team-Importe + Ablage, ohne Doppelte) – genau die Menge, aus der die
+  KI-Analyse ihre Vergleichsfälle zieht. Vorher nur die selbst eingestuften.
+- Web-App: Statuszeile „Fotos an Qwen: an/aus“ statt eines ausgegrauten Schalters, der immer wie „aus“ aussah.
+
+### Behoben
+- **Unpassende Vergleichsfälle:** Zu schwarzen Lackschuhen bekam Qwen ein iPhone und eine RTX 3080 als
+  „ähnliche Fälle“. Füllwörter, Zahlen und Standardfloskeln („Privatverkauf unter Ausschluss jeglicher
+  Gewährleistung“) zählen nicht mehr; Wörter, die in keinem Fall vorkommen, zählen als Unterschied statt
+  wegzufallen; es braucht mindestens 2 gemeinsame Wörter. Unter den eigenen Inseraten kommen jetzt 26 von 28
+  Vergleichsfällen aus derselben Kategorie.
+- `scamguard start` meldete Qwen fälschlich als „noch nicht heruntergeladen“ (README fehlte im Cache) und
+  fragte deshalb bei jedem Start Hugging Face an.
+
+### Nach dem Update (alle)
+1. `git pull origin main` auf dem eigenen Branch.
+2. **AutoML trainieren (Pflicht, sonst steht AutoML auf „aus“):** einmalig `pip install -e ".[automl]"`
+   (Mac vorher `brew install libomp`), dann `scamguard automl`. Lädt beim ersten Mal den synthetischen
+   Datensatz von Hugging Face (wenige MB). Modelle liegen nie im Git – jeder Rechner trainiert selbst.
+3. Dienste neu starten (`scamguard start`, `scamguard ui`) und die Extension neu laden.
+
 ## [0.15.0] – 2026-10-28
 
 ### Neu
