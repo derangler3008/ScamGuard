@@ -222,7 +222,7 @@ def test_listing_folder_is_a_dataset(tmp_path, monkeypatch):
     assert by_title["Waschmaschine Bosch 8 kg"].price == 1200.0
 
 
-def test_synthetic_folder_is_train_only(tmp_path, monkeypatch):
+def test_synthetic_folder_counts_like_all_other_data(tmp_path, monkeypatch):
     from scamguard.data import build, registry
 
     root = tmp_path / "datensatz_fuellen_inserate"
@@ -242,13 +242,10 @@ def test_synthetic_folder_is_train_only(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "PROCESSED_DIR", str(tmp_path / "processed"))
 
     specs = {s.name: s for s in discovery.discover_specs()}
-    assert specs["inserate:synthetisch_betrug"].train_only and specs["inserate:synthetisch_betrug"].enabled
-    assert not specs["inserate:betrug"].train_only
+    # Ein Datensatz: synthetische Ordner sind eigene Quelle, landen aber wie alles andere auch in Val/Test
+    assert specs["inserate:synthetisch_betrug"].enabled and not specs["inserate:synthetisch_betrug"].train_only
     _, stats = build.build_dataset()
-    assert stats["train_only"] == 24
-    for split in ("val", "test"):
-        sources = {l.source for l in build.read_jsonl(tmp_path / "processed" / f"{split}.jsonl")}
-        assert sources and not any("synthetisch" in s for s in sources)
+    assert stats["train_only"] == 0 and stats["total"] == 48
 
 
 @pytest.mark.parametrize("name", ["chat.jfif", "chat.jpg", "chat_ohne_endung"])

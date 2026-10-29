@@ -1,9 +1,13 @@
-"""Vergleichsfälle für das LLM: die ähnlichsten von Menschen gelabelten Inserate gehen mit in den Prompt.
+"""Vergleichsfälle für das LLM: die ähnlichsten gelabelten Fälle aus dem ganzen Datensatz gehen mit in den Prompt.
 
-So fließt der Teamdatensatz ohne Training ins LLM – jedes neue Label und jeder `scamguard team import`
-wirkt beim nächsten Scan. Quellen: eigene Labels (`data/raw/eigene_labels.jsonl`) und die Inserat-Ordner
-(`data/datensatz_fuellen_inserate/{betrug,serioes}/…/inserat.json`, auch aus Team-Importen). Synthetische
-Daten und Ordner mit `_` am Anfang bleiben draußen – das Modell soll sich an echten Fällen orientieren.
+So fließt der Datensatz ohne Training ins LLM. Quellen:
+- von Menschen geprüfte Inserate: eigene Labels (`data/raw/eigene_labels.jsonl`) und die Inserat-Ordner
+  (`data/datensatz_fuellen_inserate/{betrug,serioes}/…/inserat.json`, auch aus Team-Importen) – jedes neue
+  Label und jeder `scamguard team import` wirkt beim nächsten Scan;
+- alle übrigen aktiven Datensätze aus den Splits (`data/processed/*.jsonl`, Stand des letzten `retrain`/
+  `automl`/`data build`): Warnmeldungen, KI-generierte Nachrichten, Demo-Inserate.
+Alles zählt als ein Datensatz, ohne Unterscheidung nach Herkunft. Ordner mit `_` am Anfang bleiben draußen
+(Testartefakte).
 
 Auswahl: TF-IDF-Ähnlichkeit zum geprüften Inserat ohne Füllwörter, Zahlen und Standardfloskeln
 (`IGNORED_WORDS` – sonst wirken Lackschuhe und Grafikkarte über „Privatverkauf unter Ausschluss jeglicher
@@ -28,7 +32,8 @@ from scamguard.config import resolve_path
 from scamguard.schema import Listing
 
 LABEL_DIRS = {"betrug": 1, "serioes": 0}
-SKIP_DIRS = {"synthetisch"}
+PROCESSED_DIR = "data/processed"
+SPLITS = ("train", "val", "test")
 TEXT_CHARS = 260          # pro Fall: reicht für Masche und Ton, hält den Prompt kurz (lokales LLM)
 REFRESH_S = 30            # Dateien höchstens alle 30 s neu einlesen
 # Wörter, die in fast jedem Inserat stehen – sie machen beliebige Inserate „ähnlich“. Maschen-Wörter (PayPal,
@@ -56,20 +61,21 @@ MIN_SHARED_TERMS = 2  # ein einziges gemeinsames Wort („Mail“) macht noch ke
 
 
 def _visible(path: Path, root: Path) -> bool:
-    return not any(part.startswith("_") or part in SKIP_DIRS for part in path.relative_to(root).parts)
+    return not any(part.startswith("_") for part in path.relative_to(root).parts)
 
 
-def load_labeled(label_file: Path, listing_dir: Path) -> list[Listing]:
-    """Alle von Menschen gelabelten Inserate, dedupliziert (eigene Labels und Ordner-Ablage überschneiden sich)."""
+def load_labeled(label_file: Path, listing_dir: Path, extra: list[Listing] | None = None) -> list[Listing]:
+    """Alle von Menschen gelabelten Inserate, dedupliziert (eigene Labels und Ordner-Ablage überschneiden sich).
+    `extra` (z. B. `load_processed`) kommt dahinter – bei Doppelten gewinnt das geprüfte Inserat."""
     from scamguard.data.build import listing_fingerprint
     from scamguard.data.loaders import looks_binary
     from scamguard.data.redact import redact
 
     found: list[Listing] = []
     if label_file.exists():
-        for line in label_file.read_text(encoding="utf-8").splitlines():
+        for line in label_file.read_text(encoding="utf-8").split("\n"):
             if line.strip():
-                found.append(Listing.from_dict(json.loads(line)))
+                found.append(Listing.from_dict({"source": "eigene_labels", **json.loads(line)}))
     for name, label in LABEL_DIRS.items():
         root = listing_dir / name
         if not root.is_dir():
@@ -81,7 +87,8 @@ def load_labeled(label_file: Path, listing_dir: Path) -> list[Listing]:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            found.append(Listing.from_dict({**data, "label": label}))
+            found.append(Listing.from_dict({**data, "label": label, "source": f"inserate:{name}"}))
+    found += extra or []
 
     seen, out = set(), []
     for listing in found:
@@ -97,6 +104,17 @@ def load_labeled(label_file: Path, listing_dir: Path) -> list[Listing]:
     return out
 
 
+def load_processed(processed_dir: Path) -> list[Listing]:
+    """Alle Fälle aus den gebauten Splits (alle aktiven Datensätze, schon dedupliziert)."""
+    found = []
+    for split in SPLITS:
+        path = processed_dir / f"{split}.jsonl"
+        if path.exists():
+            found += [Listing.from_dict(json.loads(line))
+                      for line in path.read_text(encoding="utf-8").split("\n") if line.strip()]
+    return found
+
+
 def count_reviewed() -> dict[str, int]:
     """Alle von Menschen eingestuften Inserate (eigene Labels + Ordner-Ablage, ohne Doppelte) – genau die
     Menge, aus der die Vergleichsfälle kommen. `eigene` = davon über Upload/Extension/Web-App gelabelt."""
@@ -109,9 +127,11 @@ def count_reviewed() -> dict[str, int]:
 
 
 class ExampleBank:
-    def __init__(self, count: int = 4, label_file: str | Path | None = None, listing_dir: str | Path | None = None):
+    def __init__(self, count: int = 4, label_file: str | Path | None = None, listing_dir: str | Path | None = None,
+                 processed_dir: str | Path | None = None):
         self.count = count
         self._label_file, self._listing_dir = label_file, listing_dir
+        self._processed_dir = processed_dir
         self._lock = threading.Lock()
         self._checked = 0.0
         self._signature: tuple | None = None
@@ -138,6 +158,8 @@ class ExampleBank:
         label_file, listing_dir = self._paths()
         files = [label_file] if label_file.exists() else []
         files += [p for p in listing_dir.rglob("inserat.json")] if listing_dir.is_dir() else []
+        processed = Path(self._processed_dir) if self._processed_dir else resolve_path(PROCESSED_DIR)
+        files += [p for p in (processed / f"{split}.jsonl" for split in SPLITS) if p.exists()]
         signature = tuple(sorted((str(p), p.stat().st_mtime) for p in files))
         if signature == self._signature:
             return
@@ -146,7 +168,7 @@ class ExampleBank:
         from scamguard.data.build import listing_fingerprint
         from scamguard.data.phrases import STOPWORDS
 
-        listings = load_labeled(label_file, listing_dir)
+        listings = load_labeled(label_file, listing_dir, load_processed(processed))
         self._listings, self._signature = listings, signature
         self._fingerprints = [listing_fingerprint(listing) for listing in listings]
         if listings:
@@ -211,9 +233,8 @@ class ExampleBank:
 def prompt_block(examples: list[Listing]) -> str:
     if not examples:
         return ""
-    intro = ("Ähnliche Inserate aus unseren eigenen, von Menschen geprüften Einstufungen. Sie zeigen, wie wir "
-             "vergleichbare Fälle bewertet haben – nutze sie als Orientierung, bewerte das Inserat unten aber "
-             "eigenständig nach seinem Inhalt.")
+    intro = ("Ähnliche gelabelte Fälle aus unserem Datensatz. Sie zeigen, wie vergleichbare Fälle eingestuft "
+             "sind – nutze sie als Orientierung, bewerte das Inserat unten aber eigenständig nach seinem Inhalt.")
     parts = ["<vergleichsfaelle>", intro]
     for n, ex in enumerate(examples, 1):
         parts.append(f"Fall {n} – {'BETRUG' if ex.label == 1 else 'SERIÖS'}: {_summary(ex)}")

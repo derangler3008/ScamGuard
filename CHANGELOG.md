@@ -2,6 +2,27 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.17.0] – 2026-10-29
+
+### Geändert
+- **Ein Datensatz für alles:** KI-generierte Daten (Hugging Face, Demo-Inserate, Ordner `synthetisch/`) zählen
+  wie alle anderen – Training, Validierung und Test. `nur_training: true` in `huggingface.yaml` hält einen
+  Datensatz bei Bedarf weiter aus Validierung/Test heraus. Kennzahlen enthalten damit auch generierte Fälle.
+- **KI-Analyse vergleicht mit dem ganzen Datensatz:** Vergleichsfälle kommen aus den geprüften Inseraten
+  (sofort) und allen aktiven Datensätzen in `data/processed` (Warnmeldungen, KI-generierte Texte, Demo; Stand
+  des letzten `retrain`/`automl`) – ohne Unterscheidung nach Herkunft. Auf dem Mac aktuell 1.243 Fälle.
+
+### Behoben
+- JSONL-Dateien mit Unicode-Zeilenumbruch (U+2028) im Text brachen das Einlesen der Vergleichsfälle ab.
+
+### Nach dem Update (alle)
+1. `git pull origin main`.
+2. Team-Daten einlesen: `scamguard team import` (liest alle ZIPs aus dem OneDrive-Eingang).
+3. Neu trainieren: `scamguard retrain --automl` (ca. 10 Min., lädt beim ersten Mal den synthetischen
+   Hugging-Face-Datensatz). Alternativ die fertigen Modelle aus dem OneDrive-Ordner `Modelle/` nach `models/`
+   kopieren (gleiche Paketversionen vorausgesetzt).
+4. Dienste neu starten (`scamguard start`, `scamguard ui`) und die Extension neu laden.
+
 ## [0.16.0] – 2026-10-29
 
 ### Neu

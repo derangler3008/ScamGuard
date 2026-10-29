@@ -86,9 +86,11 @@ llm:
   # anthropic = Claude API (kostet pro Anfrage, Daten gehen an Anthropic)
   provider: local
   max_tokens: 1024
-  # Vergleichsfälle: die ähnlichsten von Menschen gelabelten Inserate (eigene Labels und Team-Importe aus
-  # data/datensatz_fuellen_inserate, je Klasse gleich viele) gehen mit in den Prompt – so fließt der
-  # Teamdatensatz ohne Training ins LLM. 0 = aus. Nur beim lokalen Modell (Daten bleiben auf dem Rechner).
+  # Vergleichsfälle: die ähnlichsten gelabelten Fälle (je Klasse gleich viele) gehen mit in den Prompt – so
+  # fließt der Datensatz ohne Training ins LLM. Pool: geprüfte Inserate (eigene Labels, Team-Importe aus
+  # data/datensatz_fuellen_inserate, sofort) plus alle aktiven Datensätze aus data/processed (Warnmeldungen,
+  # KI-generierte Texte, Demo – Stand des letzten retrain/automl), alles als ein Datensatz.
+  # 0 = aus. Nur beim lokalen Modell (Daten bleiben auf dem Rechner).
   beispiele: 4
 
   local:

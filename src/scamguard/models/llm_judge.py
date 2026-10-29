@@ -202,8 +202,9 @@ def _to_result(name: str, data: dict, model_label: str) -> ModelResult:
         scam = sum(ex.label == 1 for ex in examples)
         titles = ", ".join(f"„{ex.title[:40]}“" for ex in examples[:2] if ex.title)
         signals.append(Signal(name, "LLM_EXAMPLES",
-                              f"KI-Analyse verglichen mit {len(examples)} ähnlichen, von uns geprüften Fällen "
-                              f"({scam} Betrug, {len(examples) - scam} seriös)" + (f", z. B. {titles}" if titles else ""),
+                              f"KI-Analyse verglichen mit {len(examples)} ähnlichen Fällen aus dem Datensatz "
+                              f"({scam} Betrug, {len(examples) - scam} seriös)"
+                              + (f", z. B. {titles}" if titles else ""),
                               0.0, info=True))
     return ModelResult(name, score=score, signals=signals)
 

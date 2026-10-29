@@ -301,9 +301,11 @@ Details:
 - MLX- und llama.cpp-Server laufen nur auf `127.0.0.1` ohne CORS-Freigabe für fremde Seiten.
 - 16-GB-Mac: Solange Qwen läuft, sind rund 7 GB belegt; `Ctrl+C` gibt den Speicher frei.
 - Vergleich mit den anderen Modellen: `scamguard evaluate --llm --max 100`.
-- Vergleichsfälle (`llm.beispiele`, Standard 4): Qwen sieht die ähnlichsten von Menschen gelabelten
-  Inserate aus eigenen Labels und Team-Importen – so wirkt jeder neue Datensatz sofort, ohne Training.
-  Nur beim lokalen Modell; das Panel zeigt, womit verglichen wurde.
+- Vergleichsfälle (`llm.beispiele`, Standard 4): Qwen sieht die ähnlichsten gelabelten Fälle aus dem
+  ganzen Datensatz – geprüfte Inserate (eigene Labels, Team-Importe; wirken sofort) und alle aktiven
+  Datensätze aus `data/processed` (Warnmeldungen, KI-generierte Texte, Demo; Stand des letzten `retrain`
+  bzw. `automl`) – alles als ein Datensatz. Nur beim lokalen Modell; das Panel zeigt, womit verglichen
+  wurde.
 
 ### Qwen mit Fotos (provisorisch, Mac)
 

@@ -14,7 +14,7 @@ data/datensatz_fuellen_bilder/
   und serioes/ (auch echt/, legit/).
 
 Unterordner synthetisch/ (in beiden Ablagen) mit betrug/ und serioes/: selbst erzeugte Beispiele
-(scripts/synthetische_daten.py) – eigene Quelle, landen nur im Training, nie in Validierung oder Test.
+(scripts/synthetische_daten.py) – eigene Quelle, sonst wie alle anderen Daten (Training, Validierung, Test).
 
 Dateien und Ordner, die mit „_“ beginnen, werden ignoriert (Vorlagen, Entwürfe).
 Für Sonderfälle (Texte zusammensetzen, filtern …) bleibt registry.py mit `transform`-Funktionen.
@@ -169,8 +169,7 @@ def _specs_from_hf_file(path: Path) -> list[DatasetSpec]:
             german_only=bool(entry.get("nur_deutsch", True)), max_rows=entry.get("max_zeilen"),
             enabled=bool(entry.get("aktiv", True)), license=str(entry.get("lizenz", "bitte prüfen")),
             notes=str(entry.get("notiz", "aus huggingface.yaml")),
-            # SMS-/Spam-Texte sind keine Inserate: standardmäßig nur Training, Kennzahlen bleiben echte Inserate
-            train_only=bool(entry.get("nur_training", True)),
+            train_only=bool(entry.get("nur_training", False)),  # true = nie in Validierung/Test
         ))
     return specs
 
@@ -194,8 +193,7 @@ def _specs_from_label_dirs(folder: Path, kind: str, synthetic: bool = False) -> 
         specs.append(DatasetSpec(
             name=f"{kind}:{SYNTHETIC_DIR + '_' if synthetic else ''}{sub.name}", source=source, path=str(sub),
             modality=modality, fixed_label=label, german_only=False, enabled=label is not None and count > 0,
-            train_only=synthetic,
-            license=("selbst erzeugt (synthetisch) – nur Training" if synthetic
+            license=("selbst erzeugt (synthetisch)" if synthetic
                      else f"eigene {unit} – Quelle dokumentieren"),
             notes=(f"{count} {unit}, Label {'Betrug' if label else 'seriös'}" if label is not None
                    else "Ordnername ist kein Label – „betrug“ oder „serioes“ verwenden"),

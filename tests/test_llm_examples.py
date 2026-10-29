@@ -32,7 +32,7 @@ def dataset(tmp_path):
         _folder(listing_dir, "betrug", f"b{i}__k{i}", title, text)
     for i, (title, text) in enumerate(TICKETS_SERIOES):
         _folder(listing_dir, "serioes", f"s{i}__k{i}", title, text)
-    _folder(listing_dir / "betrug", "synthetisch", "x__1", "Synthetisch", "darf nicht als Vergleichsfall auftauchen")
+    _folder(listing_dir / "betrug", "synthetisch", "x__1", "Synthetisch", "zählt wie jeder andere Fall")
     _folder(listing_dir, "betrug", "_testartefakt/y__2", "Testartefakt", "Ordner mit _ werden ignoriert")
     label_file.write_text(json.dumps({"title": "Sofa grau", "description": "Ruf an: 0151 2345678", "label": 0,
                                       "category": "moebel"}, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -43,7 +43,7 @@ def test_labeled_listings_are_loaded_deduplicated_and_anonymized(dataset):
     label_file, listing_dir = dataset
     found = load_labeled(label_file, listing_dir)
     titles = {l.title for l in found}
-    assert len(found) == 5 and "Synthetisch" not in titles and "Testartefakt" not in titles
+    assert len(found) == 6 and "Synthetisch" in titles and "Testartefakt" not in titles
     sofa = next(l for l in found if l.title == "Sofa grau")
     assert "2345678" not in sofa.description  # Telefonnummer anonymisiert
     assert {l.label for l in found} == {0, 1}
@@ -56,7 +56,7 @@ def test_count_reviewed_includes_team_folders_not_only_own_labels(dataset, monke
     monkeypatch.setattr(labels, "LABEL_FILE", str(label_file))
     monkeypatch.setattr(labels, "DATASET_DIR", str(listing_dir))
     # Web-App und Extension zeigen damit dieselbe Menge, aus der das LLM seine Vergleichsfälle zieht
-    assert count_reviewed() == {"gesamt": 5, "betrug": len(TICKETS_BETRUG),
+    assert count_reviewed() == {"gesamt": 6, "betrug": len(TICKETS_BETRUG) + 1,
                                 "serioes": len(TICKETS_SERIOES) + 1, "eigene": 1}
 
 
@@ -138,6 +138,29 @@ def test_local_llm_gets_examples_in_prompt_and_reports_them(dataset, monkeypatch
     assert "<vergleichsfaelle>" in user and user.index("<vergleichsfaelle>") < user.index("<inserat>")
     info = next(s for s in result.signals if s.code == "LLM_EXAMPLES")
     assert info.info and "4 ähnlichen" in info.message and "2 Betrug, 2 seriös" in info.message
+
+
+def test_all_datasets_join_as_one_pool(dataset, tmp_path):
+    label_file, listing_dir = dataset
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    rows = [  # aus den Splits: KI-generiert, Warnmeldung – und ein Doppelter eines geprüften Inserats
+        {"title": "Tickets Konzert Berlin", "description": "Zahlung per PayPal Freunde, Tickets per Mail.",
+         "label": 1, "category": "tickets", "source": "hf:tanaos/synthetic"},
+        {"description": "Betrüger verkaufen Tickets Konzert gegen PayPal Freunde und verschwinden.",
+         "label": 1, "category": "tickets", "source": "datei:gesammelt_warnungen.csv"},
+        {"title": "2 Tickets Konzert Köln", "description": "Bezahlung nur per PayPal Freunde, Tickets schicke "
+         "ich per Mail.", "label": 1, "category": "tickets", "source": "hf:doppelt"},
+    ]
+    # U+2028 im Text: darf die JSONL-Zeile nicht zerteilen
+    rows[1]["description"] += "\u2028Zweite Zeile."
+    (processed / "train.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+                                           encoding="utf-8")
+    bank = ExampleBank(4, label_file=label_file, listing_dir=listing_dir, processed_dir=processed)
+    bank._refresh()
+    titles = [l.title or l.description[:20] for l in bank._listings]
+    assert len(titles) == 8 and "Tickets Konzert Berlin" in titles  # 6 aus Ordnern/Labels + 2 neue
+    assert titles.count("2 Tickets Konzert Köln") == 1  # Doppelter nur einmal
 
 
 def test_examples_only_for_local_model():
