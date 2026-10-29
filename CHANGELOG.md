@@ -2,6 +2,19 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.17.1] – 2026-10-29
+
+### Behoben
+- **Extension: KI-Analyse „nicht verfügbar“ bei langen Scans (Firefox):** Dauerte die KI-Analyse länger als
+  ca. 30 s (z. B. erster Scan nach dem Start, mit Fotos), legte Firefox den Hintergrund der Extension schlafen
+  und das Ergebnis ging verloren („Receiving end does not exist“). Das Panel hält die Verbindung jetzt wach,
+  solange ein Scan läuft.
+
+### Nach dem Update (alle)
+1. `git pull origin main`.
+2. Extension neu laden (Firefox: `python scripts/firefox_mit_extension.py --reload`, Chrome: auf
+   `chrome://extensions` neu laden) und offene Inserat-Seiten neu laden.
+
 ## [0.17.0] – 2026-10-29
 
 ### Geändert

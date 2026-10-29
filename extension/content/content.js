@@ -58,7 +58,12 @@
   let currentRun = 0; // ein neuer Scan (z. B. „Erneut prüfen“) verwirft ältere, noch laufende Antworten
   let chatSignature = ""; // zuletzt geprüfter Chatverlauf – nur bei neuen Nachrichten erneut prüfen
 
+  // Firefox legt den Hintergrund nach ~30 s ohne Ereignis schlafen – die KI-Analyse dauert beim
+  // ersten Scan mit Fotos oft länger. Jede Nachricht setzt den Leerlauf-Timer zurück.
+  const KEEPALIVE_MS = 10_000;
+
   async function requestScan(extracted, llm) {
+    const keepalive = setInterval(() => ext.runtime.sendMessage({ type: "keepalive" }).catch(() => {}), KEEPALIVE_MS);
     try {
       return await ext.runtime.sendMessage({
         type: "scan",
@@ -69,6 +74,8 @@
       });
     } catch (err) {
       return { ok: false, error: { kind: "extension", message: `Extension-Fehler: ${err.message}` } };
+    } finally {
+      clearInterval(keepalive);
     }
   }
 

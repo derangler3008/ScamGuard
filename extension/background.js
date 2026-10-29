@@ -161,6 +161,9 @@ async function handleMessage(msg, sender) {
     case "getSettings":
       return getSettings();
 
+    case "keepalive": // hält den Hintergrund wach, solange ein Scan läuft (siehe content.js)
+      return true;
+
     case "scan": {
       const tabId = sender.tab?.id;
       const settings = await getSettings();
