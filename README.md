@@ -125,7 +125,7 @@ scamguard data list                  # registrierte Datensätze
 scamguard data build                 # → data/processed/{train,val,test}.jsonl
 scamguard retrain                    # einlesen + trainieren + auswerten
 scamguard automl                     # Welle 2: AutoML-Suche, Bestenliste, Auswertung (5 Min.)
-scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell und Quelle
+scamguard evaluate                   # Precision/Recall/F1/AUC pro Modell und Quelle → models/auswertung_test.json
 scamguard scan examples/inserat_beispiel.json
 scamguard ui                         # Web-App → http://127.0.0.1:8501
 scamguard api                        # REST-API → http://127.0.0.1:8000 (Startseite), /docs
@@ -300,7 +300,10 @@ Details:
   ungültigem JSON einmal deterministisch neu angefragt.
 - MLX- und llama.cpp-Server laufen nur auf `127.0.0.1` ohne CORS-Freigabe für fremde Seiten.
 - 16-GB-Mac: Solange Qwen läuft, sind rund 7 GB belegt; `Ctrl+C` gibt den Speicher frei.
-- Vergleich mit den anderen Modellen: `scamguard evaluate --llm --max 100`.
+- Vergleich mit den anderen Modellen: `scamguard evaluate --llm` (ganzes Testset, auf einem M-Mac ca. 17 s je
+  Fall, also knapp eine Stunde; `--max 50` für eine Stichprobe). Ergebnis mit Version und Modellname in
+  `models/auswertung_test_llm.json`. Die ausgewerteten Fälle sind dabei aus den Vergleichsfällen ausgeblendet –
+  Qwen sieht nie das Label eines Testfalls.
 - Vergleichsfälle (`llm.beispiele`, Standard 4): Qwen sieht die ähnlichsten gelabelten Fälle aus dem
   ganzen Datensatz – geprüfte Inserate (eigene Labels, Team-Importe; wirken sofort) und alle aktiven
   Datensätze aus `data/processed` (Warnmeldungen, KI-generierte Texte, Demo; Stand des letzten `retrain`

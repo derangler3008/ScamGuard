@@ -292,15 +292,22 @@ def _cmd_automl(args) -> int:
 
 
 def _cmd_evaluate(args) -> int:
-    from scamguard.evaluate import evaluate
+    from scamguard.evaluate import evaluate, save_report
+    from scamguard.pipeline import ScamGuard
 
-    guard = None
+    guard = ScamGuard(overrides={"llm": {"enabled": bool(args.llm)}})
+    progress = None
     if args.llm:
-        from scamguard.pipeline import ScamGuard
-
-        guard = ScamGuard(overrides={"llm": {"enabled": True}})
         print("Mit LLM: pro Beispiel einige Sekunden – mit --max eine Stichprobe nehmen.")
-    report = evaluate(args.split, guard=guard, limit=args.max)
+        progress = lambda i, n: print(f"  {i}/{n}", flush=True) if i % 10 == 0 or i == n else None
+    report = evaluate(args.split, guard=guard, limit=args.max, progress=progress)
+    llm_model = None
+    if args.llm:
+        llm_cfg = guard.cfg["llm"]
+        llm_model = (llm_cfg.get(llm_cfg["provider"]) or {}).get("model") or llm_cfg["provider"]
+    path = save_report(report, PROJECT_ROOT / guard.cfg["paths"]["models_dir"], llm_model=llm_model)
+    if not report["complete"]:
+        print(f"\nAbgebrochen – ausgewertet werden die {report['models']['FUSION']['n']} fertigen Fälle.")
     print(f"Split: {report['split']}  (Schwelle {report['threshold']})\n")
     for title, block in (("Modelle", report["models"]), ("Quellen (Fusion)", report["sources"])):
         print(f"{title}:")
@@ -309,6 +316,10 @@ def _cmd_evaluate(args) -> int:
             auc = f"{m['roc_auc']:.3f}" if "roc_auc" in m else "  –  "
             print(f"  {name:22s} {m['n']:5d} {m['precision']:6.3f} {m['recall']:6.3f} {m['f1']:6.3f} {auc:>6s}")
         print()
+    if report["failed"]:
+        print("Fehler ohne Score (zählen nicht mit): "
+              + ", ".join(f"{name} {k}×" for name, k in report["failed"].items()) + "\n")
+    print(f"Gespeichert: {path}")
     return 0
 
 

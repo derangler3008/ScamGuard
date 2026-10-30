@@ -2,6 +2,15 @@
 
 Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung nach SemVer.
 
+## [0.18.0] – 2026-10-30
+
+### Neu
+- **KI-Analyse in der Auswertung:** `scamguard evaluate --llm` läuft über das ganze Testset, zeigt Fortschritt
+  und zählt LLM-Ausfälle (z. B. Zeitüberschreitung) getrennt, statt sie still wegzulassen. Ergebnisse landen
+  mit Version, Zeitpunkt und LLM-Modell in `models/auswertung_<split>[_llm].json` – Kennzahlen bleiben
+  nachvollziehbar und lassen sich mit dem Modelle-Ordner weitergeben. Ctrl+C bricht ab und wertet die bis
+  dahin fertigen Fälle aus.
+
 ## [0.17.1] – 2026-10-29
 
 ### Behoben
