@@ -19,11 +19,6 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   und das Ergebnis ging verloren („Receiving end does not exist“). Das Panel hält die Verbindung jetzt wach,
   solange ein Scan läuft.
 
-### Nach dem Update (alle)
-1. `git pull origin main`.
-2. Extension neu laden (Firefox: `python scripts/firefox_mit_extension.py --reload`, Chrome: auf
-   `chrome://extensions` neu laden) und offene Inserat-Seiten neu laden.
-
 ## [0.17.0] – 2026-10-29
 
 ### Geändert
@@ -36,14 +31,6 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Behoben
 - JSONL-Dateien mit Unicode-Zeilenumbruch (U+2028) im Text brachen das Einlesen der Vergleichsfälle ab.
-
-### Nach dem Update (alle)
-1. `git pull origin main`.
-2. Team-Daten einlesen: `scamguard team import` (liest alle ZIPs aus dem OneDrive-Eingang).
-3. Neu trainieren: `scamguard retrain --automl` (ca. 10 Min., lädt beim ersten Mal den synthetischen
-   Hugging-Face-Datensatz). Alternativ die fertigen Modelle aus dem OneDrive-Ordner `Modelle/` nach `models/`
-   kopieren (gleiche Paketversionen vorausgesetzt).
-4. Dienste neu starten (`scamguard start`, `scamguard ui`) und die Extension neu laden.
 
 ## [0.16.0] – 2026-10-29
 
@@ -66,13 +53,6 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - `scamguard start` meldete Qwen fälschlich als „noch nicht heruntergeladen“ (README fehlte im Cache) und
   fragte deshalb bei jedem Start Hugging Face an.
 
-### Nach dem Update (alle)
-1. `git pull origin main` auf dem eigenen Branch.
-2. **AutoML trainieren (Pflicht, sonst steht AutoML auf „aus“):** einmalig `pip install -e ".[automl]"`
-   (Mac vorher `brew install libomp`), dann `scamguard automl`. Lädt beim ersten Mal den synthetischen
-   Datensatz von Hugging Face (wenige MB). Modelle liegen nie im Git – jeder Rechner trainiert selbst.
-3. Dienste neu starten (`scamguard start`, `scamguard ui`) und die Extension neu laden.
-
 ## [0.15.0] – 2026-10-28
 
 ### Neu
@@ -91,12 +71,6 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - Firefox 159: Browser-Tests öffnen das Popup über den Browser-Chrome (`MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`).
 - Web-App-Browsertest fragte das echte LLM (KI-Analyse ist standardmäßig an) – läuft jetzt ohne.
 
-### Nach dem Update
-1. Dienste neu starten (`scamguard start`, `scamguard ui`).
-2. Optional, nur Mac: Qwen mit Fotos einrichten (README, „Qwen mit Fotos“).
-3. Wer schon gelabelt hat: Chat-Screenshots, die als `.jfif` gespeichert waren, neu einstufen und erneut
-   exportieren (`scamguard team export --name <Vorname>`).
-
 ## [0.14.0] – 2026-10-25
 
 ### Neu
@@ -111,10 +85,6 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 ### Behoben
 - Fotoabgleich stürzte ab, wenn es keine eigene Labeldatei gab (nur Team-Importe).
 
-### Nach dem Update
-1. Dienste neu starten (`scamguard start`, `scamguard ui`). Die Vergleichsfälle wirken sofort mit allen
-   gelabelten Inseraten auf dem Rechner; mehr Daten über `scamguard team import` (wer zusammenführt).
-
 ## [0.13.0] – 2026-10-17
 
 ### Neu
@@ -123,10 +93,6 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   synthetische Daten) und lädt es über den Upload-Link des Teams hoch. `team import` liest alle ZIPs aus dem
   Eingang (`team.eingang` in `config.local.yaml`), überspringt schon eingelesene, übernimmt gleiche Inserate
   nicht doppelt und schützt vor präparierten ZIPs.
-
-### Nach dem Update
-1. Eigene Daten abgeben: `scamguard team export --name <Vorname>` und das ZIP über den Upload-Link hochladen
-   (Link vom Team, steht nicht im Repo). Gern regelmäßig wiederholen, Doppeltes wird erkannt.
 
 ## [0.12.0] – 2026-10-16
 
@@ -141,22 +107,12 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **Synthetische Daten** (`scripts/synthetische_daten.py`): nachgebaute Chat-Screenshots typischer Maschen
   und gewöhnlicher Gespräche (`chats`: feste Vorlagen, `qwen-chats`: vom lokalen Qwen geschrieben, viel
   vielfältiger) sowie KI-Produktfotos (`fotos`: SDXL-Turbo, GPU).
-- **Update-Check** (`scripts/update_check.py`): zeigt nach `git pull`, was seit der installierten Version
-  zu tun ist (pip-Befehl mit den vorhandenen Extras, „Nach dem Update“-Schritte aus dem CHANGELOG). Mit
-  Claude Code läuft er beim Start automatisch (`.claude/settings.json`), `CLAUDE.md` sagt Claude, wie die
-  Schritte abzuarbeiten sind.
 - **Ordner `synthetisch/`** in `datensatz_fuellen_inserate` und `datensatz_fuellen_bilder`: eigene Quelle,
   beim Bauen der Splits nur im Training, nie in Validierung oder Test (`train_only`).
 
 ### Behoben
 - Windows mit AMD-GPU: PyTorch (ROCm) ließ sich nicht mehr laden, wenn die Windows-Texterkennung zuerst
   geladen war (WinError 1114) – `ocr.py` lädt torch deshalb vorher.
-
-### Nach dem Update
-1. `pip install -e .` mit den bisherigen Extras (Windows: bringt die OCR-Pakete mit).
-2. Optional: `python scripts/synthetische_daten.py chats`, dann `scamguard retrain` (Startdaten, nur Training).
-3. Gelabelte Inserate im Team über einen privaten Ordner zusammenführen, nicht über Git (README,
-   „Gelabelte Inserate im Team zusammenführen“).
 
 ## [0.11.0] – 2026-10-16
 
@@ -173,12 +129,6 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   PyTorch/ROCm (AMD) bzw. CUDA (NVIDIA) und PEFT auf denselben Daten wie `mlx_lm.lora` – `train`, `test`
   (Accuracy/Precision/Recall/F1, gültiges JSON) und `export` (Adapter einfügen, GGUF für llama.cpp).
   Standard Qwen3.5-4B in bf16, passt auf 16 GB VRAM.
-
-### Nach dem Update (nur Windows-PC, optional)
-1. Optional, für die KI-Analyse auf dem PC: llama.cpp-Build und GGUF-Modell (~13 GB) herunterladen, in
-   `config.local.yaml` eintragen (README, „LLM“).
-2. Optional, für das Feintuning: eigene Umgebung `.venv-lora` (docs/llm_feintuning.md, Abschnitt 5).
-Mac: nichts zu tun.
 
 ## [0.10.0] – 2026-10-13
 
@@ -200,10 +150,6 @@ Mac: nichts zu tun.
   `evaluate --llm`.
 - Datenstrategie (README): Recherche Kaggle/Zenodo, Umgang mit Foren, warum kein Scraping und keine
   Honeypots.
-
-### Nach dem Update (alle)
-1. `git pull origin main`, Dienste neu starten, Extension neu laden.
-2. Damit die KI-Analyse wirkt: Qwen läuft mit `scamguard start` (Mac); Windows: LM Studio/Ollama.
 
 ## [0.9.0] – 2026-10-13
 
@@ -236,15 +182,6 @@ Mac: nichts zu tun.
   nur noch mit Frist („nur bis heute“, „bis heute 18 Uhr“, „Angebot gilt bis heute“).
 - Warnung bei einseitigen Daten: fehlendes Leerzeichen („seriöseBeispiele“).
 
-### Nach dem Update (alle)
-1. `git pull origin main` auf dem eigenen Branch.
-2. Für AutoML: `pip install -e ".[automl]"`, auf dem Mac vorher `brew install libomp` (Windows braucht
-   nichts extra). Ohne die Pakete läuft alles wie bisher, AutoML meldet sich dann als „aus“.
-3. Dienste neu starten (`scamguard start`, `scamguard ui`) und die Extension neu laden (Firefox:
-   `python scripts/firefox_mit_extension.py --reload`, Chromium/Edge: Erweiterungen → *Neu laden*).
-4. Optional: `scamguard automl --ohne-demo` – solange es weniger als 20 seriöse Labels gibt, zeigt der
-   Befehl nur die Bestenliste.
-
 ## [0.8.1] – 2026-10-06
 
 ### Behoben
@@ -262,16 +199,6 @@ Mac: nichts zu tun.
 - Inserats-Ordner (`data/datensatz_fuellen_inserate/`): Telefonnummern und Mailadressen in Titel,
   Beschreibung und Chat werden anonymisiert, die Form bleibt für die Merkmale erhalten. Die Originale
   in `data/raw/eigene_labels.jsonl` bleiben unverändert.
-
-### Nach dem Update (alle)
-1. `git pull origin main` auf dem eigenen Branch. Keine neuen Abhängigkeiten, `pip install` ist nicht nötig.
-2. Laufende Dienste neu starten (`scamguard start`, `scamguard ui`) – sonst läuft der alte Code weiter,
-   inklusive Absturzgefahr mit GBERT.
-3. Extension neu laden: Firefox `python scripts/firefox_mit_extension.py --reload`, Chromium
-   `chrome://extensions` → ScamGuard → *Neu laden*. Danach offene Kleinanzeigen-Tabs neu laden.
-4. Vor 0.8.1 eingestufte Inserate haben höchstens 4 Fotos: Anzeige öffnen, Label erneut klicken – der
-   Ordner wird ergänzt, nicht doppelt angelegt.
-5. Bestehende Inserats-Ordner anonymisieren: `scamguard data ordner`.
 
 ## [0.8.0] – 2026-10-05
 

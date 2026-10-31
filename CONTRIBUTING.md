@@ -24,7 +24,7 @@ Betrugserkennung für deutschsprachige Kleinanzeigen (Inserate und Chats). Pytho
 
 ```bash
 git clone https://github.com/derangler3008/ScamGuard.git && cd ScamGuard
-git switch <eigener-branch>                 # z. B. Jannis oder Gabriel
+git switch <eigener-branch>
 python3.12 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"                     # weitere Extras: README, „Quickstart“
 ```
@@ -45,20 +45,16 @@ pytest -m e2e                           # Browser-Tests (Playwright/Chromium, Se
 
 ## Workflow
 
-- **Branches:** Jede Person arbeitet auf dem eigenen Branch (`Jannis`, `Gabriel`, …). Änderungen gehen
-  per **Pull Request** nach `main`. Vor dem Start einer Aufgabe `git pull origin main`, danach
-  `python scripts/update_check.py`: zeigt, was seit der installierten Version zu tun ist (Pakete,
-  Schritte aus dem CHANGELOG), und bleibt still, wenn alles aktuell ist. Mit Claude Code läuft das beim
-  Start automatisch (Hook in `.claude/settings.json`, Anweisungen in `CLAUDE.md`).
-  Kein Force-Push, nicht direkt auf fremde Branches pushen.
+- **Branches:** Jede Person arbeitet auf einem eigenen Branch. Änderungen gehen per **Pull Request** nach
+  `main`. Vor dem Start einer Aufgabe `git pull origin main`. Kein Force-Push, nicht direkt auf fremde
+  Branches pushen.
 - **Commits:** klein und thematisch, Beschreibung auf Deutsch im Imperativ bzw. als Ergebnis
   („Einstufung: Konflikte entscheiden“), Versionssprünge als `ScamGuard vX.Y.Z: …`.
 - **Pull Request – Checkliste:**
   - Lint und Tests grün, neue Funktionen mit Tests
   - keine echten Personendaten, keine Datendateien im Diff
   - bei Features: Version in `pyproject.toml` und `src/scamguard/__init__.py` (bei Extension-Änderungen
-    auch `extension/manifest.json`) und Eintrag in `CHANGELOG.md` – mit „### Nach dem Update“, falls die
-    anderen danach etwas tun müssen (liest `scripts/update_check.py` aus)
+    auch `extension/manifest.json`) und Eintrag in `CHANGELOG.md`
 - **Nichts ersatzlos löschen** (Dateien, Funktionen, Daten), ohne es vorher im Team abzustimmen:
   was, warum, was daran hängt.
 
