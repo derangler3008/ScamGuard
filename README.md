@@ -7,7 +7,7 @@ Betrugsmaschen: Fake-Zahlungslinks, Vorkasse-Geschichten, PayPal „Freunde & Fa
 Dreiecksbetrug, Datenabfragen und mehr. Mehrere unabhängige Detektoren bewerten Text, Preis, Bilder
 und Nachrichten; das Ergebnis ist ein Risiko-Score mit markierten Fundstellen direkt auf der Seite.
 
-Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.13.0** ([Changelog](CHANGELOG.md)).
+Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.18.0** ([Changelog](CHANGELOG.md)).
 
 - **Browser-Extension** für Chromium und Firefox: markiert Warnsignale wie ein Adblocker, prüft auch das
   Postfach live, jede neue Nachricht ohne Neuladen.
@@ -17,8 +17,9 @@ Entstanden als Projekt an der DHBW Mannheim. Aktueller Stand: **v0.13.0** ([Chan
 - **Datenpipeline** ohne Scraping: eigene Labels, Ablageordner, Hugging Face, öffentliche Warnungen,
   Foren-Erfahrungsberichte.
 
-> Die trainierbaren Modelle sind bisher nur auf synthetischen Demo-Daten trainiert. Aussagekräftige
-> Kennzahlen entstehen mit dem laufenden Labeling ([Daten & Labeling](#daten--labeling)).
+> Stand Phase 1: 1.243 Beispiele (öffentliche Warnmeldungen, KI-generierte Texte, rund 100 von Hand
+> eingestufte Inserate). Fusion auf dem Testset: F1 0,96, AUC 0,98 – überwiegend auf Warnmeldungen und
+> generierten Texten. Für echte Inserate fehlen noch genug Testfälle ([Daten & Labeling](#daten--labeling)).
 
 ---
 
@@ -618,3 +619,22 @@ aussagekräftig. Ab etwa 20 Beispielen je Klasse urteilt auch AutoML.
   Quelle (`evaluate`) zeigt, ob ein Modell Betrug oder nur die Quelle gelernt hat.
 - **LLM-Kosten:** Die KI-Analyse ist standardmäßig an, aber nur mit dem lokalen Qwen kostenlos; mit `provider: anthropic` schaltet sie die Web-App nicht von selbst ein (`--ohne-llm` bzw. Schalter zum Abschalten). Modell und Effort in `config.yaml`.
   API-Keys per Umgebungsvariable (`ANTHROPIC_API_KEY`), nie im Code.
+
+## Einsatz von KI-Werkzeugen
+
+Bei der Softwareentwicklung haben wir [Claude Code](https://claude.com/claude-code) (Anthropic) als
+Programmierassistenten eingesetzt: zum Schreiben und Überarbeiten von Code, Tests und Doku sowie bei der
+Fehlersuche. Viele Commit-Nachrichten und die Datei `CLAUDE.md` stammen aus dieser Zusammenarbeit.
+
+Beim Team lagen:
+
+- **Konzeption und Anforderungen:** Problemstellung, Architektur-Entscheidungen (lokales LLM, Late Fusion,
+  Browser-Extension), Priorisierung.
+- **Daten:** Auswahl der Quellen, Sammeln und Einstufen der Inserate (Labels ausschließlich von Menschen),
+  Kategoriensystem, Entscheidung zum Umgang mit KI-generierten Daten.
+- **Bewertung:** Auswahl und Interpretation der Kennzahlen, Analyse der Schwachstellen (Quelle-Label-
+  Zusammenhang, wenige echte Testfälle, Klassenverteilung).
+- **Prüfung:** Jeder Schritt wurde von uns getestet und abgenommen; Live-Tests auf echten Inseraten.
+
+Zur Laufzeit nutzt ScamGuard selbst KI-Modelle (Qwen, GBERT, CLIP, optional die Claude API) – siehe
+[Architektur](#architektur).
